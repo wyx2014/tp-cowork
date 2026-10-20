@@ -1,0 +1,119 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      harness_repository:
+        description: '底座 fork 仓库（账号/deepseek-harness）'
+        type: string
+        default: wyx2014/deepseek-harness
+        required: true
+      harness_ref:
+        description: '要打包的底座分支、标签或 commit（需包含产品打包接口）'
+        type: string
+        default: feat/tpcowork-workbench-ui
+        required: true
+      build_version:
+        description: '构建版本：auto 自动编号'
+        type: string
+        default: auto
+        required: true
+      deployment:
+        description: 'standalone 为独立测试包；test/production 需要更新策略服务'
+        type: choice
+        options: [standalone, test, production]
+        default: standalone
+        required: true
+      policy_origin:
+        description: '策略服务 HTTPS origin（不含路径；可在仓库 Variable PACKAGE_POLICY_ORIGIN 设置默认值）'
+        type: string
+        required: false
+      login_origins:
+        description: '测试登录 HTTPS origin，多个用逗号分隔（可设置 Variable PACKAGE_LOGIN_ORIGINS）'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-installer:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tp-cowork
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Enable long source paths
+        working-directory: ${{ runner.temp }}
+        run: |
+          git config --global core.longpaths true
+          exit $LASTEXITCODE
+      - name: Checkout TP Cowork
+        uses: actions/checkout@v4
+        with:
+          path: tp-cowork
+          persist-credentials: false
+      - name: Checkout harness fork
+        id: harness
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.harness_repository }}
+          ref: ${{ inputs.harness_ref }}
+          path: deepseek-harness
+          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tp-cowork/package-lock.json
+      - name: Set up Python for native build tools
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install product build tools
+        run: npm ci
+      - name: Install harness build dependencies
+        run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
+      - name: Verify packaging helpers
+        run: npm run test:packaging
+      - name: Build TP Cowork Windows installer
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+          PACKAGE_DEPLOYMENT: ${{ inputs.deployment }}
+          PACKAGE_POLICY_ORIGIN: ${{ inputs.policy_origin || vars.PACKAGE_POLICY_ORIGIN }}
+          PACKAGE_LOGIN_ORIGINS: ${{ inputs.deployment == 'test' && (inputs.login_origins || vars.PACKAGE_LOGIN_ORIGINS) || '' }}
+          TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
+        run: npm run build:win
+      - name: Record packaged sources
+        run: |
+          Get-Content -LiteralPath dist/installers/build-info.json | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPCowork-windows-x64-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            tp-cowork/dist/installers/*.exe
+            tp-cowork/dist/installers/*.sha256
+            tp-cowork/dist/installers/build-info.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain packaging diagnostics
+        if: always() && steps.harness.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: deepseek-harness/apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14

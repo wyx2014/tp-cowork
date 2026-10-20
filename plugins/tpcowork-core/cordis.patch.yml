@@ -1,0 +1,3 @@
+- insert:
+    - id: tpcowork-core
+      name: '@tpcowork/dsh-core'

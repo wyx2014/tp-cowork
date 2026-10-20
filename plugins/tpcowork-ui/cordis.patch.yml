@@ -1,0 +1,3 @@
+- insert:
+    - id: tpcowork-ui
+      name: '@tpcowork/dsh-ui'

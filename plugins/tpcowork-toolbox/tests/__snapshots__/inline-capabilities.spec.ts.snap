@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`inline capability selection > gives Add and slash picks the same reference, selection, submission and removal behavior 1`] = `
+{
+  "references": [
+    {
+      "appearance": "skill",
+      "clipboardText": "$office-docx",
+      "label": "office-docx",
+      "ref": "["skill","bundled:office-docx","office-docx"]",
+      "source": "toolbox-capabilities",
+    },
+  ],
+  "skillIds": [
+    "bundled:office-docx",
+  ],
+  "text": "报告正文 $office-docx ",
+}
+`;
+
+exports[`inline capability selection > opens a sent add-picked skill document after the draft selection changes 1`] = `
+{
+  "references": [
+    {
+      "clickable": true,
+      "kind": "skill",
+      "label": "/office-docx",
+    },
+    {
+      "clickable": false,
+      "kind": "mcp",
+      "label": "聚源",
+    },
+  ],
+  "shown": "报告正文 /office-docx 聚源",
+  "text": "报告正文 $office-docx @聚源",
+}
+`;
+
+exports[`inline capability selection > opens a sent slash-picked skill document after the draft selection changes 1`] = `
+{
+  "references": [
+    {
+      "clickable": true,
+      "kind": "skill",
+      "label": "/office-docx",
+    },
+    {
+      "clickable": false,
+      "kind": "mcp",
+      "label": "聚源",
+    },
+  ],
+  "shown": "报告正文 /office-docx 聚源",
+  "text": "报告正文 $office-docx @聚源",
+}
+`;

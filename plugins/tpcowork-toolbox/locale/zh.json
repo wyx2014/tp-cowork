@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-toolbox",
+    "description": "能力管理层：统一专家团队、技能、MCP 连接器和技能商店的发现、配置与安装入口。Client 通过 DSH Remote 访问 Host 管理服务，复用底座的技能与连接机制，团队执行交给 experts，让能力管理与任务执行各司其职。"
+  }
+}

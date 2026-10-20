@@ -1,0 +1,19 @@
+{
+  "extends": "../../../deepseek-harness/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+    "typeRoots": ["../../../deepseek-harness/node_modules/@types"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../../deepseek-harness/vendor/cordis" },
+    { "path": "../../../deepseek-harness/vendor/loader" },
+    { "path": "../../../deepseek-harness/packages/settings/settings" },
+    { "path": "../../../deepseek-harness/packages/llm/llm" },
+    { "path": "../../../deepseek-harness/packages/llm/llm-pi-ai" }
+  ]
+}

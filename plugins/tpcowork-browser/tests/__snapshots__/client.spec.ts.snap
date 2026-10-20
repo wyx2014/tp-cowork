@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loads the browser in the real client roster, renders its durable result and retracts on unload > browser screenshot result card 1`] = `"Capture pageDonehttps://example.com/Open fileResult{"ok":true}"`;

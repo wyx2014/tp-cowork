@@ -1,0 +1,6 @@
+- insert:
+    - id: tpcowork-toolbox
+      name: '@tpcowork/dsh-toolbox'
+      config:
+        prompthub:
+          endpoint: !!js process.env.DSH_PROMPTHUB_URL || 'http://localhost:8080'

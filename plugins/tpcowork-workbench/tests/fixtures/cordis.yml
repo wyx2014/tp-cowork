@@ -1,0 +1,30 @@
+- id: llm
+  name: llm
+- id: session
+  name: session
+- id: projections
+  name: projections
+- id: prompt
+  name: prompt
+- id: tools
+  name: tools
+- id: agents
+  name: agents
+- id: fs
+  name: fs
+- id: working-directory
+  name: working-directory
+- id: loop
+  name: loop
+  config:
+    agents: []
+- id: todo
+  name: todo
+  config:
+    allowParallelInProgress: true
+- id: present
+  name: present
+  config:
+    maxFiles: 8
+- id: workbench
+  name: workbench

@@ -1,0 +1,90 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`asset-research-team uses the current default model and effort when the blank parent was created with an older default 1`] = `
+{
+  "members": [
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+  ],
+  "parent": {
+    "model": "selected-model",
+    "provider": "selected",
+    "reasoningEffort": "high",
+  },
+}
+`;
+
+exports[`supply-chain-bottleneck-team uses the current default model and effort when the blank parent was created with an older default 1`] = `
+{
+  "members": [
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+    {
+      "model": "selected-model",
+      "provider": "selected",
+      "reasoningEffort": "high",
+    },
+  ],
+  "parent": {
+    "model": "selected-model",
+    "provider": "selected",
+    "reasoningEffort": "high",
+  },
+}
+`;

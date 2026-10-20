@@ -1,0 +1,75 @@
+--- a/packages/desktop/src/main/browserView/browserGuestManager.ts
++++ b/packages/desktop/src/main/browserView/browserGuestManager.ts
+@@ -1,4 +1,5 @@
+ // Modified for TPCowork (2026-09-21): product naming and integration; see UPSTREAM.md.
++// Modified for DSH: await recording cleanup and preserve URLs during guest restoration.
+ /* eslint-disable max-lines -- IAB owner registry、ready/abort lifecycle 与 guest CDP 状态必须在同一状态机内原子维护，拆散会重新引入跨 scope 竞态。 */
+ import { randomUUID } from "node:crypto";
+ import { rm } from "node:fs/promises";
+@@ -474,6 +475,7 @@
+   private readonly inFlightScreenshots = new Map<string, InFlightScreenshot>();
+   /** 见 MAX_ABANDONED_SCREENSHOT_CAPTURES；key 为 tabId。 */
+   private readonly abandonedScreenshotCaptures = new Map<string, number>();
++  private readonly recordingTasks = new Map<string, Promise<void>>();
+   private readonly recordings = new Map<string, BrowserRecordingEntry>();
+   private readonly downloads = new Map<string, DownloadRecord>();
+   private readonly queuedDownloads = new Map<string, string[]>();
+@@ -1126,6 +1128,7 @@
+       if (command.method === "recordingCancel" && entry.status === "running") {
+         entry.controller.abort(new DOMException("recording cancelled", "AbortError"));
+         this.setRecordingTerminal(entry, "cancelled");
++        await this.recordingTasks.get(entry.id)?.catch(() => undefined);
+       }
+       return this.withMeta(
+         {
+@@ -2044,7 +2047,15 @@
+     }
+   }
+ 
+-  private async runRecording(
++  // DSH owns plugin unload and must await hidden recorder windows and file handles.
++  private runRecording(entry: BrowserRecordingEntry, tab: ManagedTab, options?: BrowserRecordingOptions): Promise<void> {
++    const task = this.runRecordingWork(entry, tab, options);
++    this.recordingTasks.set(entry.id, task);
++    void task.then(() => this.recordingTasks.delete(entry.id), () => this.recordingTasks.delete(entry.id));
++    return task;
++  }
++
++  private async runRecordingWork(
+     entry: BrowserRecordingEntry,
+     tab: ManagedTab,
+     rawOptions?: BrowserRecordingOptions,
+@@ -3982,7 +3993,7 @@
+     const onLoadingStopped = () => {
+       if (tab.guest !== guest) return;
+       tab.loading = false;
+-      if (!this.guestRecoveryFlights.has(tab.tabId)) {
++      if (!this.guestRecoveryFlights.has(tab.tabId) && !this.restoreFlights.has(tab.tabId)) {
+         tab.cachedUrl = safeStr(() => guest.getURL(), tab.cachedUrl);
+         tab.cachedTitle = safeStr(() => guest.getTitle(), tab.cachedTitle);
+       }
+@@ -4351,7 +4362,7 @@
+     return Boolean(tab?.guest && tab.lifecycle !== "closed");
+   }
+ 
+-  disposeAll(): void {
++  async disposeAll(): Promise<void> {
+     for (const request of this.runningRequests.values()) {
+       request.controller.abort(new DOMException("browser manager disposed", "AbortError"));
+     }
+@@ -4377,9 +4388,12 @@
+     for (const entry of this.recordings.values()) {
+       entry.controller.abort(new DOMException("browser manager disposed", "AbortError"));
+       if (entry.cleanupTimer) clearTimeout(entry.cleanupTimer);
+-      if (entry.artifact?.path)
+-        void rm(entry.artifact.path, { force: true }).catch(() => undefined);
+-    }
++    }
++    await Promise.allSettled([...this.recordingTasks.values()]);
++    await Promise.all([...this.recordings.values()].map(async (entry) => {
++      if (entry.cleanupTimer) clearTimeout(entry.cleanupTimer);
++      if (entry.artifact?.path) await rm(entry.artifact.path, { force: true });
++    }));
+     this.recordings.clear();
+     this.residencyCoordinator.dispose();
+     this.restoredTabClaims.clear();

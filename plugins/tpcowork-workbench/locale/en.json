@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-workbench",
+    "description": "Task completion layer: listens for file delivery and turn completion, reminding the assistant to reconcile unfinished tasks. Reuses DSH todo_write, Session logs and task projections to help keep recorded progress consistent with delivered results."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-ui",
+    "description": "界面表现层：负责品牌、主题、首页、侧栏和通用设置的展示适配，通过 DSH 的主题、插槽和布局服务统一外观。界面定制集中维护，便于独立更换样式和跟随底座升级。"
+  },
+  "ui": {
+    "brand": "TP Cowork",
+    "preview": "预览版",
+    "automation": "自动化",
+    "greeting": "今天有什么工作，交给我吧",
+    "accountMenu": "账号菜单",
+    "more": "更多",
+    "settings": "设置",
+    "signIn": "登录",
+    "signOut": "退出登录",
+    "cancelSignIn": "取消登录",
+    "authCommitting": "正在同步登录状态…",
+    "authFailed": "PromptHub 认证未完成，请检查服务地址和网络后重试",
+    "authTimeout": "登录已超时，请重试",
+    "authExpired": "登录已过期，请重新登录",
+    "tasksTitle": "任务",
+    "tasksCompleted": "任务已完成",
+    "tasksExpand": "展开任务列表",
+    "tasksCollapse": "收起任务列表",
+    "tasksProgress": "已完成 {done} 项，共 {total} 项",
+    "tasksStatus_completed": "已完成",
+    "tasksStatus_in_progress": "进行中",
+    "tasksStatus_pending": "待处理"
+  }
+}

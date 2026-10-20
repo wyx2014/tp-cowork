@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "asset-research-team",
+  "name": "资产投研团队 · 个股研究",
+  "version": "2.0.0",
+  "workflowId": "investment-team-dsh-v1",
+  "concurrency": 4,
+  "phases": ["analysis"],
+  "optionalMcpIds": ["juyuan", "caihui_mcp"],
+  "members": [
+    {"id":"business-analyst","name":"商业分析师 · 段永平视角","phase":"analysis","goal":"分析商业模式、生意属性、竞争壁垒与护城河；区分事实、推断与假设。"},
+    {"id":"financial-analyst","name":"财务分析师 · 巴菲特视角","phase":"analysis","goal":"分析财务质量、自由现金流、安全边际和估值；标注口径、期间、币种与数据缺口。"},
+    {"id":"industry-researcher","name":"行业研究员 · 芒格视角","phase":"analysis","goal":"分析行业格局、可比公司、竞争优势和长期结构变化；寻找反证。"},
+    {"id":"risk-assessor","name":"风险评估师 · 李录视角","phase":"analysis","goal":"核查治理、管理层、下行风险、公告事件及永久损失概率；避免伪精确概率。"}
+  ]
+}

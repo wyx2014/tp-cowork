@@ -1,0 +1,21 @@
+{
+  "requiredFiles": [
+    "references/gui-authoring.md",
+    "scripts/init_skill.py",
+    "scripts/package_skill.py",
+    "scripts/quick_validate.py",
+    "SKILL.md"
+  ],
+  "checksums": {
+    "references/gui-authoring.md": "27421b046aa028ed272339618b4b466b19fec7e235c9365697f914c99177d759",
+    "scripts/init_skill.py": "bcd6b802c400a9e89319844c6c3d965855c8b0555e982eb72cd4accb7ee67e3e",
+    "scripts/package_skill.py": "a78153297962cb6d73cb345aa1cbb3f93b5aa435008abb52b785090672e4786c",
+    "scripts/quick_validate.py": "227ec1bfe149622dec6e36f3b43cfbaa6fff2a17af2c8ffee9d81ecc26e6068d",
+    "SKILL.md": "a513ec946f5cc23c83fd2c143a93dab7352ab77e81cbad824c75460d07dac017"
+  },
+  "tools": [],
+  "pythonModules": [
+    "yaml"
+  ],
+  "limitations": []
+}

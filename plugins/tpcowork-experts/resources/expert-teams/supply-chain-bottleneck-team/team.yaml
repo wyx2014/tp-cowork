@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "supply-chain-bottleneck-team",
+  "name": "资产投研团队 · 供应链瓶颈研究",
+  "version": "2.0.0",
+  "workflowId": "bottleneck-hunter-dsh-v1",
+  "concurrency": 3,
+  "phases": ["discovery", "validation"],
+  "optionalMcpIds": ["juyuan", "caihui_mcp"],
+  "members": [
+    {"id":"trend-verifier","name":"趋势与需求验证师","phase":"discovery","goal":"验证趋势持续性、物理资本开支、需求增速和时间窗口，先判断研究前提是否成立。"},
+    {"id":"chain-mapper","name":"产业链架构师","phase":"discovery","goal":"从终端向材料、设备和基础设施逐层拆解，形成可验证的供应链节点与供应商地图。"},
+    {"id":"bottleneck-validator","name":"瓶颈证据分析师","phase":"validation","goal":"基于发现阶段，按集中度、扩产周期、替代难度、利用率、需求增速、认证周期验证瓶颈等级与持续时间。"},
+    {"id":"company-screener","name":"标的映射与估值师","phase":"validation","goal":"将高等级瓶颈映射至上市公司，核验业务暴露、财务质量、流动性、估值及潜在回报约束。"},
+    {"id":"counter-case-analyst","name":"反方验证与风险师","phase":"validation","goal":"主动寻找替代技术、扩产响应、需求下行、地缘、稀释和叙事过热等反证。"}
+  ]
+}

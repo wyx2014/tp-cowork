@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-experts",
+    "description": "团队执行层：接收工具箱选定的团队、技能与连接器，基于 DSH workflow 和子智能体组织分工、汇总、审阅及交付。运行状态保存在原生 Session 记录中，团队管理与执行职责分离，便于追踪真实进展。"
+  }
+}

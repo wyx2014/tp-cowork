@@ -1,0 +1,3 @@
+- insert:
+    - id: tpcowork-workbench
+      name: '@tpcowork/dsh-workbench'

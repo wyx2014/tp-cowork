@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-ui",
+    "description": "Presentation layer: adapts branding, themes, the home page, sidebar and General settings through DSH theme, slot and layout services. Keeping appearance changes together makes styling and upstream upgrades easier to maintain."
+  },
+  "ui": {
+    "brand": "TP Cowork",
+    "preview": "Preview",
+    "automation": "Automation tasks",
+    "greeting": "What's on your plate today? Leave it to me.",
+    "accountMenu": "Account menu",
+    "more": "More",
+    "settings": "Settings",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "cancelSignIn": "Cancel sign-in",
+    "authCommitting": "Syncing your account…",
+    "authFailed": "PromptHub sign-in could not finish. Check the service address and network, then retry.",
+    "authTimeout": "Sign-in timed out. Try again.",
+    "authExpired": "Your session expired. Sign in again.",
+    "tasksTitle": "Tasks",
+    "tasksCompleted": "Tasks completed",
+    "tasksExpand": "Expand task list",
+    "tasksCollapse": "Collapse task list",
+    "tasksProgress": "{done} of {total} tasks completed",
+    "tasksStatus_completed": "Completed",
+    "tasksStatus_in_progress": "In progress",
+    "tasksStatus_pending": "Pending"
+  }
+}

@@ -1,0 +1,1823 @@
+{
+  "version": "6.2.4",
+  "cases": [
+    {
+      "expression": "* * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "* * * * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769904060000
+    },
+    {
+      "expression": "* * * * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709132460000
+    },
+    {
+      "expression": "* * * * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953200000
+    },
+    {
+      "expression": "* * * * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793511960000
+    },
+    {
+      "expression": "* * * * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791126960000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769961600000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709132700000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773028800000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793595600000
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791127200000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769850000000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1774918800000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1711854900000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1774962000000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798725600000
+    },
+    {
+      "expression": "0 9 31 * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793397600000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1835395200000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1835366400000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1835413200000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1835413200000
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1835355600000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1772208000000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1774929600000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1796014800000
+    },
+    {
+      "expression": "0 0 L * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793365200000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1771232400000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1771203600000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1710472500000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773666000000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1794837600000
+    },
+    {
+      "expression": "0 9 15W * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1792015200000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1770022800000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769994000000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709262900000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1775048400000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793628000000
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793570400000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1772154000000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709176500000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1774962000000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1796047200000
+    },
+    {
+      "expression": "0 9 31W * *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793311200000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1771578000000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1771549200000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1710472500000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1774011600000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1795183200000
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1792101600000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1772154000000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1711682100000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1774616400000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1795788000000
+    },
+    {
+      "expression": "0 9 * * l5",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793311200000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1770454800000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1770426000000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709349300000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772974800000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1794060000000
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791669600000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1770339600000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709262900000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773406800000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793973600000
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791496800000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1770022800000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769994000000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709522100000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773061200000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793628000000
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791151200000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1775001600000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1774972800000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1711908900000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1775016000000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1798722000000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1774972800000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1711908900000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1775016000000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791205200000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1770393600000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709316900000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773460800000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1794027600000
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791550800000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1770480000000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709403300000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773547200000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1794114000000
+    },
+    {
+      "expression": "0 0 * * 7",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791637200000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769961600000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773028800000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793595600000
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791205200000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769961600000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773028800000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793595600000
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791205200000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763615000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769904015000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709132415000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953155000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793511915000
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791126915000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769904017000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709132417000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953157000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793511917000
+    },
+    {
+      "expression": "* * * * * */17",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791126917000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1830297600000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1830268800000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1830276900000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1830315600000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1830315600000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1830258000000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1735668900000
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1835395200000
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1835366400000
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1835413200000
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1835413200000
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1835355600000
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": null
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": null
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769961600000
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773028800000
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793595600000
+    },
+    {
+      "expression": "@midnight",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791205200000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769907600000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709133300000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953200000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793512800000
+    },
+    {
+      "expression": "@hourly",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791129600000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1769961600000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709144100000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773028800000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793595600000
+    },
+    {
+      "expression": "@daily",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791205200000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1770480000000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709403300000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773547200000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1794114000000
+    },
+    {
+      "expression": "@weekly",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791637200000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1772294400000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1709230500000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1775016000000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1796101200000
+    },
+    {
+      "expression": "@monthly",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1793451600000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1798761600000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1798732800000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1735668900000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "@yearly",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1798722000000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "nextRunAt": 1798761600000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2026-02-01T00:00:00+00:00",
+      "timezone": "Asia/Shanghai",
+      "nextRunAt": 1798732800000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2024-02-28T15:00:00+00:00",
+      "timezone": "Asia/Kathmandu",
+      "nextRunAt": 1735668900000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1798779600000
+    },
+    {
+      "expression": "@annually",
+      "reference": "2026-10-04T15:15:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1798722000000
+    },
+    {
+      "expression": "R * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "R * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1769765400000
+    },
+    {
+      "expression": "R * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769764500000
+    },
+    {
+      "expression": "R/15 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "R/15 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "R/15 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769763600000
+    },
+    {
+      "expression": "R(10-20) * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769764200000
+    },
+    {
+      "expression": "R(10-20) * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1769764560000
+    },
+    {
+      "expression": "R(10-20) * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769764380000
+    },
+    {
+      "expression": "R(10-30)/5 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769764200000
+    },
+    {
+      "expression": "R(10-30)/5 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1769764200000
+    },
+    {
+      "expression": "R(10-30)/5 * * * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769764200000
+    },
+    {
+      "expression": "R R * * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769817600000
+    },
+    {
+      "expression": "R R * * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1769765406000
+    },
+    {
+      "expression": "R R * * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769843707000
+    },
+    {
+      "expression": "0 0 R * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "0 0 R * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1771632000000
+    },
+    {
+      "expression": "0 0 R * *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "0 0 1 R *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1798761600000
+    },
+    {
+      "expression": "0 0 1 R *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1772323200000
+    },
+    {
+      "expression": "0 0 1 R *",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1785542400000
+    },
+    {
+      "expression": "0 0 * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 0,
+      "nextRunAt": 1769904000000
+    },
+    {
+      "expression": "0 0 * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 1234567890,
+      "nextRunAt": 1770249600000
+    },
+    {
+      "expression": "0 0 * * R",
+      "reference": "2026-01-30T08:59:59.123+00:00",
+      "timezone": "UTC",
+      "randomWord": 4294967295,
+      "nextRunAt": 1769990400000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953200000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1773034200000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953200000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953200000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-03-08T06:59:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1772953145000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793518200000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793514600000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793512800000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793512800000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-11-01T05:45:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793511905000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-11-01T06:00:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793518200000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-11-01T06:00:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793514600000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-11-01T06:00:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793516400000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-11-01T06:00:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793513700000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-11-01T06:00:00+00:00",
+      "timezone": "America/New_York",
+      "nextRunAt": 1793512805000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-03-29T00:59:59+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1774746000000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-03-29T00:59:59+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1774827000000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-03-29T00:59:59+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1774746000000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-03-29T00:59:59+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1774746000000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-03-29T00:59:59+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1774746005000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-10-25T00:45:00+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1792891800000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-10-25T00:45:00+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1792974600000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-10-25T00:45:00+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1792890000000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-10-25T00:45:00+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1792890000000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-10-25T00:45:00+00:00",
+      "timezone": "Europe/Berlin",
+      "nextRunAt": 1792889105000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-10-03T15:29:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791041400000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-10-03T15:29:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791124200000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-10-03T15:29:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791043200000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-10-03T15:29:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791041400000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-10-03T15:29:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1791041345000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2026-04-04T14:45:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1775318400000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2026-04-04T14:45:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1775314800000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2026-04-04T14:45:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1775316600000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2026-04-04T14:45:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1775314800000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2026-04-04T14:45:00+00:00",
+      "timezone": "Australia/Lord_Howe",
+      "nextRunAt": 1775313905000
+    },
+    {
+      "expression": "30 2 * * *",
+      "reference": "2011-12-29T12:00:00+00:00",
+      "timezone": "Pacific/Apia",
+      "nextRunAt": 1325161800000
+    },
+    {
+      "expression": "30 1 * * *",
+      "reference": "2011-12-29T12:00:00+00:00",
+      "timezone": "Pacific/Apia",
+      "nextRunAt": 1325239200000
+    },
+    {
+      "expression": "0 * * * *",
+      "reference": "2011-12-29T12:00:00+00:00",
+      "timezone": "Pacific/Apia",
+      "nextRunAt": 1325163600000
+    },
+    {
+      "expression": "*/15 * * * *",
+      "reference": "2011-12-29T12:00:00+00:00",
+      "timezone": "Pacific/Apia",
+      "nextRunAt": 1325160900000
+    },
+    {
+      "expression": "* * * * * 5,35",
+      "reference": "2011-12-29T12:00:00+00:00",
+      "timezone": "Pacific/Apia",
+      "nextRunAt": 1325160005000
+    }
+  ],
+  "validity": [
+    {
+      "expression": "* * * * *",
+      "valid": true
+    },
+    {
+      "expression": "*/5 * * * MON-FRI",
+      "valid": true
+    },
+    {
+      "expression": "0 9 31 * *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 29 2 *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 L * *",
+      "valid": true
+    },
+    {
+      "expression": "0 9 15W * *",
+      "valid": true
+    },
+    {
+      "expression": "0 9 W1 * *",
+      "valid": true
+    },
+    {
+      "expression": "0 9 31W * *",
+      "valid": true
+    },
+    {
+      "expression": "0 9 * * 5#3",
+      "valid": true
+    },
+    {
+      "expression": "0 9 * * l5",
+      "valid": true
+    },
+    {
+      "expression": "0 9 * * sat#1,sun#2",
+      "valid": true
+    },
+    {
+      "expression": "0 9 13 * FRI",
+      "valid": true
+    },
+    {
+      "expression": "0 9 ? * MON",
+      "valid": true
+    },
+    {
+      "expression": "0 0 1 JAN,APR,JUL,OCT *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 * APR-JAN/3 *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 * * 6-7",
+      "valid": true
+    },
+    {
+      "expression": "0 0 * * 7",
+      "valid": true
+    },
+    {
+      "expression": "0 0 * * MON-MON",
+      "valid": true
+    },
+    {
+      "expression": "0 0 1-31 * MON",
+      "valid": true
+    },
+    {
+      "expression": "* * * * * 15,25",
+      "valid": true
+    },
+    {
+      "expression": "* * * * * */17",
+      "valid": true
+    },
+    {
+      "expression": "0 0 1 1 * 0 2028/2",
+      "valid": true
+    },
+    {
+      "expression": "0 0 1 1 * 0 2025",
+      "valid": true
+    },
+    {
+      "expression": "0 0 29 2 * 0 2024,2028",
+      "valid": true
+    },
+    {
+      "expression": "0 0 31 2 *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 31 2 MON",
+      "valid": true
+    },
+    {
+      "expression": "@midnight",
+      "valid": true
+    },
+    {
+      "expression": "@hourly",
+      "valid": true
+    },
+    {
+      "expression": "@daily",
+      "valid": true
+    },
+    {
+      "expression": "@weekly",
+      "valid": true
+    },
+    {
+      "expression": "@monthly",
+      "valid": true
+    },
+    {
+      "expression": "@yearly",
+      "valid": true
+    },
+    {
+      "expression": "@annually",
+      "valid": true
+    },
+    {
+      "expression": "R * * * *",
+      "valid": true
+    },
+    {
+      "expression": "R/15 * * * *",
+      "valid": true
+    },
+    {
+      "expression": "R(10-20) * * * *",
+      "valid": true
+    },
+    {
+      "expression": "R(10-30)/5 * * * *",
+      "valid": true
+    },
+    {
+      "expression": "R R * * * R",
+      "valid": true
+    },
+    {
+      "expression": "0 0 R * *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 1 R *",
+      "valid": true
+    },
+    {
+      "expression": "0 0 * * R",
+      "valid": true
+    },
+    {
+      "expression": "99 * * * *",
+      "valid": false
+    },
+    {
+      "expression": "* * *",
+      "valid": false
+    },
+    {
+      "expression": "* * * * * * * *",
+      "valid": false
+    },
+    {
+      "expression": "@reboot",
+      "valid": false
+    },
+    {
+      "expression": "H * * * *",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * * 0 2100",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * * 0 1969",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * * 60",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * 7 0",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * 1,5#2",
+      "valid": false
+    },
+    {
+      "expression": "0 9 1W,2W * *",
+      "valid": false
+    },
+    {
+      "expression": "0 0 * * 1-5#3",
+      "valid": false
+    },
+    {
+      "expression": "0 0 0 * *",
+      "valid": false
+    },
+    {
+      "expression": "*/0 * * * *",
+      "valid": false
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+# Third-party notices and native adaptations
+
+This plugin includes browser runtime code from the user's tp-cowork 3.15.1 working tree, based on repository revision `cc02756842ecc19a796593c0878273ebf6b3d31c`, under the Apache License 2.0. That checkout includes local changes; `vendor/reference.json` records the copied files and their source SHA-256 values. TPCowork derives from ZCode, with upstream baseline `v3.15.1` / `aac4755666d09fdcd70272fcf063c077a639015f`. The full license is in `LICENSE` and the built `lib/licenses/tpcowork.txt`. Original notices and attribution are preserved in `lib/licenses/tpcowork-NOTICE.md` and `lib/licenses/tpcowork-UPSTREAM.md`; those archived product descriptions concern the reference application. This plugin's behavior is described in its own README.
+
+Playwright 1.59.1 supplies the pinned injected script under Apache License 2.0 (`lib/playwright/LICENSE`). Bundled Zod 4.3.6 and ws 8.19.0 are MIT licensed; their full notices are included in `lib/licenses/zod.txt` and `lib/licenses/ws.txt`. React and the DSH / Cordis services are supplied by the host application and are not bundled into the distributable. esbuild is a build dependency.
+
+## Reference refresh
+
+From the plugin directory, `node scripts/vendor-reference.mjs --check` copies the adjacent reference checkout into a temporary directory and checks that `patches/browserGuestManager.patch` applies. Omitting `--check` replaces the pinned source only after that check succeeds, copies the Playwright asset and license, and updates the manifest. A changed Playwright version requires a reviewed build adaptation. Normal builds use vendored source and the npm lockfile.
+
+The local patch tracks recording tasks so cancellation and disposal await recorder shutdown, awaits deletion of temporary recording artifacts, and prevents the bootstrap document from replacing a saved restore URL during tab restoration. Reapply or deliberately retire these fixes when refreshing upstream. `build.mjs` separately substitutes the DSH logger and app paths, redirects recorder preload and Playwright asset paths, and emits the CJS compatibility shim for bundled ws. `src/reference-shared.ts` supplies the shared protocol constants used by the native runtime.
+
+## Desktop integration
+
+The separately installed native payload lives at `apps/desktop/lib/tpcowork-browser/`. The shell delegates only this plugin's webview leases, forwards the private versioned Host IPC channel, and exposes a restricted request / subscription API to the trusted application main frame. The optional adapter loads on demand; absence of the payload leaves ordinary DSH browsing available and gives an actionable enablement error. Its private protocol is version 1; upgrade the shell and plugin together.

@@ -1,0 +1,239 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`native team submission and delivery > asset-research-team uses real workflow phases, child sessions, files, present and plan > native presentation 1`] = `
+{
+  "members": [
+    {
+      "label": "商业分析师 · 段永平视角",
+      "phase": "并行研究",
+    },
+    {
+      "label": "独立审阅报告",
+      "phase": "独立审阅报告",
+    },
+    {
+      "label": "综合研究结论",
+      "phase": "综合研究结论",
+    },
+    {
+      "label": "行业研究员 · 芒格视角",
+      "phase": "并行研究",
+    },
+    {
+      "label": "财务分析师 · 巴菲特视角",
+      "phase": "并行研究",
+    },
+    {
+      "label": "风险评估师 · 李录视角",
+      "phase": "并行研究",
+    },
+  ],
+  "plan": {
+    "todos": [
+      {
+        "content": "商业分析师 · 段永平视角",
+        "status": "pending",
+      },
+      {
+        "content": "财务分析师 · 巴菲特视角",
+        "status": "pending",
+      },
+      {
+        "content": "行业研究员 · 芒格视角",
+        "status": "pending",
+      },
+      {
+        "content": "风险评估师 · 李录视角",
+        "status": "pending",
+      },
+      {
+        "content": "综合研究结论",
+        "status": "pending",
+      },
+      {
+        "content": "独立审阅报告",
+        "status": "pending",
+      },
+      {
+        "content": "交付 Markdown/HTML 报告",
+        "status": "pending",
+      },
+    ],
+  },
+}
+`;
+
+exports[`native team submission and delivery > asset-research-team uses real workflow phases, child sessions, files, present and plan 1`] = `
+{
+  "outputs": [
+    "html",
+    "markdown",
+    "member",
+    "member",
+    "member",
+    "member",
+  ],
+  "phases": [
+    "analysis",
+    "synthesis",
+    "review",
+  ],
+  "roles": [
+    {
+      "memberId": "business-analyst",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "financial-analyst",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "industry-researcher",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "lead-review",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "lead-synthesis",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "risk-assessor",
+      "status": "succeeded",
+    },
+  ],
+  "settlement": {
+    "delivery": "delivered",
+    "execution": "succeeded",
+    "plan": "reconciled",
+  },
+}
+`;
+
+exports[`native team submission and delivery > supply-chain-bottleneck-team uses real workflow phases, child sessions, files, present and plan > native presentation 1`] = `
+{
+  "members": [
+    {
+      "label": "产业链架构师",
+      "phase": "发现机会",
+    },
+    {
+      "label": "反方验证与风险师",
+      "phase": "验证证据",
+    },
+    {
+      "label": "标的映射与估值师",
+      "phase": "验证证据",
+    },
+    {
+      "label": "独立审阅报告",
+      "phase": "独立审阅报告",
+    },
+    {
+      "label": "瓶颈证据分析师",
+      "phase": "验证证据",
+    },
+    {
+      "label": "综合研究结论",
+      "phase": "综合研究结论",
+    },
+    {
+      "label": "趋势与需求验证师",
+      "phase": "发现机会",
+    },
+  ],
+  "plan": {
+    "todos": [
+      {
+        "content": "趋势与需求验证师",
+        "status": "pending",
+      },
+      {
+        "content": "产业链架构师",
+        "status": "pending",
+      },
+      {
+        "content": "瓶颈证据分析师",
+        "status": "pending",
+      },
+      {
+        "content": "标的映射与估值师",
+        "status": "pending",
+      },
+      {
+        "content": "反方验证与风险师",
+        "status": "pending",
+      },
+      {
+        "content": "综合研究结论",
+        "status": "pending",
+      },
+      {
+        "content": "独立审阅报告",
+        "status": "pending",
+      },
+      {
+        "content": "交付 Markdown/HTML 报告",
+        "status": "pending",
+      },
+    ],
+  },
+}
+`;
+
+exports[`native team submission and delivery > supply-chain-bottleneck-team uses real workflow phases, child sessions, files, present and plan 1`] = `
+{
+  "outputs": [
+    "html",
+    "markdown",
+    "member",
+    "member",
+    "member",
+    "member",
+    "member",
+  ],
+  "phases": [
+    "discovery",
+    "validation",
+    "synthesis",
+    "review",
+  ],
+  "roles": [
+    {
+      "memberId": "bottleneck-validator",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "chain-mapper",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "company-screener",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "counter-case-analyst",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "lead-review",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "lead-synthesis",
+      "status": "succeeded",
+    },
+    {
+      "memberId": "trend-verifier",
+      "status": "succeeded",
+    },
+  ],
+  "settlement": {
+    "delivery": "delivered",
+    "execution": "succeeded",
+    "plan": "reconciled",
+  },
+}
+`;

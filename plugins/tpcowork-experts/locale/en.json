@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-experts",
+    "description": "Team execution layer: runs teams, skills and connectors selected in Toolbox through DSH workflows and subagents, coordinating research, synthesis, review and delivery. Native Session records retain execution state, separating team management from execution and keeping progress traceable."
+  }
+}

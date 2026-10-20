@@ -1,0 +1,11 @@
+{
+  "requiredFiles": [
+    "SKILL.md"
+  ],
+  "checksums": {
+    "SKILL.md": "ae5816bf04027a16e7e4c060b307ae27755a635124e811c0af5c1ab0316e46c9"
+  },
+  "tools": [],
+  "pythonModules": [],
+  "limitations": []
+}

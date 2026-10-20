@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-toolbox",
+    "description": "Capability management layer: brings together expert teams, skills, MCP connectors and the skill store for discovery, configuration and installation. The Client reaches Host services through DSH Remote and reuses native skill and connection mechanisms; experts owns team execution."
+  }
+}

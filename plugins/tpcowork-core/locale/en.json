@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-core",
+    "description": "Product core: owns assistant identity, office guidance and intranet DeepSeek defaults through DSH prompt, model and credential services. Centralizing shared rules lets appearance and business capabilities evolve independently."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "requiredFiles": [
+    "SKILL.md"
+  ],
+  "checksums": {
+    "SKILL.md": "28eb7b58f49c3e8e00ba381edf10fd573a68d876eff0b64e7dffcd74d6bdbaf6"
+  },
+  "tools": [
+    "extract_image"
+  ],
+  "pythonModules": [],
+  "limitations": []
+}

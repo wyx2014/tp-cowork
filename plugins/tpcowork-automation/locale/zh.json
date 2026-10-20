@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-automation",
+    "description": "自动化编排层：Host 统一保存任务定义、管理定时调度和运行记录，Client 提供任务、模板及结果入口。支持纯提醒和每次创建独立 DSH 会话的助手任务，让重复工作复用现有 Agent 执行能力。"
+  }
+}

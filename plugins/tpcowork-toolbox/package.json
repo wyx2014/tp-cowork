@@ -1,0 +1,112 @@
+{
+  "name": "@tpcowork/dsh-toolbox",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "TP Cowork toolbox Host and Client capability management seam",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/types/tpcowork-toolbox/src/host.d.ts",
+      "default": "./lib/host.js"
+    },
+    "./client": {
+      "types": "./lib/types/tpcowork-toolbox/src/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./contracts": {
+      "types": "./lib/types/tpcowork-toolbox/src/contracts/index.d.ts",
+      "default": "./lib/contracts.js"
+    },
+    "./remote": {
+      "types": "./lib/types/tpcowork-toolbox/src/remote.d.ts",
+      "default": "./lib/remote.js"
+    },
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./composition": {
+      "types": "./lib/types/tpcowork-toolbox/src/composition.d.ts",
+      "default": "./lib/composition.js"
+    },
+    "./web-search-step": {
+      "types": "./lib/types/tpcowork-toolbox/src/host/web-search-step/index.d.ts",
+      "default": "./lib/web-search-step.js"
+    }
+  },
+  "files": [
+    "lib",
+    "resources",
+    "locale/*.json",
+    "runtime/playwright.json",
+    "runtime/browsers.tar.gz",
+    "runtime/python",
+    "README.md",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "node build.mjs --typecheck",
+    "test": "node ../../../deepseek-harness/node_modules/vitest/vitest.mjs run --config vitest.config.ts",
+    "test:artifact": "node tests/artifact-smoke.mjs",
+    "prepack": "node build.mjs",
+    "prepare:runtime": "node ../../scripts/prepare-toolbox-runtime.mjs",
+    "test:bootstrap": "node ../../../deepseek-harness/node_modules/vitest/vitest.mjs run --config vitest.config.ts tests/bootstrap.spec.ts"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-api-gateway": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-alpha.2",
+    "react": "^18.2.0",
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1",
+    "@deepseek-ai/dsh-app-boot": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-settings": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-skill": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-skill-filesystem": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-credentials": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-scope": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-mcp-client": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-agent": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-workflow": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-web": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-store": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-commands": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.1-alpha.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-commands"
+      ]
+    }
+  },
+  "dependencies": {
+    "@playwright/mcp": "0.0.30",
+    "@modelcontextprotocol/sdk": "1.12.1",
+    "zod": "3.25.76",
+    "zod-to-json-schema": "3.24.6"
+  },
+  "bundleDependencies": [
+    "@playwright/mcp",
+    "@modelcontextprotocol/sdk",
+    "zod",
+    "zod-to-json-schema"
+  ]
+}

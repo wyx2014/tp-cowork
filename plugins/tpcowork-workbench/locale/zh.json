@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-workbench",
+    "description": "任务收尾层：监听文件交付结果和回合结束，在交付成功或最终回复仍有进行中任务时提醒助手核对清单。复用 DSH 的 todo_write、Session 日志与任务投影，帮助交付结果与进度记录保持一致。"
+  }
+}

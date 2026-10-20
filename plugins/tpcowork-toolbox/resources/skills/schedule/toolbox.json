@@ -1,0 +1,13 @@
+{
+  "requiredFiles": [
+    "SKILL.md"
+  ],
+  "checksums": {
+    "SKILL.md": "ca31ab84904abd2436da2d4b8595a097488e56c721ce8e5cbfff92290d947ed5"
+  },
+  "tools": [
+    "cron"
+  ],
+  "pythonModules": [],
+  "limitations": []
+}

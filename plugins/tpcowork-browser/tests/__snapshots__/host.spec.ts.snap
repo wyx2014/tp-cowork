@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loads tools through a Cordis profile, observes policy and retracts tools on unload > browser tabs model output 1`] = `
+[
+  {
+    "text": "{"ok":true,"tabs":[]}",
+    "type": "text",
+  },
+]
+`;

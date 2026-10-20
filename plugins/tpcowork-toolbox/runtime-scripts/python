@@ -1,0 +1,3 @@
+#!/bin/sh
+TOOLBOX_PYTHON_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "${TPCOWORK_PYTHON:-python3}" -B -I "$TOOLBOX_PYTHON_DIR/boot.py" "$@"

@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { test } from 'node:test'
+import { buildWindows, collectWindowsInstallers, standaloneBuildVersion } from '../build-windows.mjs'
+import { runCommand } from '../package-command.mjs'
+import { stageCoreBundle } from '../stage-core-bundle.mjs'
+
+test('standalone CI versions need only the run identity, with distinct rerun versions', () => {
+  const environment = { PACKAGE_BUILD_VERSION: 'auto', GITHUB_RUN_NUMBER: '12', GITHUB_RUN_ATTEMPT: '1' }
+  const now = new Date('2026-10-20T00:00:00Z')
+  assert.equal(standaloneBuildVersion(environment, '0.2.1-alpha.2', now), '0.2.1-alpha.2.20261020.12.1')
+  assert.equal(standaloneBuildVersion({ ...environment, GITHUB_RUN_ATTEMPT: '2' }, '0.2.1-alpha.2', now), '0.2.1-alpha.2.20261020.12.2')
+  assert.equal(standaloneBuildVersion({}, '0.2.1-alpha.2'), '0.2.1-alpha.2')
+  assert.throws(() => standaloneBuildVersion({ ...environment, GITHUB_RUN_NUMBER: 'bad' }, '0.2.1-alpha.2', now), /positive integer/)
+})
+
+test('copies the verified installer with its exact checksum and both source revisions', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tpcowork-windows-artifact-'))
+  try {
+    const source = join(root, 'installer.exe')
+    const bytes = Buffer.from('fixture installer bytes')
+    await writeFile(source, bytes)
+    await writeFile(join(root, 'diagnostic.log'), 'not an installer')
+    const output = join(root, 'dist/installers')
+    const revisions = { productCommit: 'product-commit', harnessCommit: 'harness-commit' }
+    assert.deepEqual(await collectWindowsInstallers(root, output, revisions), ['installer.exe'])
+    assert.deepEqual(await readFile(join(output, 'installer.exe')), bytes)
+    assert.equal(await readFile(join(output, 'installer.exe.sha256'), 'utf8'), `${createHash('sha256').update(bytes).digest('hex')}  installer.exe\n`)
+    assert.deepEqual(JSON.parse(await readFile(join(output, 'build-info.json'), 'utf8')), {
+      schemaVersion: 1, ...revisions, installers: ['installer.exe'],
+    })
+    assert.deepEqual((await readdir(output)).sort(), ['build-info.json', 'installer.exe', 'installer.exe.sha256'])
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('refuses missing or ambiguous installers instead of collecting an old executable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tpcowork-windows-empty-'))
+  try {
+    await assert.rejects(collectWindowsInstallers(root, join(root, 'out'), {}), /expected one verified installer/)
+    await writeFile(join(root, 'a.exe'), '')
+    await writeFile(join(root, 'b.exe'), '')
+    await assert.rejects(collectWindowsInstallers(root, join(root, 'out'), {}), /found 2/)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('build stages reject process failures and preserve arguments containing spaces', async () => {
+  assert.equal(await runCommand(process.execPath, ['-e', 'process.stdout.write(process.argv[1])', 'a path with spaces'], { capture: true }), 'a path with spaces')
+  await assert.rejects(runCommand(process.execPath, ['-e', 'process.exit(7)'], { capture: true }), /exited 7/)
+})
+
+test('Mac and Linux Windows builds stop before installing or preparing files', { skip: process.platform === 'win32' && process.arch === 'x64' }, async () => {
+  await assert.rejects(buildWindows([]), /Windows x64/)
+})
+
+test('core staging excludes local and ambient API keys and preserves developer files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tpcowork-core-staging-'))
+  try {
+    const source = join(root, 'source')
+    await mkdir(source)
+    await writeFile(join(source, 'package.json'), JSON.stringify({ name: '@example/core', files: ['index.js', 'deployment.local.json', 'model.patch.yml', 'model.js'] }))
+    await writeFile(join(source, 'index.js'), 'export const example = true\n')
+    const local = JSON.stringify({ apiKey: 'local-example-secret', apiBase: 'https://local.example.com/v1' })
+    await writeFile(join(source, 'deployment.local.json'), local)
+    await writeFile(join(source, 'model.patch.yml'), 'local patch')
+    await writeFile(join(source, 'model.js'), 'local model')
+    const destination = join(root, 'release')
+    await stageCoreBundle(source, destination, { TPCOWORK_DEEPSEEK_API_KEY: 'ambient-example-secret', TPCOWORK_DEEPSEEK_BASE_URL: 'https://release.example.com/v1' })
+    const staged = JSON.parse(await readFile(join(destination, 'deployment.local.json'), 'utf8'))
+    assert.equal(staged.apiKey, undefined)
+    assert.equal(staged.apiBase, 'https://release.example.com/v1')
+    assert.equal(await readFile(join(source, 'deployment.local.json'), 'utf8'), local)
+    assert.equal(await readFile(join(source, 'model.patch.yml'), 'utf8'), 'local patch')
+    assert.equal(await readFile(join(source, 'model.js'), 'utf8'), 'local model')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})

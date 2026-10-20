@@ -1,0 +1,3 @@
+deployment.local.json
+*.tgz
+*.tsbuildinfo

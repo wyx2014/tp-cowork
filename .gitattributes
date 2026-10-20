@@ -1,0 +1,5 @@
+* text=auto eol=lf
+# Preserve vendored bytes and patch context for reproducible refreshes.
+plugins/tpcowork-browser/vendor/** -text
+*.patch -text whitespace=-blank-at-eol
+plugins/tpcowork-browser/vendor/playwright/LICENSE whitespace=cr-at-eol

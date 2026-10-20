@@ -1,0 +1,39 @@
+html body[data-tpcowork-ui] .WY7D4G_root { font-size: var(--dsh-sidebar-font-size); }
+html body[data-tpcowork-ui] .WY7D4G_logoRow { height: var(--dsh-sidebar-brand-height); padding: var(--dsh-sidebar-brand-padding); }
+html body[data-tpcowork-ui] .WY7D4G_brandMark { display: var(--dsh-sidebar-brand-mark-display); }
+html body[data-tpcowork-ui] .WY7D4G_brandName { font-weight: var(--dsh-sidebar-brand-weight); }
+html body[data-tpcowork-ui] .WY7D4G_root:not(.WY7D4G_collapsed) .WY7D4G_newSession { justify-content: var(--dsh-sidebar-action-align);
+    height: var(--dsh-sidebar-action-height); padding: var(--dsh-sidebar-action-padding);
+    margin: var(--dsh-sidebar-action-margin); border-style: var(--dsh-sidebar-action-border-style);
+    border-radius: var(--dsh-sidebar-action-radius); background: var(--dsh-sidebar-action-fill); }
+html body[data-tpcowork-ui] .WY7D4G_root:not(.WY7D4G_collapsed) .WY7D4G_newSession:hover { background: var(--dsh-sidebar-action-hover); }
+html[data-platform="darwin"] body[data-tpcowork-ui] .WY7D4G_root:not(.WY7D4G_collapsed) .WY7D4G_newSession { background: var(--dsh-sidebar-action-fill); }
+html[data-platform="darwin"] body[data-tpcowork-ui] .WY7D4G_root:not(.WY7D4G_collapsed) .WY7D4G_newSession:hover { background: var(--dsh-sidebar-action-hover); }
+html body[data-tpcowork-ui] .WY7D4G_root:not(.WY7D4G_collapsed) .WY7D4G_newSessionContent { justify-content: var(--dsh-sidebar-action-align); gap: var(--dsh-sidebar-action-gap); }
+html body[data-tpcowork-ui] .WY7D4G_newSession, html body[data-tpcowork-ui] .WY7D4G_panelRow { color: var(--dsw-alias-label-primary); font-weight: 400; }
+html body[data-tpcowork-ui] .WY7D4G_newSessionContent svg, html body[data-tpcowork-ui] .WY7D4G_panelGlyph svg { color: inherit; }
+html body[data-tpcowork-ui] .WY7D4G_panelList { gap: var(--dsh-sidebar-panels-gap); margin-bottom: var(--dsh-sidebar-panels-margin); }
+html body[data-tpcowork-ui] .WY7D4G_panelRow { min-height: var(--dsh-sidebar-panel-height);
+    padding: var(--dsh-sidebar-panel-padding); border-radius: var(--dsh-sidebar-action-radius); }
+html[data-platform="darwin"] body[data-tpcowork-ui] .pa6opG_sidebarCol { background: var(--dsh-sidebar-material); }
+html body[data-tpcowork-ui] .qxPbgW_stack { gap: var(--dsh-hero-gap); max-width: var(--dsh-hero-width); }
+html body[data-tpcowork-ui] .qxPbgW_titleGroup { display: none; }
+html body[data-tpcowork-ui] .qxPbgW_fishHitbox { flex: 1; min-width: 0; max-width: 100%; }
+html body[data-tpcowork-ui] .FXhjRG_composerHero { width: min(calc(var(--dsh-hero-width)
+    + 2 * var(--dsh-composer-side-clearance)), 100%); }
+html body[data-tpcowork-ui] .-vAKla_root { padding: var(--dsh-composer-padding); }
+html body[data-tpcowork-ui] .-vAKla_card { gap: var(--dsh-composer-gap); padding-top: var(--dsh-composer-top-padding);
+    border-radius: var(--dsh-composer-radius); }
+html body[data-tpcowork-ui] .-vAKla_cardWorkspaceTrigger::after { border-radius: var(--dsh-composer-radius); }
+html body[data-tpcowork-ui] .-vAKla_input { padding: var(--dsh-composer-editor-padding); }
+html body[data-tpcowork-ui] .-vAKla_root:not(.-vAKla_hero) .-vAKla_input
+    { min-height: var(--dsh-composer-min-height); }
+html body[data-tpcowork-ui] .-vAKla_placeholder { inset: var(--dsh-composer-placeholder-inset); }
+html body[data-tpcowork-ui] .-vAKla_row { padding: var(--dsh-composer-toolbar-padding); }
+html body[data-tpcowork-ui] .-vAKla_add { background: var(--dsh-composer-attach-fill); color: var(--dsh-composer-attach-ink); }
+html body[data-tpcowork-ui] .-vAKla_primary { width: var(--dsh-composer-submit-size); height: var(--dsh-composer-submit-size);
+    background: var(--dsh-composer-submit-fill); color: var(--dsh-composer-submit-ink);
+    transform: var(--dsh-composer-submit-transform); }
+html body[data-tpcowork-ui] .-vAKla_primary:hover:not(:disabled) { background: var(--dsh-composer-submit-hover); }
+html body[data-tpcowork-ui] .u3cv6q_bubble { border: var(--dsh-chat-user-border); border-radius: var(--dsh-chat-user-radius); }
+html body[data-tpcowork-ui] [data-plugin-package^="@tpcowork/"] ._dj94W_cardDesc { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; line-height: 20px; }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@tpcowork/dsh-automation",
+    "description": "Automation orchestration layer: the Host owns task definitions, scheduling and run history; the Client provides tasks, templates and results. Supports reminders and assistant tasks that create a separate DSH Session for each run, reusing the existing Agent execution system."
+  }
+}
