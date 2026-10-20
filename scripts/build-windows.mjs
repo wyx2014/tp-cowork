@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { harnessRoot, npmCli, productRoot, runCommand } from './package-command.mjs'
+import { withStagedWindowsApplication } from './stage-windows-smoke.mjs'
 import { desktopBuildVersionPrefix, validateDesktopBuildVersion } from '../../deepseek-harness/apps/desktop/scripts/desktop-build-version.mjs'
 
 /** Number an unpublished CI artifact without an update server or signing credentials. */
@@ -84,8 +85,9 @@ export async function buildWindows(argv = process.argv.slice(2)) {
     await runCommand('pnpm', args, { cwd: harnessRoot, env })
     if (values.check) return
     const application = join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked')
-    await runCommand(join(application, `${product.productName}.exe`),
-      [join(productRoot, 'scripts/smoke-windows-product.mjs'), join(application, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } })
+    // Python extension DLLs cannot reliably load from the deeply nested CI output path.
+    await withStagedWindowsApplication(application, staged => runCommand(join(staged, `${product.productName}.exe`),
+      [join(productRoot, 'scripts/smoke-windows-product.mjs'), join(staged, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }))
     const revision = async cwd => (await runCommand('git', ['rev-parse', 'HEAD'], { cwd, env, capture: true })).trim()
     const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), deployment, unsigned: true }
     const names = await collectWindowsInstallers(join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'), output, revisions)

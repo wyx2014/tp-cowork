@@ -20,7 +20,7 @@
 4. `build_version` 保持 `auto`；`deployment` 保持 `standalone`，生成独立测试包，无需配置更新策略服务、证书或模型 API Key。
 5. 成功后在运行页面的 **Artifacts** 下载 `TPCowork-windows-x64-…`，解压得到 EXE、SHA-256 文件和 `build-info.json`。后者记录产品、底座两个实际 commit 和打包模式。
 
-工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、七个产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查，以及产品 bundle、浏览器归档、离线 Python 导入检查后才上传安装包。安装包保留 30 天，失败诊断日志保留 14 天。工作流只上传 Actions Artifact，不自动创建 GitHub Release。
+工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、七个产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。安装包保留 30 天，失败诊断日志保留 14 天。工作流只上传 Actions Artifact，不自动创建 GitHub Release。
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 

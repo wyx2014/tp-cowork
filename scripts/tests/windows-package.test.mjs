@@ -7,6 +7,42 @@ import { test } from 'node:test'
 import { buildWindows, collectWindowsInstallers, standaloneBuildVersion } from '../build-windows.mjs'
 import { runCommand } from '../package-command.mjs'
 import { stageCoreBundle } from '../stage-core-bundle.mjs'
+import { withStagedWindowsApplication } from '../stage-windows-smoke.mjs'
+
+test('verifies the complete application from a private path with spaces and preserves its source', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'tp-source-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const native = 'resources/app.asar.unpacked/dsh/node_modules/@tpcowork/dsh-toolbox/runtime/python/Lib/site-packages/lxml'
+  await mkdir(join(root, native), { recursive: true })
+  const files = ['TP Cowork.exe', 'resources/app.asar', `${native}/_elementpath.cp312-win_amd64.pyd`]
+  for (const file of files) await writeFile(join(root, file), Buffer.from(`packaged bytes: ${file}`))
+  let staged
+  const result = await withStagedWindowsApplication(root, async application => {
+    staged = application
+    assert.notEqual(application, root)
+    assert.match(application, /TP Cowork$/u)
+    assert.ok(application.length < 100, 'native DLLs need a short staging directory')
+    for (const file of files) assert.deepEqual(await readFile(join(application, file)), await readFile(join(root, file)))
+    return 'verified'
+  })
+  assert.equal(result, 'verified')
+  await assert.rejects(readdir(staged), { code: 'ENOENT' })
+  for (const file of files) assert.equal(await readFile(join(root, file), 'utf8'), `packaged bytes: ${file}`)
+})
+
+test('a failed product smoke rejects the build and removes its private application', async t => {
+  const source = await mkdtemp(join(tmpdir(), 'tp-source-'))
+  t.after(() => rm(source, { recursive: true, force: true }))
+  await writeFile(join(source, 'TP Cowork.exe'), 'fixture executable')
+  let staged
+  const failure = new Error('native Python import failed')
+  await assert.rejects(withStagedWindowsApplication(source, async application => {
+    staged = application
+    throw failure
+  }), error => error === failure)
+  await assert.rejects(readdir(staged), { code: 'ENOENT' })
+  assert.equal(await readFile(join(source, 'TP Cowork.exe'), 'utf8'), 'fixture executable')
+})
 
 test('standalone CI versions need only the run identity, with distinct rerun versions', () => {
   const environment = { PACKAGE_BUILD_VERSION: 'auto', GITHUB_RUN_NUMBER: '12', GITHUB_RUN_ATTEMPT: '1' }
