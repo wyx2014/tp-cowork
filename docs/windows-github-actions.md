@@ -24,6 +24,8 @@
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 
+上传前还会在临时目录实际运行 EXE，验证首次安装、同目录覆盖升级及安装后的插件和 Python，再卸载测试应用。独立的 **Verify Windows installer** 工作流可按构建运行 ID 和 Artifact 名称检查已有安装包，无需重新编译。真实安装检查仅用于一次性 GitHub Actions runner。
+
 ## 打包模式
 
 | deployment | 行为 | 必填配置 |

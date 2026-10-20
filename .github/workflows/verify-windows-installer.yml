@@ -1,0 +1,35 @@
+name: Verify Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Build run containing the installer artifact'
+        required: true
+        default: '39392660853'
+      artifact_name:
+        description: 'Installer artifact name'
+        required: true
+        default: TPCowork-windows-x64-4-1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  install:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: ${{ inputs.artifact_name }}
+          path: installer
+      - name: Verify installation, upgrade and installed product
+        shell: pwsh
+        run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer
