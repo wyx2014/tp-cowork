@@ -21,16 +21,20 @@ for (const name of product.bundles) {
   const patches = manifest.dsh.bundle.patch
   for (const patch of Array.isArray(patches) ? patches : [patches]) readFileSync(join(directory, patch))
 }
-const anchor = join(runtime, 'node_modules/@deepseek-ai/dsh/package.json')
+const anchor = join(runtime, 'package.json')
 const requireRuntime = createRequire(anchor)
-const { initProfile, loadProfileDirectory, PROFILE_TEMPLATES } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/dsh-app-boot')))
+const { createRuntimeResolution, initProfile, loadProfileDirectory, PROFILE_TEMPLATES } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/dsh-app-boot')))
 const profile = mkdtempSync(join(tmpdir(), 'tp-bundles-'))
 try {
   initProfile(profile, [...PROFILE_TEMPLATES.web.bundles, ...product.bundles])
   const loaded = loadProfileDirectory('dsh', profile, anchor)
   console.log('Installed product skipped bundles:', JSON.stringify(loaded.skippedBundles))
   assert.deepEqual(loaded.skippedBundles, [], 'Installed runtime cannot load its profile bundles')
-  for (const name of product.bundles) assert.ok(loaded.layers.some(layer => layer.packageName === name), `Profile omits ${name}`)
+  const resolution = await createRuntimeResolution({ installAnchor: anchor, profile: loaded, home: profile })
+  for (const name of product.bundles) {
+    assert.ok(loaded.layers.some(layer => layer.packageName === name), `Profile omits ${name}`)
+    assert.ok(resolution.entries.some(entry => entry.name === name && entry.scope === 'installation'), `Runtime module lookup omits ${name}`)
+  }
 } finally { rmSync(profile, { recursive: true, force: true }) }
 const core = JSON.parse(readFileSync(join(runtime, 'node_modules/@tpcowork/dsh-core/deployment.local.json'), 'utf8'))
 assert.equal(core.apiKey, undefined, 'Product package must not embed a developer API key')
