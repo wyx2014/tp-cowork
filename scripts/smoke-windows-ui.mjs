@@ -1,0 +1,73 @@
+/** Launch the installed application with a private home and inspect its real renderer. */
+import assert from 'node:assert/strict'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { _electron } from 'playwright-core'
+
+const [executable, homeArgument, outputArgument] = process.argv.slice(2)
+if (!executable || !homeArgument || !outputArgument) throw new Error('Expected executable, private home and evidence directory')
+const home = resolve(homeArgument), output = resolve(outputArgument)
+await mkdir(home, { recursive: true })
+await mkdir(output, { recursive: true })
+const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)))
+delete env.ELECTRON_RUN_AS_NODE
+const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
+const log = [], errors = []
+let app, page, failure
+try {
+  app = await _electron.launch({ executablePath: resolve(executable),
+    args: [`--user-data-dir=${join(home, 'electron')}`],
+    env: { ...env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1', DSH_DESKTOP_OPEN_DEVTOOLS: '0' }, timeout: 60_000 })
+  for (const stream of [app.process().stdout, app.process().stderr]) {
+    stream?.on('data', bytes => { log.push(redact(bytes)); if (log.length > 300) log.shift() })
+  }
+  const observe = window => {
+    window.on('pageerror', error => errors.push(redact(error.message)))
+    window.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())) })
+  }
+  app.on('window', observe)
+  for (const window of app.windows()) observe(window)
+  const deadline = Date.now() + 60_000
+  while (Date.now() < deadline) {
+    page = app.windows().find(window => window.url().startsWith('dsh-app://app'))
+    if (page && await page.locator('body[data-tpcowork-ui]').count()) break
+    await new Promise(done => setTimeout(done, 250))
+  }
+  assert.ok(page, 'Installed application did not open its main page')
+  const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
+  console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
+  assert.equal(await page.locator('body[data-tpcowork-ui]').count(), 1, 'TP Cowork appearance plugin did not activate')
+  for (const name of ['ui', 'browser', 'toolbox', 'automation', 'experts']) {
+    assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
+  }
+  page.setDefaultTimeout(20_000)
+  await page.getByRole('button', { name: /^(Toolbox|工具箱)$/ }).click()
+  await page.locator('.tp-toolbox').waitFor()
+  await page.getByRole('button', { name: /^(Teams|Expert teams|专家团队)$/i }).click()
+  await page.screenshot({ path: join(output, 'toolbox.png'), fullPage: true })
+  assert.deepEqual(errors, [], 'Installed renderer reported errors')
+  console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
+} catch (error) {
+  failure = error
+} finally {
+  if (app) {
+    const windows = []
+    for (const window of app.windows()) {
+      try {
+        windows.push(await window.evaluate(() => ({ url: location.protocol + '//' + location.host + location.pathname,
+          title: document.title, text: document.body?.innerText,
+          productAppearance: document.body?.hasAttribute('data-tpcowork-ui'),
+          productModules: window.__DSH_BOOT__?.entries?.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) })))
+        await window.screenshot({ path: join(output, `window-${windows.length}.png`), timeout: 5000 })
+      } catch (error) { log.push(`Window evidence: ${redact(error)}`) }
+    }
+    let profile
+    try { profile = JSON.parse(await readFile(join(home, 'profiles/desktop/package.json'), 'utf8')) }
+    catch (error) { log.push(`Profile evidence: ${redact(error)}`) }
+    await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), windows, profile, errors, log }, null, 2) + '\n')
+    console.log(JSON.stringify({ windows, profile, errors }, null, 2))
+    const timer = setTimeout(() => app.process().kill(), 10_000)
+    try { await app.close() } finally { clearTimeout(timer) }
+  }
+}
+if (failure) throw failure

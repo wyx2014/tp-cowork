@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$InstallerDirectory)
+param([Parameter(Mandatory)][string]$InstallerDirectory, [switch]$CleanMachine)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run the real product installation check on a disposable GitHub Actions runner.' }
 $installers = @(Get-ChildItem -LiteralPath $InstallerDirectory -Filter '*.exe' -File)
@@ -37,9 +37,9 @@ try {
     Set-Content -LiteralPath $source -Value ('class Probe { static int Main() { System.IO.File.WriteAllText(' + $markerLiteral + ', "called"); return 2; } }')
     & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe "/out:$legacyUninstaller" $source
     if ($LASTEXITCODE -ne 0) { throw 'Cannot build the legacy uninstaller probe.' }
-    foreach ($key in $legacyKeys) {
+    foreach ($key in $(if ($CleanMachine) { @() } else { $legacyKeys })) {
         if (Test-Path -LiteralPath $key) { throw 'The legacy application is already registered on this runner.' }
-        New-Item -Path $key | Out-Null
+        New-Item -Path $key -Force | Out-Null
         $ownedLegacyKeys += $key
         New-ItemProperty -LiteralPath $key -Name InstallLocation -Value $legacy | Out-Null
         New-ItemProperty -LiteralPath $key -Name UninstallString -Value ('"' + $legacyUninstaller + '"') | Out-Null
@@ -48,6 +48,8 @@ try {
         Write-Output "Checking $mode at $application"
         # NSIS requires /D last and unquoted, even when the path contains spaces.
         Invoke-InstallerProcess $installers[0].FullName ("/S /D=" + $application)
+        & node (Join-Path $PSScriptRoot 'smoke-windows-ui.mjs') (Join-Path $application 'TP Cowork.exe') (Join-Path $scratch 'profile') (Join-Path $PSScriptRoot "../test-results/windows-install/$mode")
+        if ($LASTEXITCODE -ne 0) { throw 'Installed product UI verification failed.' }
         $hadElectronMode = Test-Path Env:ELECTRON_RUN_AS_NODE
         $previousElectronMode = $env:ELECTRON_RUN_AS_NODE
         try {
@@ -58,10 +60,10 @@ try {
             else { Remove-Item Env:ELECTRON_RUN_AS_NODE }
         }
         if (Test-Path -LiteralPath $legacyMarker) { throw 'The DSH installer invoked the nanobot uninstaller.' }
-        foreach ($key in $legacyKeys) {
+        foreach ($key in $ownedLegacyKeys) {
             if ((Get-ItemPropertyValue -LiteralPath $key -Name InstallLocation) -ne $legacy) { throw 'The DSH installer replaced the nanobot registration.' }
         }
-        $residue = @(Get-ChildItem -LiteralPath $scratch -Directory | Where-Object Name -notin @('TP Cowork', 'nanobot'))
+        $residue = @(Get-ChildItem -LiteralPath $scratch -Directory | Where-Object Name -notin @('TP Cowork', 'nanobot', 'profile'))
         if ($residue.Count -ne 0) { throw 'Installer left staging or backup directories after success.' }
         Write-Output "TP Cowork: $mode and installed product verified"
     }

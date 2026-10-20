@@ -119,3 +119,10 @@ jobs:
           path: deepseek-harness/apps/desktop/.desktop-build/packaging-runs/
           if-no-files-found: warn
           retention-days: 14
+      - name: Retain installed UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-ui-${{ github.run_id }}
+          path: tp-cowork/test-results/windows-install/
+          if-no-files-found: warn
