@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "build:win": "node scripts/build-windows.mjs",
-    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs"
+    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs"
   },
   "devDependencies": { "pnpm": "11.28.5" }
 }
