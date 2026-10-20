@@ -26,6 +26,8 @@
 
 上传前还会在临时目录实际运行 EXE，验证首次安装、同目录覆盖升级及安装后的插件和 Python，再卸载测试应用。每次安装后启动真实桌面程序，用私有数据目录检查 TP Cowork 外观、客户端插件及工具箱专家团队入口；截图和启动记录保存在 `installed-ui-…` Artifact。测试同时登记旧 nanobot 版的安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。独立的 **Verify Windows installer** 工作流可按构建运行 ID 和 Artifact 名称检查已有安装包，无需重新编译；仅在诊断旧包的干净机器行为时勾选 `clean_machine`，正式打包始终验证旧版并存。真实安装检查仅用于一次性 GitHub Actions runner。
 
+若 EXE 已生成，但后续验收失败，工作流会保留 `unverified-installer-<run_id>` 诊断产物 7 天。可将该运行 ID 和产物名称填入 **Verify Windows installer** 复查；它尚未通过完整验收，不作为交付包。正式测试包以通过安装和界面验收后上传的 `TPCowork-windows-x64-…` 为准。
+
 DSH 版的安装标识是 `com.tparuyi.tpcowork.dsh`，与旧 nanobot 版 `com.tparuyi.app` 独立，两者可并存。安装 DSH 版时选择默认目录或其他空目录；旧版会话与配置不自动迁移。
 
 ## 打包模式
