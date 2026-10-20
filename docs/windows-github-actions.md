@@ -24,7 +24,9 @@
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 
-上传前还会在临时目录实际运行 EXE，验证首次安装、同目录覆盖升级及安装后的插件和 Python，再卸载测试应用。独立的 **Verify Windows installer** 工作流可按构建运行 ID 和 Artifact 名称检查已有安装包，无需重新编译。真实安装检查仅用于一次性 GitHub Actions runner。
+上传前还会在临时目录实际运行 EXE，验证首次安装、同目录覆盖升级及安装后的插件和 Python，再卸载测试应用。测试同时登记旧 nanobot 版的安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。独立的 **Verify Windows installer** 工作流可按构建运行 ID 和 Artifact 名称检查已有安装包，无需重新编译。真实安装检查仅用于一次性 GitHub Actions runner。
+
+DSH 版的安装标识是 `com.tparuyi.tpcowork.dsh`，与旧 nanobot 版 `com.tparuyi.app` 独立，两者可并存。安装 DSH 版时选择默认目录或其他空目录；旧版会话与配置不自动迁移。
 
 ## 打包模式
 
