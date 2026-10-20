@@ -48,6 +48,10 @@ try {
   await page.getByRole('button', { name: /^(Experts · Skills · Connectors|专家 · 技能 · 连接器)$/ }).click()
   await page.locator('.tp-toolbox').waitFor()
   await page.getByRole('button', { name: /^(Teams|Expert teams|专家团队)$/i }).click()
+  const research = page.locator('.tp-toolbox-card').filter({ has: page.getByRole('heading', { name: '资产投研团队 · 个股研究', exact: true }) })
+  await research.waitFor()
+  assert.equal(await research.getByRole('button', { name: /^(Use team|使用团队)$/ }).isEnabled(), true,
+    'Installed stock research team is unavailable')
   await page.screenshot({ path: join(output, 'toolbox.png'), fullPage: true })
   assert.deepEqual(errors, [], 'Installed renderer reported errors')
   console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
