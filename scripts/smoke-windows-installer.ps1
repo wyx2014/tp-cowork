@@ -48,17 +48,17 @@ try {
         Write-Output "Checking $mode at $application"
         # NSIS requires /D last and unquoted, even when the path contains spaces.
         Invoke-InstallerProcess $installers[0].FullName ("/S /D=" + $application)
-        & node (Join-Path $PSScriptRoot 'smoke-windows-ui.mjs') (Join-Path $application 'TP Cowork.exe') (Join-Path $scratch 'profile') (Join-Path $PSScriptRoot "../test-results/windows-install/$mode")
-        if ($LASTEXITCODE -ne 0) { throw 'Installed product UI verification failed.' }
         $hadElectronMode = Test-Path Env:ELECTRON_RUN_AS_NODE
         $previousElectronMode = $env:ELECTRON_RUN_AS_NODE
         try {
             $env:ELECTRON_RUN_AS_NODE = '1'
-            Invoke-InstallerProcess (Join-Path $application 'TP Cowork.exe') ('"' + $productSmoke + '" "' + (Join-Path $application 'resources') + '"')
+            Invoke-InstallerProcess (Join-Path $application 'TP Cowork.exe') ('--expose-internals "' + $productSmoke + '" "' + (Join-Path $application 'resources') + '"')
         } finally {
             if ($hadElectronMode) { $env:ELECTRON_RUN_AS_NODE = $previousElectronMode }
             else { Remove-Item Env:ELECTRON_RUN_AS_NODE }
         }
+        & node (Join-Path $PSScriptRoot 'smoke-windows-ui.mjs') (Join-Path $application 'TP Cowork.exe') (Join-Path $scratch 'profile') (Join-Path $PSScriptRoot "../test-results/windows-install/$mode")
+        if ($LASTEXITCODE -ne 0) { throw 'Installed product UI verification failed.' }
         if (Test-Path -LiteralPath $legacyMarker) { throw 'The DSH installer invoked the nanobot uninstaller.' }
         foreach ($key in $ownedLegacyKeys) {
             if ((Get-ItemPropertyValue -LiteralPath $key -Name InstallLocation) -ne $legacy) { throw 'The DSH installer replaced the nanobot registration.' }

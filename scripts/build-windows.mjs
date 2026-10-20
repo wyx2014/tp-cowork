@@ -87,7 +87,7 @@ export async function buildWindows(argv = process.argv.slice(2)) {
     const application = join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked')
     // Python extension DLLs cannot reliably load from the deeply nested CI output path.
     await withStagedWindowsApplication(application, staged => runCommand(join(staged, `${product.productName}.exe`),
-      [join(productRoot, 'scripts/smoke-windows-product.mjs'), join(staged, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }))
+      ['--expose-internals', join(productRoot, 'scripts/smoke-windows-product.mjs'), join(staged, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }))
     const revision = async cwd => (await runCommand('git', ['rev-parse', 'HEAD'], { cwd, env, capture: true })).trim()
     const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), deployment, unsigned: true }
     const names = await collectWindowsInstallers(join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'), output, revisions)
