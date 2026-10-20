@@ -43,6 +43,16 @@ jobs:
         env:
           CLEAN_MACHINE: ${{ inputs.clean_machine }}
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -CleanMachine:($env:CLEAN_MACHINE -eq 'true')
+      - name: Upload verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPCowork-windows-x64-verified-${{ inputs.run_id }}
+          path: |
+            installer/*.exe
+            installer/*.sha256
+            installer/build-info.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Retain installed UI evidence
         if: always()
         uses: actions/upload-artifact@v4
