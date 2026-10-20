@@ -14,6 +14,25 @@ delete env.ELECTRON_RUN_AS_NODE
 const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
 const log = [], errors = []
 let app, page, failure
+// Capture through Electron so the welcome window cannot leave the main compositor occluded.
+async function captureWindow(window, path) {
+  const native = await app.browserWindow(window)
+  let timer
+  try {
+    const png = await Promise.race([
+      native.evaluate(async browserWindow => {
+        if (browserWindow.isMinimized()) browserWindow.restore()
+        browserWindow.show()
+        browserWindow.focus()
+        const snapshot = await browserWindow.capturePage(undefined, { stayAwake: true })
+        if (snapshot.isEmpty()) throw new Error('Installed window returned an empty screenshot')
+        return snapshot.toPNG().toString('base64')
+      }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Installed window capture exceeded 20 seconds')), 20_000) }),
+    ])
+    await writeFile(path, Buffer.from(png, 'base64'))
+  } finally { clearTimeout(timer); await native.dispose() }
+}
 try {
   app = await _electron.launch({ executablePath: resolve(executable),
     args: [`--user-data-dir=${join(home, 'electron')}`],
@@ -52,7 +71,7 @@ try {
   await research.waitFor()
   assert.equal(await research.getByRole('button', { name: /^(Use team|使用团队)$/ }).isEnabled(), true,
     'Installed stock research team is unavailable')
-  await page.screenshot({ path: join(output, 'toolbox.png') })
+  await captureWindow(page, join(output, 'toolbox.png'))
   assert.deepEqual(errors, [], 'Installed renderer reported errors')
   console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
 } catch (error) {
@@ -67,7 +86,7 @@ try {
           productAppearance: document.body?.hasAttribute('data-tpcowork-ui'),
           browserEnabled: (await window.dshDesktop?.browserAutomation?.request('snapshot'))?.enabled,
           productModules: window.__DSH_BOOT__?.entries?.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) })))
-        await window.screenshot({ path: join(output, `window-${windows.length}.png`), timeout: 5000 })
+        await captureWindow(window, join(output, `window-${windows.length}.png`))
       } catch (error) { log.push(`Window evidence: ${redact(error)}`) }
     }
     let profile
