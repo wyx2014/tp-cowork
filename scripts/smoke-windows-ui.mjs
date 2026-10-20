@@ -40,6 +40,10 @@ try {
   for (const name of ['ui', 'browser', 'toolbox', 'automation', 'experts']) {
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
+  await page.waitForFunction(async () =>
+    (await window.dshDesktop?.browserAutomation?.request('snapshot'))?.enabled === true,
+  null, { timeout: 20_000 })
+  console.log('Installed native browser bridge enabled')
   page.setDefaultTimeout(20_000)
   await page.getByRole('button', { name: /^(Experts · Skills · Connectors|专家 · 技能 · 连接器)$/ }).click()
   await page.locator('.tp-toolbox').waitFor()
@@ -54,9 +58,10 @@ try {
     const windows = []
     for (const window of app.windows()) {
       try {
-        windows.push(await window.evaluate(() => ({ url: location.protocol + '//' + location.host + location.pathname,
+        windows.push(await window.evaluate(async () => ({ url: location.protocol + '//' + location.host + location.pathname,
           title: document.title, text: document.body?.innerText,
           productAppearance: document.body?.hasAttribute('data-tpcowork-ui'),
+          browserEnabled: (await window.dshDesktop?.browserAutomation?.request('snapshot'))?.enabled,
           productModules: window.__DSH_BOOT__?.entries?.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) })))
         await window.screenshot({ path: join(output, `window-${windows.length}.png`), timeout: 5000 })
       } catch (error) { log.push(`Window evidence: ${redact(error)}`) }
