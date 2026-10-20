@@ -126,3 +126,11 @@ jobs:
           name: installed-ui-${{ github.run_id }}
           path: tp-cowork/test-results/windows-install/
           if-no-files-found: warn
+      - name: Retain unverified installer for diagnosis
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unverified-installer-${{ github.run_id }}
+          path: tp-cowork/dist/installers/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -41,7 +41,7 @@ try {
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
   page.setDefaultTimeout(20_000)
-  await page.getByRole('button', { name: /^(Toolbox|工具箱)$/ }).click()
+  await page.getByRole('button', { name: /^(Experts · Skills · Connectors|专家 · 技能 · 连接器)$/ }).click()
   await page.locator('.tp-toolbox').waitFor()
   await page.getByRole('button', { name: /^(Teams|Expert teams|专家团队)$/i }).click()
   await page.screenshot({ path: join(output, 'toolbox.png'), fullPage: true })
