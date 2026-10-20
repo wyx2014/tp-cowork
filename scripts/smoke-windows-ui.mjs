@@ -52,7 +52,7 @@ try {
   await research.waitFor()
   assert.equal(await research.getByRole('button', { name: /^(Use team|使用团队)$/ }).isEnabled(), true,
     'Installed stock research team is unavailable')
-  await page.screenshot({ path: join(output, 'toolbox.png'), fullPage: true })
+  await page.screenshot({ path: join(output, 'toolbox.png') })
   assert.deepEqual(errors, [], 'Installed renderer reported errors')
   console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
 } catch (error) {
