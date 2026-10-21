@@ -9,6 +9,9 @@ import { desktopPlan, runDesktop, assertDesktopStopped } from '../dev-desktop.mj
 import { initializeDesktopProfile } from '../initialize-desktop-profile.mjs'
 import { harnessRoot, productRoot, runCommand } from '../package-command.mjs'
 
+/** Whether a step's script argument ends with `suffix`, written with forward slashes but matched on any platform separator. */
+const runsScript = (args, suffix) => args[0]?.replaceAll('\\', '/').endsWith(suffix) ?? false
+
 /** Commit a fixture checkout so dev-desktop.mjs can read its git state, independent of the caller's own git identity. */
 function initGit(directory) {
   execFileSync('git', ['init', '-q'], { cwd: directory })
@@ -123,7 +126,7 @@ test('plugin changes and missing plugin output rebuild plugins without compiling
   for (const explicit of [true, false]) {
     if (!explicit) await rm(join(options.product, 'plugins/tpcowork-experts/lib/host.js'))
     const { steps } = desktopPlan({ ...options, plugins: explicit })
-    assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-experts/build.mjs')))
+    assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-experts/build.mjs')))
     assert.ok(steps.some(step => step.args.includes('--install-native')))
     assert.ok(!steps.some(step => step.args.includes('build') || step.args.includes('build:desktop') || step.args.includes('install')))
     assert.equal(steps.at(-1).args.at(-1), 'start:desktop')
@@ -134,8 +137,8 @@ test('explicit full rebuild compiles both layers without reinstalling existing p
   const options = await readyFixture(t)
   const { steps } = desktopPlan({ ...options, rebuild: true })
   assert.ok(steps.some(step => step.args.includes('build:desktop')))
-  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-ui/build.mjs')))
-  assert.ok(!steps.some(step => step.args[0]?.endsWith('desktop-plugin.mjs')))
+  assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-ui/build.mjs')))
+  assert.ok(!steps.some(step => runsScript(step.args, 'desktop-plugin.mjs')))
   assert.ok(!steps.some(step => step.args.includes('prepare:primary-runtime')))
 })
 
@@ -144,7 +147,7 @@ test('a broken or moved plugin link is repaired without rebuilding or reinstalli
   const profile = join(options.environment.DSH_HOME, 'profiles/desktop')
   await rm(join(profile, 'node_modules/@tpcowork/dsh-experts'))
   const { steps } = desktopPlan(options)
-  const installs = steps.filter(step => step.args[0]?.endsWith('desktop-plugin.mjs'))
+  const installs = steps.filter(step => runsScript(step.args, 'desktop-plugin.mjs'))
   assert.equal(installs.length, 1)
   assert.deepEqual(installs[0].args.slice(1), ['install', 'experts'])
   assert.ok(!steps.some(step => step.args.includes('build:desktop')))
@@ -179,7 +182,7 @@ test('editing plugin source after the baseline is recorded rebuilds plugins with
   await runDesktop(options, { run: async () => {}, log: () => {} })
   await writeFile(join(options.product, 'plugins/tpcowork-experts/lib/host.js'), 'changed')
   const { steps } = desktopPlan(options)
-  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-experts/build.mjs')))
+  assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-experts/build.mjs')))
   assert.ok(!steps.some(step => step.args.includes('build:desktop') || step.args.includes('build')))
 })
 
@@ -191,7 +194,7 @@ test('editing a harness file after the baseline is recorded rebuilds both the ha
   await writeFile(join(options.harness, 'apps/desktop/lib/main.js'), 'changed')
   const { steps } = desktopPlan(options)
   assert.ok(steps.some(step => step.args.includes('build:desktop')))
-  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-ui/build.mjs')))
+  assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-ui/build.mjs')))
 })
 
 test('a failed run does not record a fingerprint, so the next attempt still retries the rebuild', async t => {
@@ -202,11 +205,11 @@ test('a failed run does not record a fingerprint, so the next attempt still retr
   const before = await readFile(join(options.harness, 'apps/desktop/.desktop-build/development/build-fingerprint.json'), 'utf8')
   await writeFile(join(options.product, 'plugins/tpcowork-experts/lib/host.js'), 'changed')
   await assert.rejects(runDesktop(options, { log: () => {}, run: async (_command, args) => {
-    if (args[0]?.endsWith('tpcowork-experts/build.mjs')) throw new Error('fixture build failed')
+    if (runsScript(args, 'tpcowork-experts/build.mjs')) throw new Error('fixture build failed')
   } }))
   assert.equal(await readFile(join(options.harness, 'apps/desktop/.desktop-build/development/build-fingerprint.json'), 'utf8'), before)
   const { steps } = desktopPlan(options)
-  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-experts/build.mjs')))
+  assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-experts/build.mjs')))
 })
 
 test('a running desktop prevents build and install operations', { skip: process.platform === 'win32' }, async t => {
