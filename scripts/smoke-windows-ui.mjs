@@ -12,8 +12,13 @@ await mkdir(output, { recursive: true })
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)))
 delete env.ELECTRON_RUN_AS_NODE
 const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
-const log = [], errors = [], networkFailures = [], observers = []
+const log = [], errors = [], networkFailures = [], observers = [], pendingRequests = new Map()
 let app, page, failure
+async function waitForPageAssets(window) {
+  await window.waitForLoadState('load', { timeout: 60_000 })
+  await window.waitForFunction(() => document.fonts.status === 'loaded'
+    && [...document.images].every(image => image.complete), null, { timeout: 20_000 })
+}
 // Capture through Electron so the welcome window cannot leave the main compositor occluded.
 async function captureWindow(window, path) {
   const native = await app.browserWindow(window)
@@ -53,9 +58,14 @@ try {
       networkFailures.push({ kind: 'response', status: response.status(), url: redact(response.url()),
         resourceType: response.request().resourceType(), window: redact(window.url()) })
     }
-    const requestfailed = request => networkFailures.push({ kind: 'requestfailed', url: redact(request.url()),
-      error: redact(request.failure()?.errorText), resourceType: request.resourceType(), window: redact(window.url()) })
-    const events = { pageerror, console: consoleError, response, requestfailed }
+    const request = request => pendingRequests.set(request, { url: redact(request.url()), resourceType: request.resourceType() })
+    const requestfinished = request => pendingRequests.delete(request)
+    const requestfailed = request => {
+      pendingRequests.delete(request)
+      networkFailures.push({ kind: 'requestfailed', url: redact(request.url()),
+        error: redact(request.failure()?.errorText), resourceType: request.resourceType(), window: redact(window.url()) })
+    }
+    const events = { pageerror, console: consoleError, response, request, requestfinished, requestfailed }
     for (const [event, listener] of Object.entries(events)) window.on(event, listener)
     observers.push({ window, events })
   }
@@ -69,7 +79,7 @@ try {
   }
   assert.ok(page, 'Installed application did not open its main page')
   // Finish cold-start requests before a reload can cancel them.
-  await page.waitForLoadState('networkidle', { timeout: 60_000 })
+  await waitForPageAssets(page)
   assert.deepEqual([...errors], [], 'Installed renderer reported errors during first load')
   // Observe a complete document load even when Electron launched before listeners attached.
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -99,7 +109,7 @@ try {
   await research.waitFor()
   assert.equal(await research.getByRole('button', { name: /^(Use team|使用团队)$/ }).isEnabled(), true,
     'Installed stock research team is unavailable')
-  await page.waitForLoadState('networkidle', { timeout: 60_000 })
+  await waitForPageAssets(page)
   await captureWindow(page, join(output, 'toolbox.png'))
   assert.deepEqual([...errors], [], 'Installed renderer reported errors')
   console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
@@ -125,8 +135,9 @@ try {
     let profile
     try { profile = JSON.parse(await readFile(join(home, 'profiles/desktop/package.json'), 'utf8')) }
     catch (error) { log.push(`Profile evidence: ${redact(error)}`) }
-    await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), windows, profile, errors, networkFailures, log }, null, 2) + '\n')
-    console.log(JSON.stringify({ windows, profile, errors, networkFailures }, null, 2))
+    const pendingNetwork = [...pendingRequests.values()]
+    await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), windows, profile, errors, networkFailures, pendingNetwork, log }, null, 2) + '\n')
+    console.log(JSON.stringify({ windows, profile, errors, networkFailures, pendingNetwork }, null, 2))
     const timer = setTimeout(() => app.process().kill(), 10_000)
     try { await app.close() } finally { clearTimeout(timer) }
   }
