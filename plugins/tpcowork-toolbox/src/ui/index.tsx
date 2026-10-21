@@ -124,7 +124,7 @@ export function registerToolboxUi(ctx: Context): void {
     try { return { ok: true, value: await model.submit(request, signal ?? new AbortController().signal) } }
     catch (error) { return admissionFailure('toolbox/admission-failed', t('failed')) }
   })
-  const Icon = ({ size }: { size: number }) => <svg className="tp-toolbox-sidebar-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  const Icon = ({ size }: { size: number }) => <svg data-testid="toolbox-navigation" className="tp-toolbox-sidebar-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M9 6H5a2 2 0 0 1 0-4h10a7 7 0 0 1 7 7v5a8 8 0 0 1-16 0" />
     <circle cx="5" cy="12" r="3" /><circle cx="13" cy="12" r="3" /><path d="M8 12h2" />
   </svg>

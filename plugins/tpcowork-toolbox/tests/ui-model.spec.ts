@@ -27,6 +27,24 @@ function bench() {
 const message = { sessionId: 's1', requestId: 'request-1', mode: 'steer', clientTimeZone: 'Asia/Shanghai', content: [{ type: 'text', text: '/office-docx prepare a report' }, { type: 'file', receiptId: 'receipt-1' }] } as SessionPromptRequest
 
 describe('toolbox draft and authoritative admission', () => {
+  it('keeps a cold-start draft until task endpoints are available and restores it on the module notification', async () => {
+    const { model, remote, current } = bench()
+    remote.toolbox.describe.mockResolvedValue(ok({ ...description, modules: { ...description.modules, teams: false } }))
+    model.prepareTeam('s1', current.teams.items[0]!)
+    await model.loadChoice('s1')
+    await model.refresh()
+    expect(remote.toolboxTasks.selection).not.toHaveBeenCalled()
+    expect(remote.toolboxTasks.context).not.toHaveBeenCalled()
+    expect(model.state.getSnapshot().choices.s1).toMatchObject({ unavailable: true,
+      draft: { team: { id: current.teams.items[0]!.id } } })
+    remote.toolbox.describe.mockResolvedValue(ok(description))
+    await model.refresh('modules')
+    expect(remote.toolboxTasks.selection).toHaveBeenCalledExactlyOnceWith({ sessionId: 's1' })
+    expect(remote.toolboxTasks.context).toHaveBeenCalledExactlyOnceWith({ sessionId: 's1', taskId: 's1' })
+    expect(model.state.getSnapshot().choices.s1).toMatchObject({ unavailable: false,
+      draft: { team: { id: current.teams.items[0]!.id } }, catalog: current })
+  })
+
   it('refreshes only the changed catalog and selected drafts without reloading unrelated panels or empty drafts', async () => {
     const { model, remote } = bench()
     await model.refresh(); await model.loadChoice('selected'); await model.loadChoice('blank')
@@ -206,6 +224,7 @@ describe('toolbox draft and authoritative admission', () => {
   })
   it('waits for a superseding choice read before returning the catalog to a popup', async () => {
     const { model, remote, current } = bench()
+    await model.refresh()
     let first!: (value: ReturnType<typeof ok<typeof current>>) => void
     let latest!: (value: ReturnType<typeof ok<typeof current>>) => void
     remote.toolboxTasks.selection.mockImplementationOnce(() => new Promise(resolve => { first = resolve }))

@@ -18,10 +18,10 @@ export function ToolboxPage(props: PageProps) {
   const modules = state.description?.modules
   const busy = state.skills.loading || state.mcp.loading || state.teams.loading
   const toolbar = <>
-    <nav className="tp-toolbox-tabs" aria-label={t('title')}>{(['teams', 'skills', 'mcp', 'prompthub'] as Tab[]).map(tab => <Button key={tab} aria-pressed={state.tab === tab} onClick={() => { props.setTab(tab); setQuery('') }}>{t(tab)}</Button>)}</nav>
+    <nav className="tp-toolbox-tabs" aria-label={t('title')}>{(['teams', 'skills', 'mcp', 'prompthub'] as Tab[]).map(tab => <Button key={tab} data-testid={`toolbox-tab-${tab}`} aria-pressed={state.tab === tab} onClick={() => { props.setTab(tab); setQuery('') }}>{t(tab)}</Button>)}</nav>
     <Input className="tp-toolbox-search" icon={<ToolboxIcon name="search" />} type="search" aria-label={t('search')} placeholder={t('search')} maxLength={200} value={query} onChange={event => setQuery(event.target.value)} />
   </>
-  return <section className="tp-toolbox" aria-label={t('title')}>
+  return <section data-testid="toolbox-page" className="tp-toolbox" aria-label={t('title')}>
     <PageLayout.Provider value={{
       heading: <div><h1>{t('title')}</h1><p>{t('subtitle')}</p></div>,
       refresh: <Button className="tp-toolbox-icon-button" aria-label={t('refresh')} title={t('refresh')} disabled={busy} onClick={() => { void props.refresh() }}><ToolboxIcon name="refresh" /></Button>,

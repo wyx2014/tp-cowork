@@ -11,6 +11,31 @@ import { descriptionSchema } from '../src/remote.ts'
 
 const description = { contractVersion: 1, modules: { skills: false, mcp: false, teams: false, installer: false, prompthub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
 describe('DSH plugin seam', () => {
+  it('announces teams only while both the catalog and task services are available', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(TypertRegistry)
+      await ctx.plugin(TypertGatewayService)
+      await ctx.plugin(host)
+      await ctx.plugin({ name: 'teams-fixture', apply(inner: Context) {
+        inner.provide('toolboxTeams', { inventory: async () => ({ revision: 1, complete: true, items: [] }) })
+      } })
+      expect((await ctx.toolbox.describe()).modules.teams).toBe(false)
+      const stream = (await ctx.typertGateway.stream({ namespace: 'toolboxChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
+      expect((await stream.next()).value).toEqual({ type: 'ready' })
+      const unused = async () => { throw new Error('Task methods are not used by describe') }
+      const tasks = await ctx.plugin({ name: 'tasks-fixture', apply(inner: Context) {
+        inner.provide('toolboxTasks', { selection: unused, context: unused, submit: unused })
+      } })
+      expect((await ctx.toolbox.describe()).modules.teams).toBe(true)
+      expect((await stream.next()).value).toMatchObject({ type: 'changed', change: { domain: 'modules' } })
+      await tasks.dispose()
+      expect((await ctx.toolbox.describe()).modules.teams).toBe(false)
+      expect((await stream.next()).value).toMatchObject({ type: 'changed', change: { domain: 'modules' } })
+      await stream.return?.()
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('loads through the real Host Gateway, streams invalidation and removes endpoints and idle listeners on unload', async () => {
     const ctx = new Context()
     try {

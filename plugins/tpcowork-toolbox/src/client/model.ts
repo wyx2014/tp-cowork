@@ -140,6 +140,15 @@ export class ToolboxModel {
 
   async loadChoice(sessionId: string, confirm = false): Promise<void> {
     if (this.disposed) return
+    if (!this.state.getSnapshot().description) await this.refresh()
+    if (this.disposed) return
+    if (this.state.getSnapshot().description?.modules.teams !== true) {
+      this.state.update(s => {
+        const choice = s.choices[sessionId] ??= emptyChoice()
+        choice.unavailable = true
+      })
+      return
+    }
     if (confirm) this.confirmingChoices.add(sessionId)
     const reading = this.readChoice(sessionId)
     this.choiceReads.set(sessionId, reading)

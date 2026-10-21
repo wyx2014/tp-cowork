@@ -19,9 +19,9 @@ export function Teams({ load, available, t, query, actions }: SectionProps & { l
   return <SectionLayout><LoadNotice load={load} available={available} empty={!load.value?.items.length} t={t} />
     {load.value && !load.value.complete && <p role="alert">{t('incomplete')}</p>}
     {!!load.value?.items.length && !rows.length && <p className="tp-toolbox-empty">{t('noMatches')}</p>}
-    <div className="tp-toolbox-grid">{rows.map(team => <article className="tp-toolbox-card" key={team.id}>
+    <div className="tp-toolbox-grid">{rows.map(team => <article data-testid={`toolbox-team-${team.id}`} className="tp-toolbox-card" key={team.id}>
       <div className="tp-toolbox-card-body"><header><h3>{team.name}</h3><ReadinessBadge value={team.readiness} t={t} /></header><p className="tp-toolbox-card-description">{t('teamMembers')}: {team.members.map(member => member.name).join(' · ')}</p><Reasons value={team.readiness} />
-      <p className="tp-toolbox-meta">{t('version')}: {team.version}</p></div><div className="tp-toolbox-actions"><Button id={`${detailId}-${team.id}`} onClick={event => setDetail({ item: team, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button><Button disabled={!canUse(team)} onClick={() => useTeam(team)}>{t('useTeam')}</Button></div>
+      <p className="tp-toolbox-meta">{t('version')}: {team.version}</p></div><div className="tp-toolbox-actions"><Button id={`${detailId}-${team.id}`} onClick={event => setDetail({ item: team, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button><Button data-testid="toolbox-use-team" disabled={!canUse(team)} onClick={() => useTeam(team)}>{t('useTeam')}</Button></div>
     </article>)}</div>
   </SectionLayout>
 }

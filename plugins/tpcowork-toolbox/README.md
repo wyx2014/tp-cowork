@@ -66,7 +66,7 @@ Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱
 接口文档：[Step 网页搜索](https://platform.stepfun.com/docs/zh/api-reference/search/search)。
 - `../../docs/toolbox/migration.md`、`migration-manifest.json`：完整迁移映射和资源清点。
 
-`describe.modules` 只说明管理服务是否挂载，不代表技能可用或 MCP 已连接。缺少模块时显示尚未接入；读取不完整、失败和断线时保留已有内容并阻止目录写操作。更新来自 `toolboxChanges.watch`，ready/reset 时重读，无固定轮询。技能变更只刷新技能目录及带选择的未提交草稿；启停直接采用 Host 返回的目录，不触发整页重读，目录读取不再发送变更事件。Python 模块检查按解释器及依赖集合共享结果，点击「检查可用性」重新检测；工具、凭证和资源 fingerprint 继续实时核对。
+`describe.modules` 说明管理服务是否挂载，其中 teams 需团队目录及任务服务同时就绪，不代表技能可用或 MCP 已连接。首次启动在任务服务就绪前保留选择草稿、不请求任务接口，模块变更通知到达后自动恢复读取。缺少模块时显示尚未接入；读取不完整、失败和断线时保留已有内容并阻止目录写操作。更新来自 `toolboxChanges.watch`，ready/reset 时重读，无固定轮询。技能变更只刷新技能目录及带选择的未提交草稿；启停直接采用 Host 返回的目录，不触发整页重读，目录读取不再发送变更事件。Python 模块检查按解释器及依赖集合共享结果，点击「检查可用性」重新检测；工具、凭证和资源 fingerprint 继续实时核对。
 
 聊天能力通过 `ctx.commandUi.register()` 加入 DSH 原生“＋”菜单的“添加”分组，与文件、目标、计划等原有入口共用菜单；团队、技能和连接器选择复用 DSH 的 `popupSelect` 面板、搜索及键盘操作。从 `/` 建议选择技能后，同步到相同的能力选择与引用，重复选择不生成重复标签；引用删除、撤销和发送后的保留行为与“＋ → 技能”一致。已选能力参考 `tp-cowork`，作为原生编辑器内的轻量引用显示：技能使用紫色魔杖与名称，MCP 使用金色连接图标与名称，团队使用团队图标与名称，不带胶囊背景。点击引用或在引用后按退格即可移除；撤销恢复引用和选择，正文及其他引用保持完整。`conversation.input.selection` 仅呈现加载、提交及校验提示。未选择时不显示能力提示；历史空快照不参与能力校验，也不会拦截普通聊天。团队必需技能不可单独移除。`client-session/prompt-admission` 在原生命令仲裁和附件序列化之后，将完整 `SessionPromptRequest` 交给 `toolboxTasks.submit`；带能力选择的普通聊天按 requestId 保存不可变快照，下次发送前可继续增删技能和 MCP；删除全部标签会提交空快照，撤下此前能力。后续没有能力选择的消息沿用 DSH 原生发送流程，目录版本变化不会把历史空快照判为能力失效。团队任务受理后保留固定快照。团队按钮通过 `uiWorkspace.startSession` 的 `reuseBlank: false` 选项准备独立草稿，在 `onPrepared` 中绑定团队引用与能力：首行是可移除的团队引用，下方是可编辑提示词，个股研究和供应链研究各有对应模板。AI 创建技能也只填入提示。
 

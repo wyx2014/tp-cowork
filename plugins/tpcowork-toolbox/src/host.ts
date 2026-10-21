@@ -30,7 +30,8 @@ export class ToolboxService extends TypertRemoteService implements ToolboxApi {
       contractVersion: 1,
       modules: {
         skills: this.ctx.get('toolboxSkills') !== undefined, mcp: this.ctx.get('toolboxMcp') !== undefined,
-        teams: this.ctx.get('toolboxTeams') !== undefined, installer: this.ctx.get('toolboxInstaller') !== undefined,
+        teams: this.ctx.get('toolboxTeams') !== undefined && this.ctx.get('toolboxTasks') !== undefined,
+        installer: this.ctx.get('toolboxInstaller') !== undefined,
         prompthub: this.ctx.get('toolboxPromptHub') !== undefined,
       },
       defaultMcpIds: defaultMcpPresets.map(preset => preset.id),
@@ -48,7 +49,7 @@ export function apply(ctx: Context, config: Config): void {
   new ToolboxService(ctx, config)
   new ToolboxChangesService(ctx)
   let revision = 0
-  for (const key of ['toolboxSkills', 'toolboxMcp', 'toolboxTeams', 'toolboxInstaller', 'toolboxPromptHub'] as const) {
+  for (const key of ['toolboxSkills', 'toolboxMcp', 'toolboxTeams', 'toolboxTasks', 'toolboxInstaller', 'toolboxPromptHub'] as const) {
     ctx.inject([key], inner => {
       const changed = () => { ctx.emit('toolbox/changed', { revision: ++revision, domain: 'modules' }) }
       changed()
