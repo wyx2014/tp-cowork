@@ -7,8 +7,14 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "node scripts/dev-desktop.mjs",
+    "dev:plugins": "node scripts/dev-desktop.mjs --plugins",
+    "dev:rebuild": "node scripts/dev-desktop.mjs --rebuild",
+    "start": "node scripts/dev-desktop.mjs",
+    "desktop:brand": "node scripts/desktop-branding.mjs",
+    "desktop:preview": "node scripts/desktop-branding.mjs --stage",
     "build:win": "node scripts/build-windows.mjs",
-    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs scripts/tests/desktop-branding.test.mjs"
+    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs scripts/tests/desktop-branding.test.mjs scripts/tests/dev-desktop.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.61.1",
