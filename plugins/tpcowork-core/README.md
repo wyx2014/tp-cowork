@@ -6,7 +6,7 @@
 | --- | --- |
 | `persona.md` | 产品定位、办公能力介绍、模型来源说明和通用交流方式 |
 | `index.js` | 将产品身份接入 DSH 提示词组装，保留自定义角色与其他插件的贡献 |
-| `cordis.patch.yml` | 注册 core 插件，不覆盖用户的 system-prompt 或 preset 配置 |
+| `cordis.patch.yml` | 注册 core 插件并关闭官方 DeepSeek API-Key 来源，不覆盖用户的 system-prompt 或 preset 配置 |
 | `src/model.ts` → `model.js` | 独立注册内网模型，复用 DSH 的 pi-ai 适配器与配置解析 |
 | `deployment.js`、`build.mjs` | 部署配置校验、一次性导入、构建与首次凭证初始化 |
 | `model.patch.yml` | 内网模型配置与新会话的默认选择，不修改其他模型入口 |
@@ -39,7 +39,7 @@ DSH 对声明 `complete: true` 的完整提示词拥有最终决定权，因此 
 | 推理 | 关闭；不发送 `reasoning_effort` |
 | 设置区 / 凭证引用 | `tpcowork-core-model` / `TPCOWORK_DEEPSEEK_API_KEY` |
 
-内网模型独立注册，不修改 `llm-pi-ai`、官方 DeepSeek、账号模型或它们的凭证。原来保存的默认模型和会话内的模型选择继续生效；没有保存默认选择的新安装使用内网模型。已有用户可在模型选择器中选择“资产DeepSeek”。
+内网模型独立注册，bundle 默认关闭官方 DeepSeek API-Key 来源 `llm-deepseek`，保留 `llm-pi-ai`、账号模型和已有凭证。用户保存的默认模型与会话模型选择不被改写；原先选择官方来源的用户需切换到“资产DeepSeek”或重新启用该来源。没有保存默认选择的新安装使用内网模型。移除 core bundle 后恢复上游来源配置。
 
 首次准备当前项目的内网发行配置，在工作区根目录执行：
 
@@ -63,4 +63,4 @@ node plugins/tpcowork-core/build.mjs --import-tpcowork /Users/wyx/project/nanobo
 
 ## 验证
 
-在 `deepseek-harness` 目录运行 `node node_modules/vitest/vitest.mjs run --config ../plugins/tpcowork-core/vitest.config.ts`，类型检查使用 `node node_modules/typescript/bin/tsc -p ../plugins/tpcowork-core/tsconfig.json`。测试覆盖提示词快照、真实预设配置、自定义角色、完整提示词、工具排序、运行上下文、部署导入与凭证保护；验证两个 DeepSeek 来源并存、设置互不覆盖、真实适配器的 HTTP 请求与 SSE 工具调用、连续回复、缺少凭证时不发请求和卸载恢复。测试使用模拟 HTTP 响应，不需要连接内网服务。
+在 `deepseek-harness` 目录运行 `node node_modules/vitest/vitest.mjs run --config ../tp-coworkdsh/plugins/tpcowork-core/vitest.config.ts`，类型检查使用 `node node_modules/typescript/bin/tsc -p ../tp-coworkdsh/plugins/tpcowork-core/tsconfig.json`。测试覆盖提示词快照、真实预设配置、自定义角色、完整提示词、工具排序、运行上下文、部署导入与凭证保护；验证官方 API-Key 来源默认关闭、其他来源设置保留、真实适配器的 HTTP 请求与 SSE 工具调用、连续回复、缺少凭证时不发请求和卸载恢复。测试使用模拟 HTTP 响应，不需要连接内网服务。

@@ -44,18 +44,21 @@ function transport(responses: string[][]) {
 it('composes the shipped core model defaults over DSH and restores upstream selections when the bundle is removed', async () => {
   const base = load(await readFile(resolve('packages/bundle/base/cordis.patch.yml'), 'utf8'), { schema: entryListSchema })
   const original = applyEntryPatches([], base, () => {})
-  const manifest = JSON.parse(await readFile(resolve('../plugins/tpcowork-core/package.json'), 'utf8'))
+  const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, '../package.json'), 'utf8'))
   const layers = await Promise.all(manifest.dsh.bundle.patch.map(async (file: string) =>
-    load(await readFile(resolve('../plugins/tpcowork-core', file), 'utf8'), { schema: entryListSchema })))
+    load(await readFile(resolve(import.meta.dirname, '..', file), 'utf8'), { schema: entryListSchema })))
   const warnings: string[] = []
   const rows = applyEntryPatches(original, layers.flat(), message => warnings.push(message))
   expect(warnings).toEqual([])
   expect(rows.find(row => row.id === 'agent-default-model')?.config).toEqual({
     provider: 'asset-deepseek', model: 'deepseek_v4_flash',
   })
-  for (const id of ['llm-pi-ai', 'llm-deepseek', 'llm-deepseek-account', 'deepseek-account']) {
+  for (const id of ['llm-pi-ai', 'llm-deepseek-account', 'deepseek-account']) {
     expect(rows.find(row => row.id === id)).toEqual(original.find(row => row.id === id))
   }
+  // The upstream "DeepSeek" (official, API-key) route is disabled; only asset-deepseek ships.
+  expect(original.find(row => row.id === 'llm-deepseek')?.disabled).toBeFalsy()
+  expect(rows.find(row => row.id === 'llm-deepseek')?.disabled).toBe(true)
   expect(rows.find(row => row.id === 'tpcowork-core-model')?.name).toBe('@tpcowork/dsh-core/model')
   const restored = applyEntryPatches([], base, () => {})
   expect(restored).toEqual(original)
