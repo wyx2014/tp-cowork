@@ -1,6 +1,6 @@
 /** Match the automation page's content width, typography, controls and list rhythm. */
 import { teamStyles } from './teams/styles.ts'
-import { storeStyles } from './prompthub/styles.ts'
+import { storeStyles } from './tpcoworkhub/styles.ts'
 import { mcpStyles } from './mcp-styles.ts'
 
 export const styles = `

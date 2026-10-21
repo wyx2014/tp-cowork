@@ -15,11 +15,11 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       ctx.effect(() => adaptSidebar(ctx.slots, 264, defaultSidebarWidth), 'tpcowork: sidebar width');
       ctx.effect(() => ctx.theme.overrideTokens(id, tokens), 'tpcowork: theme overrides');
       ctx.effect(() => ctx.locale.register('tpcowork', locales), 'tpcowork: localized labels');
-      const account = createPromptHubAccount(window.dshDesktop?.promptHub);
-      ctx.effect(() => () => account.dispose(), 'tpcowork: PromptHub account lifetime');
+      const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub);
+      ctx.effect(() => () => account.dispose(), 'tpcowork: TpcoworkHub account lifetime');
       ctx.slots.inject('settings.launcher', () => ctx.slots.register({
         name: 'settings.launcher', priority: -10, locale: 'tpcowork', inject: () => ({
-          hooks: { promptHub: account.source }, startSignIn: account.startSignIn, cancelSignIn: account.cancelSignIn,
+          hooks: { tpcoworkHub: account.source }, startSignIn: account.startSignIn, cancelSignIn: account.cancelSignIn,
           signOut: account.signOut, refreshAccount: account.refreshAccount,
         }),
       }, SettingsLauncher));

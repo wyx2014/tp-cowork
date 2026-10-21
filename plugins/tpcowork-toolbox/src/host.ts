@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import type { Change, InstallerApi, McpApi, PromptHubApi, SkillsApi, TeamsApi, ToolboxApi, ToolboxDescription } from './contracts/index.ts'
+import type { Change, InstallerApi, McpApi, TpcoworkHubApi, SkillsApi, TeamsApi, ToolboxApi, ToolboxDescription } from './contracts/index.ts'
 import { defaultMcpPresets } from './presets.ts'
 import { hostContribution } from './remote.ts'
 import { watchChanges } from './changes.ts'
@@ -17,7 +17,7 @@ declare module '@deepseek-ai/cordis' {
     toolboxMcp: McpApi
     toolboxTeams: TeamsApi
     toolboxInstaller: InstallerApi
-    toolboxPromptHub: PromptHubApi
+    toolboxTpcoworkHub: TpcoworkHubApi
   }
   interface Events { 'toolbox/changed'(change: Change): void }
 }
@@ -32,7 +32,7 @@ export class ToolboxService extends TypertRemoteService implements ToolboxApi {
         skills: this.ctx.get('toolboxSkills') !== undefined, mcp: this.ctx.get('toolboxMcp') !== undefined,
         teams: this.ctx.get('toolboxTeams') !== undefined && this.ctx.get('toolboxTasks') !== undefined,
         installer: this.ctx.get('toolboxInstaller') !== undefined,
-        prompthub: this.ctx.get('toolboxPromptHub') !== undefined,
+        tpcoworkhub: this.ctx.get('toolboxTpcoworkHub') !== undefined,
       },
       defaultMcpIds: defaultMcpPresets.map(preset => preset.id),
       ...(this.ctx.get('toolboxSkills') ? { userSkillsDirectory: userSkillsDirectory({ configured: this.config.skills.userRoot }) } : {}),
@@ -49,7 +49,7 @@ export function apply(ctx: Context, config: Config): void {
   new ToolboxService(ctx, config)
   new ToolboxChangesService(ctx)
   let revision = 0
-  for (const key of ['toolboxSkills', 'toolboxMcp', 'toolboxTeams', 'toolboxTasks', 'toolboxInstaller', 'toolboxPromptHub'] as const) {
+  for (const key of ['toolboxSkills', 'toolboxMcp', 'toolboxTeams', 'toolboxTasks', 'toolboxInstaller', 'toolboxTpcoworkHub'] as const) {
     ctx.inject([key], inner => {
       const changed = () => { ctx.emit('toolbox/changed', { revision: ++revision, domain: 'modules' }) }
       changed()

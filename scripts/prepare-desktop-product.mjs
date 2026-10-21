@@ -13,7 +13,7 @@ await mkdir(packages, { recursive: true })
 const env = { ...process.env, TPCOWORK_PACKAGED_PYTHON_SOURCE: join(resolveDesktopTargetBuildPaths().runtime, 'primary-runtime/dependencies/python') }
 for (const [directory, buildArgs] of [
   ['tpcowork-ui', ['build.mjs']], ['tpcowork-browser', ['build.mjs', '--install-native']],
-  ['tpcowork-toolbox', ['build.mjs']], ['tpcowork-automation', ['build.mjs']], ['tpcowork-experts', ['build.mjs']],
+  ['tpcowork-toolbox', ['build.mjs', '--install-native']], ['tpcowork-automation', ['build.mjs']], ['tpcowork-experts', ['build.mjs']],
 ]) {
   const cwd = join(productRoot, 'plugins', directory)
   if (directory === 'tpcowork-browser') await runCommand('npm', ['ci', '--legacy-peer-deps', '--no-audit', '--no-fund'], { cwd, env })

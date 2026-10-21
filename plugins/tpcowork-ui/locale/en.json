@@ -15,7 +15,7 @@
     "signOut": "Sign out",
     "cancelSignIn": "Cancel sign-in",
     "authCommitting": "Syncing your account…",
-    "authFailed": "PromptHub sign-in could not finish. Check the service address and network, then retry.",
+    "authFailed": "TP Cowork Hub sign-in could not finish. Check the service address and network, then retry.",
     "authTimeout": "Sign-in timed out. Try again.",
     "authExpired": "Your session expired. Sign in again.",
     "tasksTitle": "Tasks",

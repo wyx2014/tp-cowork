@@ -10,7 +10,7 @@ const ts = requireHarness('typescript')
 const { build } = createRequire(requireHarness.resolve('tsx/package.json'))('esbuild')
 const output = resolve(root, 'lib')
 const optionalEntries = {}
-for (const module of ['prompthub', 'teams', 'web-search-step']) {
+for (const module of ['tpcoworkhub', 'teams', 'web-search-step']) {
   const entry = resolve(root, `src/host/${module}/index.ts`)
   try { await access(entry); optionalEntries[module] = entry }
   catch (error) { if (error.code !== 'ENOENT') throw error }
@@ -76,4 +76,13 @@ await cp(resolve(harness, 'node_modules/zod/LICENSE'), resolve(output, 'licenses
 await cp(resolve(harness, 'LICENSE'), resolve(output, 'licenses/deepseek-harness.txt'))
 await cp(resolve(root, 'runtime-scripts/playwright-launcher.mjs'), resolve(output, 'playwright-launcher.mjs'))
 await writeFile(resolve(output, 'optional-modules.json'), JSON.stringify({ schemaVersion: 1, artifacts: Object.keys(optionalEntries) }, null, 2) + '\n')
-console.log('Built @tpcowork/dsh-toolbox Host, Client and contracts.')
+// The desktop shell only ever dynamically imports this one file through a thin, generic loader
+// (DesktopTpcoworkHubPlugin); no TP Cowork Hub logic lives in the shell itself.
+await build({ ...common, external: [...common.external, 'electron'],
+  entryPoints: [resolve(root, 'native/tpcoworkhub-desktop.ts')], outfile: resolve(output, 'desktop/tpcoworkhub.js') })
+if (process.argv.includes('--install-native')) {
+  const target = resolve(root, '../../../deepseek-harness/apps/desktop/lib/tpcoworkhub')
+  await mkdir(target, { recursive: true })
+  await cp(resolve(output, 'desktop/tpcoworkhub.js'), resolve(target, 'desktop.js'))
+}
+console.log('Built @tpcowork/dsh-toolbox Host, Client and contracts.' + (process.argv.includes('--install-native') ? ' Installed desktop TP Cowork Hub assets.' : ''))

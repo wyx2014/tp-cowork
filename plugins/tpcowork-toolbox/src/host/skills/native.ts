@@ -11,7 +11,7 @@ export interface NativeOptions {
 }
 async function secret(ctx: Context, ref: string): Promise<string | undefined> {
   try { return (await ctx.get('credentials')?.resolve(credentialRef(ref)))?.value }
-  catch { throw new Error('凭证服务暂不可用，请检查 DSH 凭证配置。') }
+  catch { throw new Error('凭证服务暂不可用，请检查 TP Cowork 凭证配置。') }
 }
 function endpoint(value: string | undefined): URL | undefined {
   if (!value) return undefined
@@ -57,7 +57,7 @@ async function boundedBody(response: Response, maxBytes: number): Promise<string
   } finally { await reader.cancel(); reader.releaseLock() }
 }
 export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
-  if ((await nativeMissing(ctx, 'call', config)).length) throw new Error('电话尚未配置；请补充部署设置和 DSH 凭证引用。')
+  if ((await nativeMissing(ctx, 'call', config)).length) throw new Error('电话尚未配置；请补充部署设置和 TP Cowork 凭证引用。')
   if (!['dial','hangup'].includes(args.action) || (args.action === 'dial' && !/^\d{3,20}$/.test(args.number ?? ''))) throw new Error('拨号需要明确的数字号码。')
   const url = new URL('/cgi-bin/ConfigManApp.com', endpoint(process.env.DSH_YEALINK_URL)!)
   if (args.action === 'hangup') url.searchParams.set('key', 'CALLEND')
@@ -78,7 +78,7 @@ export async function sendCall(ctx: Context, args: { action: string; number?: st
   } catch { throw new Error(signal.aborted ? '电话操作已取消。' : '话机指令失败；请检查网络、TLS 证书和凭证。') }
 }
 export async function extractImage(ctx: Context, args: { image_path: string; prompt?: string | undefined }, signal: AbortSignal, config: NativeOptions, cwd?: string): Promise<string> {
-  if ((await nativeMissing(ctx, 'image-extract', config)).length) throw new Error('图片提取尚未配置；请补充多模态服务和 DSH 凭证引用。')
+  if ((await nativeMissing(ctx, 'image-extract', config)).length) throw new Error('图片提取尚未配置；请补充多模态服务和 TP Cowork 凭证引用。')
   const fs = ctx.get('fs')
   if (!fs) throw new Error('当前会话未提供文件读取能力。')
   const target = await fs.resolve(args.image_path, cwd === undefined ? {} : { cwd })

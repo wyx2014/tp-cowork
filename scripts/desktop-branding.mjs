@@ -25,6 +25,29 @@ export function productSvg(icon, name, wordmark = false) {
     : `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="${label}"><image href="${image}" width="256" height="256"/></svg>\n`
 }
 
+/** The browser tab favicon historically was a single flat-filled mark on a transparent
+ * background (black in light mode, white in dark mode) rather than the app icon's own
+ * filled square — derive that same silhouette from the current icon instead of embedding
+ * the square wholesale, so the favicon keeps that lighter, theme-matched effect. */
+async function faviconMark(icon, sharp, name, hex) {
+  const { data, info } = await sharp(icon).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { width, height, channels } = info
+  const bgIndex = (Math.floor(height * 0.03) * width + Math.floor(width / 2)) * channels
+  const bg = [data[bgIndex], data[bgIndex + 1], data[bgIndex + 2]]
+  const [r, g, b] = [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
+  const mark = Buffer.alloc(width * height * 4)
+  for (let pixel = 0; pixel < width * height; pixel++) {
+    const source = pixel * channels, target = pixel * 4
+    const alpha = channels === 4 ? data[source + 3] : 255
+    const distance = Math.hypot(data[source] - bg[0], data[source + 1] - bg[1], data[source + 2] - bg[2])
+    mark[target] = r; mark[target + 1] = g; mark[target + 2] = b
+    mark[target + 3] = alpha === 0 ? 0 : Math.max(0, Math.min(255, Math.round((distance - 40) * 8)))
+  }
+  const png = await sharp(mark, { raw: { width, height, channels: 4 } }).png().toBuffer()
+  const label = name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}"><image href="data:image/png;base64,${png.toString('base64')}" width="${width}" height="${height}"/></svg>\n`
+}
+
 async function transform(path, change) {
   const previous = await readFile(path, 'utf8')
   const next = change(previous)
@@ -100,7 +123,6 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const webManifest = JSON.parse(await readFile(webManifestPath, 'utf8'))
   webManifest.name = webManifest.short_name = name
   await writeFile(webManifestPath, JSON.stringify(webManifest, null, 2) + '\n')
-  const favicon = productSvg(icon, name)
   const images = [
     ['apps/desktop/resources/icon.png', icon],
     ['apps/desktop/resources/icon-windows.png', icon],
@@ -108,7 +130,8 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     ['apps/desktop/resources/icon.icns', await macIcon(icon, sharp)],
     ['apps/desktop/resources/tray-windows.ico', await windowsIcon(icon, sharp)],
     ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon, name, true)],
-    ['apps/web/public/favicon.svg', favicon], ['apps/web/public/favicon-dark.svg', favicon],
+    ['apps/web/public/favicon.svg', await faviconMark(icon, sharp, name, '#000000')],
+    ['apps/web/public/favicon-dark.svg', await faviconMark(icon, sharp, name, '#ffffff')],
   ]
   for (const [file, content] of images) {
     await mkdir(dirname(join(harness, file)), { recursive: true })

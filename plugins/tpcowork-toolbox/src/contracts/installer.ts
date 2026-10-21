@@ -1,8 +1,8 @@
-/** One Host installer is shared by local import, bundled resources and PromptHub. */
+/** One Host installer is shared by local import, bundled resources and TpcoworkHub. */
 export type InstallSource =
   | { kind: 'bundled'; resourceId: string }
   | { kind: 'local'; importId: string }
-  | { kind: 'prompthub'; skillId: string; versionId: string; fingerprint: string }
+  | { kind: 'tpcoworkhub'; skillId: string; versionId: string; fingerprint: string }
 export interface InstallRequest {
   requestId: string
   source: InstallSource

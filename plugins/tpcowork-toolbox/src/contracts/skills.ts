@@ -6,7 +6,7 @@ export interface SkillItem {
   id: string
   name: string
   description: string
-  origin: 'bundled' | 'user' | 'project' | 'prompthub'
+  origin: 'bundled' | 'user' | 'project' | 'tpcoworkhub'
   provider: string
   version: string
   fingerprint: string

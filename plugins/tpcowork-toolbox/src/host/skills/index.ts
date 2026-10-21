@@ -107,7 +107,7 @@ export class ToolboxSkills extends TypertRemoteService implements SkillsApi {
             try {
               const marker = JSON.parse(await readFile(join(candidate.resourceBase.path, markerName), 'utf8')) as { owner?: string; source?: string; version?: string; fingerprint?: string }
               if (marker.source?.startsWith('bundled:')) origin = 'bundled'
-              if (marker.source?.startsWith('prompthub:')) origin = 'prompthub'
+              if (marker.source?.startsWith('tpcoworkhub:')) origin = 'tpcoworkhub'
               if (typeof marker.version === 'string') version = marker.version
               managed = marker.owner === 'tpcowork-toolbox' && marker.fingerprint === hash
             } catch { /* Unmanaged skills have no ownership marker. */ }

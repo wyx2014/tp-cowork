@@ -72,9 +72,9 @@ async function fixture(initial: object = {}) {
 it('initializes a fresh profile once and preserves disable/remove/override choices through restart and release upgrade', async () => {
   const { dir, start, skill, deployment } = await fixture()
   const ctx = await start()
-  expect((await ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: false, prompthub: true })
-  expect(await ctx.toolboxPromptHub.account()).toMatchObject({ configured: false, state: 'signed_out' })
-  expect(await ctx.toolboxPromptHub.browserAuth()).toMatchObject({ loginUrl: 'http://localhost:8080/desktop/authorize' })
+  expect((await ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: false, tpcoworkhub: true })
+  expect(await ctx.toolboxTpcoworkHub.account()).toMatchObject({ configured: false, state: 'signed_out' })
+  expect(await ctx.toolboxTpcoworkHub.browserAuth()).toMatchObject({ loginUrl: 'http://localhost:8080/desktop/authorize' })
   const mcp = await ctx.toolboxMcp.inventory()
   expect(mcp.items.map(item => item.id)).toEqual(['juyuan', 'caihui_mcp', 'playwright'])
   expect(mcp.items.find(item => item.id === 'juyuan')?.readiness.reasons).toContainEqual(expect.objectContaining({ code: 'needs_configuration' }))

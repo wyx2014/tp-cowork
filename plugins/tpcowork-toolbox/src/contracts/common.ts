@@ -18,13 +18,13 @@ export interface CredentialBinding {
 }
 export interface Change {
   revision: number
-  domain: 'skills' | 'mcp' | 'teams' | 'installer' | 'prompthub' | 'modules'
+  domain: 'skills' | 'mcp' | 'teams' | 'installer' | 'tpcoworkhub' | 'modules'
   id?: string
 }
 export type ChangeFrame = { type: 'ready' } | { type: 'changed'; change: Change }
 export interface ToolboxDescription {
   contractVersion: 1
-  modules: { skills: boolean; mcp: boolean; teams: boolean; installer: boolean; prompthub: boolean }
+  modules: { skills: boolean; mcp: boolean; teams: boolean; installer: boolean; tpcoworkhub: boolean }
   defaultMcpIds: string[]
   userSkillsDirectory?: string | undefined
 }

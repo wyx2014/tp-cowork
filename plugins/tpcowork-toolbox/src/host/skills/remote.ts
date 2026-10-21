@@ -5,7 +5,7 @@ import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import type { SkillsApi, InstallerApi, SkillItem } from '../../contracts/index.ts'
 export const readinessSchema = z.object({ state: z.enum(['unknown', 'checking', 'ready', 'blocked', 'error']), checkedAt: z.number().optional(), reasons: z.array(z.object({ code: z.string(), message: z.string() }).strict()) }).strict()
 export const skillSchema = z.object({
-  id: z.string(), name: z.string(), description: z.string(), origin: z.enum(['bundled', 'user', 'project', 'prompthub']),
+  id: z.string(), name: z.string(), description: z.string(), origin: z.enum(['bundled', 'user', 'project', 'tpcoworkhub']),
   provider: z.string(), version: z.string(), fingerprint: z.string(), installed: z.boolean(), enabled: z.boolean(),
   invocation: z.object({ modelInvocable: z.boolean(), userInvocable: z.boolean() }).strict(), readiness: readinessSchema, resources: z.array(z.string()),
   path: z.string().optional(), managed: z.boolean().optional(),
@@ -16,7 +16,7 @@ export const installSchema = z.object({
   source: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('bundled'), resourceId: z.string().min(1) }).strict(),
     z.object({ kind: z.literal('local'), importId: z.string().min(1) }).strict(),
-    z.object({ kind: z.literal('prompthub'), skillId: z.string().min(1), versionId: z.string().min(1), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
+    z.object({ kind: z.literal('tpcoworkhub'), skillId: z.string().min(1), versionId: z.string().min(1), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   ]), scope: z.discriminatedUnion('kind', [z.object({ kind: z.literal('user') }).strict(), z.object({ kind: z.literal('project'), sessionId: z.string() }).strict()]),
   conflict: z.enum(['reject', 'replace-owned']),
 }).strict()

@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import type { PromptHubFile, PromptHubSkill } from '../../contracts/prompthub.ts'
+import type { TpcoworkHubFile, TpcoworkHubSkill } from '../../contracts/tpcoworkhub.ts'
 import { fingerprint, safeResource } from '../installer/files.ts'
-import { PromptHubError } from './errors.ts'
+import { TpcoworkHubError } from './errors.ts'
 import { fileSchema } from './remote.ts'
 
 const rawSkill = z.object({
@@ -11,13 +11,13 @@ const rawSkill = z.object({
 })
 export function decode<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value)
-  if (!parsed.success) throw new PromptHubError('protocol')
+  if (!parsed.success) throw new TpcoworkHubError('protocol')
   return parsed.data
 }
-function skill(value: unknown): PromptHubSkill {
+function skill(value: unknown): TpcoworkHubSkill {
   const raw = decode(rawSkill, value)
   const id = raw.id || raw._id
-  if (!id || id.length > 200) throw new PromptHubError('protocol')
+  if (!id || id.length > 200) throw new TpcoworkHubError('protocol')
   return { id, name: raw.slug || raw.name || raw.displayName || id, description: raw.description || raw.summary || '', versionId: raw.latestVersionId || '', version: raw.version || '',
     ...(raw.displayName ? { displayName: raw.displayName } : {}),
     ...(raw.tags !== undefined ? { tags: [...new Set((Array.isArray(raw.tags) ? raw.tags : raw.tags.split(',')).map(tag => tag.trim()).filter(Boolean))] } : {}),
@@ -26,19 +26,19 @@ function skill(value: unknown): PromptHubSkill {
 }
 export function page(value: unknown) {
   const raw = decode(z.object({ page: z.array(z.object({ skill: rawSkill })).optional(), items: z.array(z.object({ skill: rawSkill })).optional(), continueCursor: z.string().nullable().optional(), isDone: z.boolean().optional() }), value)
-  if (!raw.page && !raw.items) throw new PromptHubError('protocol')
-  if (raw.isDone === false && !raw.continueCursor) throw new PromptHubError('protocol')
+  if (!raw.page && !raw.items) throw new TpcoworkHubError('protocol')
+  if (raw.isDone === false && !raw.continueCursor) throw new TpcoworkHubError('protocol')
   return { items: (raw.page ?? raw.items!).map(row => skill(row.skill)), next: raw.isDone === true ? null : raw.continueCursor || null }
 }
 export function detail(value: unknown, id: string, maxBytes: number, maxFiles: number, allowUnversioned = false) {
   const raw = decode(z.object({ skill: rawSkill, latestVersion: z.object({ id: z.string().min(1).max(200), version: z.string() }).nullish(), files: z.array(fileSchema) }), value)
   const item = { ...skill(raw.skill), versionId: raw.latestVersion?.id ?? '', version: raw.latestVersion?.version ?? '' }
-  if (item.id !== id) throw new PromptHubError('protocol')
+  if (item.id !== id) throw new TpcoworkHubError('protocol')
   if (raw.latestVersion) validateMetadata(raw.files, maxBytes, maxFiles)
-  else if (!allowUnversioned || raw.files.length) throw new PromptHubError('invalid-package')
+  else if (!allowUnversioned || raw.files.length) throw new TpcoworkHubError('invalid-package')
   return { skill: item, files: raw.files, fingerprint: fingerprint(raw.files.map(file => ({ ...file, bytes: new Uint8Array() }))) }
 }
-export function validateMetadata(files: PromptHubFile[], maxBytes: number, maxFiles: number): void {
+export function validateMetadata(files: TpcoworkHubFile[], maxBytes: number, maxFiles: number): void {
   try {
     if (!files.length || files.length > maxFiles || !files.some(file => file.path === 'SKILL.md')) throw new Error()
     let total = 0
@@ -50,7 +50,7 @@ export function validateMetadata(files: PromptHubFile[], maxBytes: number, maxFi
       total += file.size
       if (!Number.isSafeInteger(total) || total > maxBytes) throw new Error()
     }
-  } catch { throw new PromptHubError('invalid-package') }
+  } catch { throw new TpcoworkHubError('invalid-package') }
 }
 export const loginResultSchema = z.object({ token: z.string().min(1).max(32768), user: z.object({ id: z.string(), username: z.string() }) })
 export const websiteUserSchema = z.object({

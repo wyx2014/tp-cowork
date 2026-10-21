@@ -12,7 +12,7 @@ import { present, skillId } from './host/installer/index.ts'
 import { SkillError } from './host/installer/errors.ts'
 import { parseDefinition } from './host/mcp/schema.ts'
 import type { McpDefinition } from './contracts/index.ts'
-import * as PromptHub from './host/prompthub/index.ts'
+import * as TpcoworkHub from './host/tpcoworkhub/index.ts'
 import * as Teams from './host/teams/index.ts'
 import { bundledPythonPath } from './runtime-paths.ts'
 
@@ -20,7 +20,7 @@ export interface Config {
   settingsEntry: string
   skills: SkillsConfig
   mcp: McpConfig
-  prompthub: PromptHub.Config
+  tpcoworkhub: TpcoworkHub.Config
   defaults: { skills: Volatile<Record<string, string>>; mcp: Volatile<Record<string, string>> }
   deployment: { juyuanEndpoint: string; caihuiEndpoint: string; playwrightCommand: string; playwrightArgs: string[] }
 }
@@ -31,7 +31,7 @@ export const Config = z.object({
     python: z.string().default(bundledPythonPath()),
   }),
   mcp: McpConfig,
-  prompthub: PromptHub.Config,
+  tpcoworkhub: TpcoworkHub.Config,
   defaults: z.object({ skills: z.dict(z.string()).default({}).volatile(), mcp: z.dict(z.string()).default({}).volatile() }),
   deployment: z.object({
     juyuanEndpoint: z.string().default('https://api.gildata.com/mcp-servers/aidata-assistant-srv-api'),
@@ -150,7 +150,7 @@ export function composeToolbox(ctx: Context, config: Config): void {
     applySkillsModule(inner, { ...config.skills, settingsEntry: config.settingsEntry, settingsPath: ['skills'] })
     inner.inject(['toolboxInstaller'], async defaultsCtx => {
       await initializeDefaults(defaultsCtx, config)
-      mountOptionalModule(defaultsCtx, PromptHub, config.prompthub)
+      mountOptionalModule(defaultsCtx, TpcoworkHub, config.tpcoworkhub)
       defaultsCtx.inject(['tools', 'credentials'], mcpCtx => applyMcpModule(mcpCtx, { ...config.mcp, settingsEntry: config.settingsEntry, settingsPath: ['mcp'] }))
       mountOptionalModule(defaultsCtx, Teams, undefined)
     })

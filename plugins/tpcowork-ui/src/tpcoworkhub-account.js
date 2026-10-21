@@ -1,5 +1,5 @@
 /** Bind the native website authentication bridge to the renderer's account hook. */
-export function createPromptHubAccount(bridge) {
+export function createTpcoworkHubAccount(bridge) {
   let snapshot = { status: 'loading', phase: 'idle' };
   let active = true;
   let generation = 0;

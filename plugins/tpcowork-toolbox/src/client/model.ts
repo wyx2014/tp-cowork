@@ -7,7 +7,7 @@ import type { SkillsClientApi } from './remote.ts'
 import { unwrap } from './remote.ts'
 import { visibleMcp } from './visibility.ts'
 
-export type Tab = 'teams' | 'skills' | 'mcp' | 'prompthub'
+export type Tab = 'teams' | 'skills' | 'mcp' | 'tpcoworkhub'
 export interface Load<T> { value: T | null; loading: boolean; failed: boolean }
 export interface Choice {
   draft: SelectionDraft
@@ -27,7 +27,7 @@ export interface ToolboxState {
   connection: 'connecting' | 'live' | 'interrupted'
   failed: boolean
 }
-type Remote = Pick<TypertClientRemote, 'toolbox' | 'toolboxSkills' | 'toolboxInstaller' | 'toolboxMcp' | 'toolboxTeams' | 'toolboxPromptHub' | 'toolboxTasks'>
+type Remote = Pick<TypertClientRemote, 'toolbox' | 'toolboxSkills' | 'toolboxInstaller' | 'toolboxMcp' | 'toolboxTeams' | 'toolboxTpcoworkHub' | 'toolboxTasks'>
 const emptyLoad = <T>(): Load<T> => ({ value: null, loading: false, failed: false })
 const emptyChoice = (): Choice => ({ draft: { expectedRevision: 0, team: null, skillIds: [], mcpIds: [] }, catalog: null, phase: 'draft', context: null, unavailable: false })
 export const hasSelection = (draft: SelectionDraft): boolean => Boolean(draft.team || draft.skillIds.length || draft.mcpIds.length)
@@ -79,7 +79,7 @@ export class ToolboxModel {
   }
 
   private async refreshDomain(domain: Exclude<Change['domain'], 'modules'>): Promise<void> {
-    if (domain === 'prompthub') { this.state.update(s => { s.epoch++ }); return }
+    if (domain === 'tpcoworkhub') { this.state.update(s => { s.epoch++ }); return }
     const key = domain === 'installer' ? 'skills' : domain
     await Promise.all([this.loadCatalog(key), this.refreshChoices()])
   }

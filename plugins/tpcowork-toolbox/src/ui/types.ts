@@ -1,7 +1,7 @@
 import type { HostObservable, PropsHooks, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolboxState, Tab } from '../client/model.ts'
 import type { InstallerClientApi, SkillsClientApi } from '../client/remote.ts'
-import type { McpApi, PromptHubApi, TeamItem, SelectionDraft } from '../contracts/index.ts'
+import type { McpApi, TpcoworkHubApi, TeamItem, SelectionDraft } from '../contracts/index.ts'
 
 export type UiActions = {
   refresh(): Promise<void>
@@ -26,13 +26,13 @@ export type UiActions = {
   mcpRemove: McpApi['remove']
   mcpEnable: McpApi['setEnabled']
   mcpProbe: McpApi['probe']
-  hubAccount: PromptHubApi['account']
-  hubLogin: PromptHubApi['login']
-  hubLogout: PromptHubApi['logout']
-  hubList: PromptHubApi['list']
-  hubDetail: PromptHubApi['detail']
-  hubInstall: PromptHubApi['install']
-  hubPublish: PromptHubApi['publish']
+  hubAccount: TpcoworkHubApi['account']
+  hubLogin: TpcoworkHubApi['login']
+  hubLogout: TpcoworkHubApi['logout']
+  hubList: TpcoworkHubApi['list']
+  hubDetail: TpcoworkHubApi['detail']
+  hubInstall: TpcoworkHubApi['install']
+  hubPublish: TpcoworkHubApi['publish']
   prepareTeam(team: TeamItem, prompt: string): void
   prepareSkill(prompt: string): void
   loadChoice(sessionId: string, confirm?: boolean): Promise<void>

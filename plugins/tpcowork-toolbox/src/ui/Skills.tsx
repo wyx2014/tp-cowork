@@ -70,7 +70,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
     {!!items.length && !rows.length && <p className="tp-toolbox-empty">{t('noMatches')}</p>}
     <div className="tp-toolbox-grid">{rows.map(item => <article className="tp-toolbox-card" key={item.id}>
       <div className="tp-toolbox-card-body"><header><h3>/{item.name}</h3><ReadinessBadge value={item.readiness} t={t} /></header><p className="tp-toolbox-card-description">{item.description}</p>
-      <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')} · {t(item.enabled ? 'enabled' : 'disabled')} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'prompthub' ? 'prompthub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
+      <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')} · {t(item.enabled ? 'enabled' : 'disabled')} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'tpcoworkhub' ? 'tpcoworkhub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
       <Reasons value={item.readiness} /></div>
       <div className="tp-toolbox-actions"><Button id={`${editorId}-detail-${item.id}`} onClick={event => setDetail({ item, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button>
         <Button disabled={!mutable || !item.installed} onClick={() => mutate(() => actions.skillEnable({ id: item.id, enabled: !item.enabled, expectedRevision: load.value!.revision }))}>{t(item.enabled ? 'disable' : 'enable')}</Button>

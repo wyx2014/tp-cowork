@@ -12,7 +12,7 @@
 | `src/runtime.js` | 主题覆盖、已有品牌插槽注册，以及卸载清理 |
 | `src/layout-adapter.js` | 通过上游共享布局 store 的现有动作适配侧栏宽度 |
 | `src/task-panel.js` | 当前会话任务投影、右上角任务卡及展开/收起交互 |
-| `src/settings-launcher.js`、`src/prompt-hub-account.js` | 首页账号菜单与 PromptHub 桌面账号状态 |
+| `src/settings-launcher.js`、`src/tpcoworkhub-account.js` | 首页账号菜单与 TP Cowork Hub 桌面账号状态 |
 | `src/upstream-css.js`、`src/upstream-styles.js` | 读取 DSH 已构建的 CSS 类名并生成原版组件的覆盖样式 |
 | `locale/zh.json`、`locale/en.json` | 插件列表说明和界面文字 |
 | `cordis.patch.yml` | 插件组合 |
@@ -24,7 +24,7 @@
 
 通用设置通过 `settings.general.item` 插槽覆盖移除 Session Log 上传选项及说明，禁用插件后恢复原版设置项。
 
-首页侧栏的「更多」菜单通过 `settings.launcher` 插槽保留设置入口，移除意见反馈入口。点击「登录」使用系统默认浏览器打开 PromptHub 授权页；浏览器已登录时直接确认账号，未登录时使用网站现有的用户名、密码页面。确认后侧栏显示账号名称，并与技能商店共享登录、重启恢复和退出状态。需要包含 PromptHub 桥接的桌面壳、已启用的 toolbox 插件，以及支持 `/desktop/authorize` 的网站；网站地址和等待时限由 toolbox 的 `prompthub` 配置提供，见[工具箱使用说明](../../docs/toolbox/user-guide.md)。等待认证时菜单仅保留设置和取消登录操作，不显示额外提示；可在桌面或网站取消，关闭浏览器标签页后可从桌面取消，未取消则等待超时。失败或超时显示重试提示，禁用外观插件会取消尚未提交的登录并恢复 DSH 原版菜单。
+首页侧栏的「更多」菜单通过 `settings.launcher` 插槽保留设置入口，移除意见反馈入口。点击「登录」使用系统默认浏览器打开 TP Cowork Hub 授权页；浏览器已登录时直接确认账号，未登录时使用网站现有的用户名、密码页面。确认后侧栏显示账号名称，并与技能商店共享登录、重启恢复和退出状态。需要包含 TP Cowork Hub 桥接的桌面壳、已启用的 toolbox 插件，以及支持 `/desktop/authorize` 的网站；网站地址和等待时限由 toolbox 的 `tpcoworkhub` 配置提供，见[工具箱使用说明](../../docs/toolbox/user-guide.md)。等待认证时菜单仅保留设置和取消登录操作，不显示额外提示；可在桌面或网站取消，关闭浏览器标签页后可从桌面取消，未取消则等待超时。失败或超时显示重试提示，禁用外观插件会取消尚未提交的登录并恢复 DSH 原版菜单。
 
 输入框顶部沿用 DSH 的 8px 外框留白和 4px 编辑区留白，普通首行内容起点距外框顶部 12px；技能/MCP 选择区没有提示内容时隐藏其空插槽容器，避免额外产生 8px 间距，有加载、提交或错误提示时正常显示。
 

@@ -31,7 +31,7 @@ try {
     { id: 'prompt', name: 'cordis:prompt' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'sessions', name: 'cordis:sessions' }, { id: 'agents', name: 'cordis:agents' }, { id: 'projections', name: 'cordis:projections' },
     { id: 'fs', name: 'cordis:fs' }, { id: 'directory', name: 'cordis:directory' },
-    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills') }, prompthub: { endpoint: '' } } },
+    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills') }, tpcoworkhub: { endpoint: '' } } },
   ] }]))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
   const profile = { name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined }
@@ -51,14 +51,14 @@ try {
     })
     contexts.push(ctx)
     const ready = Promise.withResolvers()
-    ctx.inject(['toolboxMcp', 'toolboxPromptHub', 'toolboxTasks'], () => { ready.resolve() })
+    ctx.inject(['toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks'], () => { ready.resolve() })
     const timeout = setTimeout(() => ready.reject(new Error('toolbox/default-initialization-timeout')), 30000)
     try { await ready.promise } finally { clearTimeout(timeout) }
     return ctx
   }
   const ctx = await start()
-  assert.deepEqual((await ctx.toolbox.describe()).modules, { skills: true, installer: true, mcp: true, teams: true, prompthub: true })
-  assert.equal((await ctx.toolboxPromptHub.account()).state, 'unconfigured')
+  assert.deepEqual((await ctx.toolbox.describe()).modules, { skills: true, installer: true, mcp: true, teams: true, tpcoworkhub: true })
+  assert.equal((await ctx.toolboxTpcoworkHub.account()).state, 'unconfigured')
   const teams = await ctx.typertGateway.invoke({ namespace: 'toolboxTeams', method: 'inventory', args: {} })
   assert.deepEqual(teams.items.map(item => item.id), ['asset-research-team', 'supply-chain-bottleneck-team'])
   assert.ok(teams.items.every(item => item.readiness.state === 'blocked'))
@@ -80,7 +80,7 @@ try {
   const restored = await start()
   assert.equal(await readFile(profile.patchPath, 'utf8'), patch)
   assert.equal((await restored.toolboxSkills.inventory({})).items.length, 31)
-  console.log('Compiled toolbox + experts: PromptHub, two teams, 31 complete skills, 3 credential references, no global MCP, unchanged restart passed.')
+  console.log('Compiled toolbox + experts: TpcoworkHub, two teams, 31 complete skills, 3 credential references, no global MCP, unchanged restart passed.')
 } finally {
   for (const ctx of contexts) await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true }); hook.deregister()

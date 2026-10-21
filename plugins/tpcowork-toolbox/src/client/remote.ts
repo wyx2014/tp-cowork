@@ -1,12 +1,12 @@
 /** Browser-only endpoint contributions; API signatures remain owned by contracts. */
 import { z } from 'zod'
 import type { InvocationDescriptor, RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { McpApi, PromptHubApi, SkillsApi, TaskSubmissionApi, TeamsApi, SkillItem } from '../contracts/index.ts'
+import type { McpApi, TpcoworkHubApi, SkillsApi, TaskSubmissionApi, TeamsApi, SkillItem } from '../contracts/index.ts'
 import { remoteContribution as skillsContribution } from '../host/skills/remote.ts'
 import type { InstallerModuleApi } from '../host/skills/remote.ts'
 // Pure public schema: Host permits incomplete stored definitions for editing.
 import { definitionSchema as definition, editorEntrySchema, importRequestSchema, draftProbeSchema } from '../host/mcp/schema.ts'
-import { descriptors as hubDescriptors } from '../host/prompthub/remote.ts'
+import { descriptors as hubDescriptors } from '../host/tpcoworkhub/remote.ts'
 
 export { skillsContribution }
 export type SkillsClientApi = SkillsApi & { detail(request: { id: string; sessionId?: string }): Promise<{ item: SkillItem; content: string }> }
@@ -16,7 +16,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertClientRemote {
     toolboxMcp: RemoteApi<McpApi>
     toolboxTeams: RemoteApi<TeamsApi>
-    toolboxPromptHub: RemoteApi<PromptHubApi>
+    toolboxTpcoworkHub: RemoteApi<TpcoworkHubApi>
     toolboxTasks: RemoteApi<TaskSubmissionApi>
   }
 }
@@ -26,7 +26,7 @@ const readiness = z.object({ state: z.enum(['unknown', 'checking', 'ready', 'blo
 const mcp = z.object({ id, label: z.string(), origin: z.enum(['bundled', 'custom']), configRevision: revision, installed: z.boolean(), enabled: z.boolean(), readiness, connection: z.enum(['unknown', 'disconnected', 'connecting', 'connected', 'reconnecting', 'error']), generation: revision, toolCount: revision, observedAt: z.number().optional(), credentials: z.array(z.object({ ref: id, configured: z.boolean(), writable: z.boolean() })) })
 const teamRef = z.object({ id, version: id, workflowId: id }).strict()
 const team = teamRef.extend({ name: z.string(), enabled: z.boolean(), members: z.array(z.object({ id, name: z.string(), phase: z.string().optional(), goal: z.string().optional() })), requiredSkillIds: z.array(id), optionalMcpIds: z.array(id), readiness })
-const skill = z.object({ id, name: z.string(), description: z.string(), origin: z.enum(['bundled', 'user', 'project', 'prompthub']), provider: z.string(), version: z.string(), fingerprint: z.string(), installed: z.boolean(), enabled: z.boolean(), invocation: z.object({ modelInvocable: z.boolean(), userInvocable: z.boolean() }), readiness, resources: z.array(z.string()), path: z.string().optional(), managed: z.boolean().optional() })
+const skill = z.object({ id, name: z.string(), description: z.string(), origin: z.enum(['bundled', 'user', 'project', 'tpcoworkhub']), provider: z.string(), version: z.string(), fingerprint: z.string(), installed: z.boolean(), enabled: z.boolean(), invocation: z.object({ modelInvocable: z.boolean(), userInvocable: z.boolean() }), readiness, resources: z.array(z.string()), path: z.string().optional(), managed: z.boolean().optional() })
 const catalog = <T extends z.ZodType>(item: T) => z.object({ revision, complete: z.boolean(), items: z.array(item) }).strict()
 const context = z.object({ schemaVersion: z.literal(1), taskId: id, sessionId: id, submittedAt: z.number(), catalogRevision: revision, team: teamRef.nullable(), skills: z.array(z.object({ id, version: z.string(), fingerprint: z.string() })), mcp: z.array(z.object({ id, configRevision: revision })) }).strict()
 const selection = z.object({ expectedRevision: revision, team: teamRef.nullable(), skillIds: z.array(id), mcpIds: z.array(id) }).strict()

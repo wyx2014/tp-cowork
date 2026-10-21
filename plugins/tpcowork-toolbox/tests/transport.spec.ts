@@ -9,7 +9,7 @@ import * as host from '../src/host.ts'
 import * as client from '../src/client.ts'
 import { descriptionSchema } from '../src/remote.ts'
 
-const description = { contractVersion: 1, modules: { skills: false, mcp: false, teams: false, installer: false, prompthub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
+const description = { contractVersion: 1, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
 describe('DSH plugin seam', () => {
   it('announces teams only while both the catalog and task services are available', async () => {
     const ctx = new Context()

@@ -12,7 +12,7 @@ import { readPackage, readZip } from './archive.ts'
 
 const markerSchema = z.object({ owner: z.literal('tpcowork-toolbox'), source: z.string(), fingerprint: z.string(), requestId: z.string(), version: z.string() })
 export interface InstallerOptions { root: string; userRoot?: string; bundledRoot: string; maxBytes: number; maxFiles: number }
-/** Trusted Host source adapter. PromptHub verifies server hashes before supplying these files. */
+/** Trusted Host source adapter. TpcoworkHub verifies server hashes before supplying these files. */
 export type SourceResolver = (source: InstallSource, signal: AbortSignal) => Promise<readonly SkillFile[]>
 export class SkillInstaller extends TypertRemoteService implements InstallerApi {
   private tail: Promise<unknown> = Promise.resolve()
@@ -49,9 +49,9 @@ export class SkillInstaller extends TypertRemoteService implements InstallerApi 
     this.imports.set(importId, { files, expires: Date.now() + 15 * 60 * 1000 })
     return { importId, name }
   }
-  /** Register one trusted resolver, e.g. PromptHub or a ClawHub download adapter; disposal withdraws it. */
+  /** Register one trusted resolver, e.g. TpcoworkHub or a ClawHub download adapter; disposal withdraws it. */
   registerSource(kind: InstallSource['kind'], resolver: SourceResolver): () => void {
-    if (kind !== 'prompthub' || this.sources.has(kind)) throw new SkillError('skills/source-conflict')
+    if (kind !== 'tpcoworkhub' || this.sources.has(kind)) throw new SkillError('skills/source-conflict')
     this.sources.set(kind, resolver)
     return () => { if (this.sources.get(kind) === resolver) this.sources.delete(kind) }
   }
@@ -85,7 +85,7 @@ export class SkillInstaller extends TypertRemoteService implements InstallerApi 
           if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(request.source.resourceId) || !contained(this.options.bundledRoot, path)) throw new SkillError('skills/invalid-resource-id')
           files = await readTree(path, this.options.maxBytes, this.options.maxFiles)
         } else {
-          const resolver = this.sources.get('prompthub')
+          const resolver = this.sources.get('tpcoworkhub')
           if (!resolver) throw new SkillError('skills/source-unavailable')
           files = await resolver(request.source, signal)
         }
@@ -93,7 +93,7 @@ export class SkillInstaller extends TypertRemoteService implements InstallerApi 
         const meta = parseSkill(files.find(file => file.path === 'SKILL.md')!.bytes)
         if (request.source.kind === 'bundled' && meta.name !== request.source.resourceId) throw new SkillError('skills/name-conflict')
         const hash = fingerprint(files)
-        if (request.source.kind === 'prompthub' && hash !== request.source.fingerprint) throw new SkillError('skills/package-hash')
+        if (request.source.kind === 'tpcoworkhub' && hash !== request.source.fingerprint) throw new SkillError('skills/package-hash')
         const installRoot = request.source.kind === 'bundled' ? this.options.root : this.options.userRoot ?? this.options.root
         let target = join(installRoot, meta.name)
         const source = sourceIdentity(request.source, meta.name)
@@ -134,7 +134,7 @@ export class SkillInstaller extends TypertRemoteService implements InstallerApi 
             await mkdir(dirname(path), { recursive: true, mode: 0o700 })
             await writeFile(path, file.bytes, { flag: 'wx', mode: 0o600 })
           }
-          await writeFile(join(staging, markerName), JSON.stringify({ owner: 'tpcowork-toolbox', source, fingerprint: hash, requestId: request.requestId, version: request.source.kind === 'prompthub' ? request.source.versionId : hash.slice(0, 12) }), { flag: 'wx', mode: 0o600 })
+          await writeFile(join(staging, markerName), JSON.stringify({ owner: 'tpcowork-toolbox', source, fingerprint: hash, requestId: request.requestId, version: request.source.kind === 'tpcoworkhub' ? request.source.versionId : hash.slice(0, 12) }), { flag: 'wx', mode: 0o600 })
           signal.throwIfAborted()
           if (exists) { await this.owned(target); await rename(target, backup); moved = true }
           else if (await present(target)) throw new SkillError('skills/name-conflict')
@@ -180,7 +180,7 @@ export async function present(path: string): Promise<boolean> {
   catch (error) { if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false; throw error }
 }
 function sourceIdentity(source: InstallSource, name: string): string {
-  return source.kind === 'prompthub' ? `prompthub:${source.skillId}` : `${source.kind}:${name}`
+  return source.kind === 'tpcoworkhub' ? `tpcoworkhub:${source.skillId}` : `${source.kind}:${name}`
 }
 function safeCode(error: unknown): string {
   return error instanceof SkillError ? error.code : 'skills/installation-failed'

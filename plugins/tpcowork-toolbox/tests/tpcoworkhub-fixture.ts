@@ -5,7 +5,7 @@ import { onTestFinished } from 'vitest'
 import LocalCredentials from '@deepseek-ai/dsh-credentials-local'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { skillsFixture } from './skills-fixture.ts'
-import * as hub from '../src/host/prompthub/index.ts'
+import * as hub from '../src/host/tpcoworkhub/index.ts'
 import { fingerprint, sha256, type SkillFile } from '../src/host/installer/files.ts'
 
 export const secret = 'fixture-session-credential-not-real'
@@ -81,10 +81,10 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
     await ctx.plugin(LocalCredentials, { path: join(base.home, '.test-credentials.yaml'), watch: false })
     await ctx.credentials.set(credentialRef('HUB_PASSWORD'), password)
     const fiber = await ctx.plugin(hub, { endpoint, ...config })
-    return { service: ctx.toolboxPromptHub as hub.ToolboxPromptHub, fiber }
+    return { service: ctx.toolboxTpcoworkHub as hub.ToolboxTpcoworkHub, fiber }
   }
   const { service, fiber } = await attach(base.ctx)
   const login = () => service.login({ username: 'fixture-user', passwordRef: 'HUB_PASSWORD' })
-  const installRequest = (requestId: string, hash = fingerprint(state.files)) => ({ requestId, source: { kind: 'prompthub' as const, skillId: 'store-1', versionId: state.versionId, fingerprint: hash }, scope: { kind: 'user' as const }, conflict: 'reject' as const })
+  const installRequest = (requestId: string, hash = fingerprint(state.files)) => ({ requestId, source: { kind: 'tpcoworkhub' as const, skillId: 'store-1', versionId: state.versionId, fingerprint: hash }, scope: { kind: 'user' as const }, conflict: 'reject' as const })
   return { ...base, endpoint, state, requests, service, fiber, login, installRequest, attach }
 }

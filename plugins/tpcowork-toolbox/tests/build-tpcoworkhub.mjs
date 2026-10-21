@@ -22,7 +22,7 @@ async function collect(directory) {
 await collect(resolve(harness, 'packages')); await collect(resolve(harness, 'vendor'))
 const config = ts.readConfigFile(resolve(root, 'tsconfig.host.json'), ts.sys.readFile)
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root, { paths, noEmit: true })
-const program = ts.createProgram([resolve(root, 'src/host/prompthub/index.ts')], parsed.options)
+const program = ts.createProgram([resolve(root, 'src/host/tpcoworkhub/index.ts')], parsed.options)
 const diagnostics = ts.getPreEmitDiagnostics(program)
 if (diagnostics.length) {
   process.stderr.write(ts.formatDiagnosticsWithColorAndContext(diagnostics, { getCurrentDirectory: () => root, getCanonicalFileName: p => p, getNewLine: () => '\n' }))
@@ -30,6 +30,6 @@ if (diagnostics.length) {
 }
 if (!process.argv.includes('--typecheck')) await build({
   bundle: true, format: 'esm', platform: 'node', target: 'node22', nodePaths: [resolve(harness, 'node_modules')], external: ['@deepseek-ai/*'], tsconfig: resolve(root, 'tsconfig.base.json'),
-  entryPoints: { prompthub: resolve(root, 'src/host/prompthub/index.ts'), 'prompthub-remote': resolve(root, 'src/host/prompthub/remote.ts') }, outdir: resolve(root, 'lib'),
+  entryPoints: { tpcoworkhub: resolve(root, 'src/host/tpcoworkhub/index.ts'), 'tpcoworkhub-remote': resolve(root, 'src/host/tpcoworkhub/remote.ts') }, outdir: resolve(root, 'lib'),
 })
-console.log('PromptHub Host and Remote typecheck passed.')
+console.log('TpcoworkHub Host and Remote typecheck passed.')

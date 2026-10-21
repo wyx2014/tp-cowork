@@ -25,7 +25,7 @@ export async function loadTeams(root = defaultResources): Promise<TeamDefinition
 export function teamItem(team: TeamDefinition, ready: boolean): TeamItem {
   return { id: team.id, version: team.version, workflowId: team.workflowId, name: team.name, enabled: true,
     members: team.members.map(({ id, name, phase, goal }) => ({ id, name, phase, goal })), requiredSkillIds: [], optionalMcpIds: team.optionalMcpIds,
-    readiness: { state: ready ? 'ready' : 'blocked', reasons: ready ? [] : [{ code: 'runtime_unavailable', message: '请启用 DSH workflow、spawn subagent 和文件交付能力。' }] } }
+    readiness: { state: ready ? 'ready' : 'blocked', reasons: ready ? [] : [{ code: 'runtime_unavailable', message: '请启用 TP Cowork workflow、spawn subagent 和文件交付能力。' }] } }
 }
 /** The script bounds each phase, carries verified upstream results, then requests independent synthesis/review. */
 export function workflowScript(team: TeamDefinition): string {

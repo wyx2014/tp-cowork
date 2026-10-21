@@ -80,18 +80,18 @@ describe('unified installer', () => {
     expect((await installer.install({ requestId: 'foreign', source: { kind: 'local', importId: prepared.importId }, scope: { kind: 'user' }, conflict: 'replace-owned' })).error?.code).toBe('skills/not-owned')
     expect(await readFile(join(dir, 'skills/sample/SKILL.md'), 'utf8')).toContain('foreign')
   })
-  it('shares PromptHub validation, rejects fingerprint mismatches, and cancels before commit', async () => {
+  it('shares TpcoworkHub validation, rejects fingerprint mismatches, and cancels before commit', async () => {
     const { installer, home, dir } = await skillsFixture()
     const path = await draft(home)
     const files = await readTree(path, 99999, 100)
-    const release = installer.registerSource('prompthub', async () => files)
-    const source = { kind: 'prompthub' as const, skillId: 'public-1', versionId: 'v1', fingerprint: fingerprint(files) }
+    const release = installer.registerSource('tpcoworkhub', async () => files)
+    const source = { kind: 'tpcoworkhub' as const, skillId: 'public-1', versionId: 'v1', fingerprint: fingerprint(files) }
     const request = { requestId: 'hub', source, scope: { kind: 'user' as const }, conflict: 'reject' as const }
     expect((await installer.install({ ...request, requestId: 'bad-hub', source: { ...source, fingerprint: '0'.repeat(64) } })).error?.code).toBe('skills/package-hash')
     const pending = installer.install({ ...request, requestId: 'cancel' }); await installer.cancel({ operationId: 'cancel' })
     expect((await pending).state).toBe('cancelled')
     expect((await installer.install(request)).state).toBe('installed')
-    expect(JSON.parse(await readFile(join(dir, 'skills/sample/.toolbox-install.json'), 'utf8')).source).toBe('prompthub:public-1')
+    expect(JSON.parse(await readFile(join(dir, 'skills/sample/.toolbox-install.json'), 'utf8')).source).toBe('tpcoworkhub:public-1')
     release()
     expect((await installer.install({ ...request, requestId: 'no-hub' })).error?.code).toBe('skills/source-unavailable')
   })

@@ -15,7 +15,7 @@
     "signOut": "退出登录",
     "cancelSignIn": "取消登录",
     "authCommitting": "正在同步登录状态…",
-    "authFailed": "PromptHub 认证未完成，请检查服务地址和网络后重试",
+    "authFailed": "TP Cowork Hub 认证未完成，请检查服务地址和网络后重试",
     "authTimeout": "登录已超时，请重试",
     "authExpired": "登录已过期，请重新登录",
     "tasksTitle": "任务",

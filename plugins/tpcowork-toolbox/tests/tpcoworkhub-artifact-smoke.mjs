@@ -30,7 +30,7 @@ peers.set('zod', pathToFileURL(requireHarness.resolve('zod')).href)
 const hook = registerHooks({ resolve(specifier, context, next) { return next(peers.get(specifier) ?? specifier, context) } })
 const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, { credentialRef }, skills, hub] = await Promise.all([
   import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'),
-  import('@deepseek-ai/dsh-credentials-local'), import('@deepseek-ai/dsh-credentials'), import(pathToFileURL(resolve(root, 'lib/skills.js'))), import(pathToFileURL(resolve(root, 'lib/prompthub.js'))),
+  import('@deepseek-ai/dsh-credentials-local'), import('@deepseek-ai/dsh-credentials'), import(pathToFileURL(resolve(root, 'lib/skills.js'))), import(pathToFileURL(resolve(root, 'lib/tpcoworkhub.js'))),
 ])
 const home = await mkdtemp(join(tmpdir(), 'toolbox-hub-built-'))
 const ctx = new Context()
@@ -55,17 +55,17 @@ try {
   await ctx.credentials.set(credentialRef('FIXTURE_PASSWORD'), 'compiled-fixture-password')
   await ctx.plugin(skills, { userRoot: join(home, 'user-skills') })
   const module = await ctx.plugin(hub, { endpoint: `http://127.0.0.1:${server.address().port}` })
-  await ctx.typertGateway.invoke({ namespace: 'toolboxPromptHub', method: 'login', args: { request: { username: 'fixture', passwordRef: 'FIXTURE_PASSWORD' } } })
-  const detail = await ctx.typertGateway.invoke({ namespace: 'toolboxPromptHub', method: 'detail', args: { request: { id: 'fixture' } } })
-  const result = await ctx.typertGateway.invoke({ namespace: 'toolboxPromptHub', method: 'install', args: { request: { requestId: 'compiled', source: { kind: 'prompthub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' } } })
+  await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'login', args: { request: { username: 'fixture', passwordRef: 'FIXTURE_PASSWORD' } } })
+  const detail = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'fixture' } } })
+  const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: { requestId: 'compiled', source: { kind: 'tpcoworkhub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' } } })
   assert.equal(result.state, 'installed')
   assert.equal((await ctx.skills.get('compiled-hub')).content, 'Use this skill.')
-  assert.equal((await ctx.toolboxSkills.inventory({})).items[0].origin, 'prompthub')
+  assert.equal((await ctx.toolboxSkills.inventory({})).items[0].origin, 'tpcoworkhub')
   await module.dispose()
-  assert.equal(ctx.get('toolboxPromptHub'), undefined)
-  const missing = await ctx.toolboxInstaller.install({ requestId: 'unloaded', source: { kind: 'prompthub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' })
+  assert.equal(ctx.get('toolboxTpcoworkHub'), undefined)
+  const missing = await ctx.toolboxInstaller.install({ requestId: 'unloaded', source: { kind: 'tpcoworkhub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' })
   assert.equal(missing.error.code, 'skills/source-unavailable')
-  console.log('Compiled PromptHub/T2 installer, DSH credentials, HTTP login/download, Gateway and unload smoke passed.')
+  console.log('Compiled TpcoworkHub/T2 installer, DSH credentials, HTTP login/download, Gateway and unload smoke passed.')
 } finally {
   await ctx.fiber.dispose()
   server.closeAllConnections(); await new Promise(done => server.close(done))

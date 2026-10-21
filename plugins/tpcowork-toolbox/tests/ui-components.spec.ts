@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '../../../..
 import { Skills } from '../src/ui/Skills.tsx'
 import { Mcp } from '../src/ui/Mcp.tsx'
 import { Teams } from '../src/ui/teams/index.tsx'
-import { PromptHub } from '../src/ui/prompthub/index.tsx'
+import { TpcoworkHub } from '../src/ui/tpcoworkhub/index.tsx'
 import { actions, catalog, t } from './ui-fixture.ts'
 
 afterEach(cleanup)
@@ -408,7 +408,7 @@ describe('toolbox user paths', () => {
   })
   it('loads store details and installs the exact version through the shared installer', async () => {
     const api = actions()
-    render(React.createElement(PromptHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+    render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
     const detailsButton = await screen.findByRole('button', { name: /^Details:/ })
     expect(screen.queryByText(/Logged in|Logged out/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Upload skill' })).toBeNull()
@@ -416,13 +416,13 @@ describe('toolbox user paths', () => {
     await screen.findByText('SKILL.md (10)')
     expect(api.hubDetail).toHaveBeenCalledWith({ id: 'hub-1', preview: true }, expect.anything())
     fireEvent.click(screen.getByRole('button', { name: 'Download to My skills' }))
-    await waitFor(() => expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({ source: { kind: 'prompthub', skillId: 'hub-1', versionId: 'v1', fingerprint: 'sha256:1' } }), expect.objectContaining({ aborted: false })))
+    await waitFor(() => expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({ source: { kind: 'tpcoworkhub', skillId: 'hub-1', versionId: 'v1', fingerprint: 'sha256:1' } }), expect.objectContaining({ aborted: false })))
     expect(api.hubPublish).not.toHaveBeenCalled()
   })
   it('hides account controls when the store requires authentication', async () => {
     const api = actions()
     api.hubAccount = vi.fn(async () => ({ configured: false, writable: true }))
-    render(React.createElement(PromptHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+    render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
     expect(screen.queryByText(/Logged in|Logged out/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Upload skill' })).toBeNull()

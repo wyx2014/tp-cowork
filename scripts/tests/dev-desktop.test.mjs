@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,6 +8,14 @@ import { test } from 'node:test'
 import { desktopPlan, runDesktop, assertDesktopStopped } from '../dev-desktop.mjs'
 import { initializeDesktopProfile } from '../initialize-desktop-profile.mjs'
 import { harnessRoot, productRoot, runCommand } from '../package-command.mjs'
+
+/** Commit a fixture checkout so dev-desktop.mjs can read its git state, independent of the caller's own git identity. */
+function initGit(directory) {
+  execFileSync('git', ['init', '-q'], { cwd: directory })
+  execFileSync('git', ['add', '-A'], { cwd: directory })
+  execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'user.email=fixture@example.com', '-c', 'user.name=Fixture',
+    'commit', '-q', '-m', 'init'], { cwd: directory })
+}
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'tp desktop dev '))
@@ -151,6 +160,53 @@ test('equivalent relative plugin links are reused instead of reinstalled', async
   }
   await writeFile(path, JSON.stringify(manifest))
   assert.deepEqual(desktopPlan(options).steps.map(step => step.args), [['run', 'start:desktop']])
+})
+
+test('a checkout with no recorded fingerprint yet launches without forcing a rebuild, then records a baseline', async t => {
+  const options = await readyFixture(t)
+  initGit(options.product)
+  initGit(options.harness)
+  const calls = []
+  await runDesktop(options, { run: async (command, args) => calls.push({ command, args }), log: () => {} })
+  assert.deepEqual(calls, [{ command: 'pnpm', args: ['run', 'start:desktop'] }])
+  assert.ok(existsSync(join(options.harness, 'apps/desktop/.desktop-build/development/build-fingerprint.json')))
+})
+
+test('editing plugin source after the baseline is recorded rebuilds plugins without rebuilding the harness', async t => {
+  const options = await readyFixture(t)
+  initGit(options.product)
+  initGit(options.harness)
+  await runDesktop(options, { run: async () => {}, log: () => {} })
+  await writeFile(join(options.product, 'plugins/tpcowork-experts/lib/host.js'), 'changed')
+  const { steps } = desktopPlan(options)
+  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-experts/build.mjs')))
+  assert.ok(!steps.some(step => step.args.includes('build:desktop') || step.args.includes('build')))
+})
+
+test('editing a harness file after the baseline is recorded rebuilds both the harness and the plugins', async t => {
+  const options = await readyFixture(t)
+  initGit(options.product)
+  initGit(options.harness)
+  await runDesktop(options, { run: async () => {}, log: () => {} })
+  await writeFile(join(options.harness, 'apps/desktop/lib/main.js'), 'changed')
+  const { steps } = desktopPlan(options)
+  assert.ok(steps.some(step => step.args.includes('build:desktop')))
+  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-ui/build.mjs')))
+})
+
+test('a failed run does not record a fingerprint, so the next attempt still retries the rebuild', async t => {
+  const options = await readyFixture(t)
+  initGit(options.product)
+  initGit(options.harness)
+  await runDesktop(options, { run: async () => {}, log: () => {} })
+  const before = await readFile(join(options.harness, 'apps/desktop/.desktop-build/development/build-fingerprint.json'), 'utf8')
+  await writeFile(join(options.product, 'plugins/tpcowork-experts/lib/host.js'), 'changed')
+  await assert.rejects(runDesktop(options, { log: () => {}, run: async (_command, args) => {
+    if (args[0]?.endsWith('tpcowork-experts/build.mjs')) throw new Error('fixture build failed')
+  } }))
+  assert.equal(await readFile(join(options.harness, 'apps/desktop/.desktop-build/development/build-fingerprint.json'), 'utf8'), before)
+  const { steps } = desktopPlan(options)
+  assert.ok(steps.some(step => step.args[0]?.endsWith('tpcowork-experts/build.mjs')))
 })
 
 test('a running desktop prevents build and install operations', { skip: process.platform === 'win32' }, async t => {

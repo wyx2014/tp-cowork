@@ -1,9 +1,23 @@
 /** Launch existing local artifacts; prepare or rebuild them only when needed. */
-import { existsSync, readFileSync, readlinkSync, realpathSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { harnessRoot, productRoot, runCommand } from './package-command.mjs'
+
+/** A git-tracked checkout's current content: the commit plus any uncommitted or untracked edits within `scope`.
+ * `exclude` is always left out, even if a checkout's own .gitignore doesn't (yet) cover it — this is how the
+ * fingerprint file itself, which lives inside the harness checkout, avoids reporting itself as a pending change. */
+function gitFingerprint(repository, scope = [], exclude = []) {
+  try {
+    const head = execFileSync('git', ['-C', repository, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    const status = execFileSync('git', ['-C', repository, 'status', '--porcelain=v1', '--', ...scope, ...exclude.map(path => `:!${path}`)],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    return createHash('sha256').update(head).update('\0').update(status).digest('hex')
+  } catch { return undefined } // not a git checkout (or git unavailable): staleness falls back to missing-artifact detection
+}
 
 function missingDependencies(directory, sections) {
   const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
@@ -64,10 +78,19 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
   if (missingDependencies(product, ['devDependencies'])) {
     add('安装产品依赖', 'npm', ['ci', '--no-audit', '--no-fund'])
   }
-  const buildHarness = rebuild || harnessArtifacts.some(file => !existsSync(join(harness, file)))
+  // Detect edits since the last successful build from each checkout's own git state, so a single
+  // `npm run dev` rebuilds whatever changed without the caller choosing --plugins or --rebuild.
+  const fingerprintFile = join(development, 'build-fingerprint.json')
+  const stored = (() => { try { return JSON.parse(readFileSync(fingerprintFile, 'utf8')) } catch { return {} } })()
+  const fingerprints = { harness: gitFingerprint(harness, [], ['apps/desktop/.desktop-build']), plugins: gitFingerprint(product, ['plugins']) }
+  // A checkout with no recorded baseline yet (first run after adopting this check) defers to the
+  // existing missing-artifact checks instead of forcing a rebuild of artifacts that already exist.
+  const harnessChanged = stored.harness !== undefined && fingerprints.harness !== undefined && fingerprints.harness !== stored.harness
+  const pluginsChanged = stored.plugins !== undefined && fingerprints.plugins !== undefined && fingerprints.plugins !== stored.plugins
+  const buildHarness = rebuild || harnessChanged || harnessArtifacts.some(file => !existsSync(join(harness, file)))
     || missingDependencies(harness, ['devDependencies'])
     || missingDependencies(join(harness, 'apps/desktop'), ['dependencies', 'devDependencies'])
-  const buildPlugins = buildHarness || plugins || !pluginsReady(product, harness)
+  const buildPlugins = buildHarness || plugins || pluginsChanged || !pluginsReady(product, harness)
   if (buildHarness) add('准备底座依赖', 'pnpm', ['install', '--frozen-lockfile'], harness)
   if (buildHarness || !electronReady(harness)) {
     add('准备 Electron', 'pnpm', ['--filter', '@deepseek-ai/dsh-desktop', 'exec', 'node', 'node_modules/electron/install.js'], harness)
@@ -102,7 +125,15 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
   }
   add('启动 TP Cowork', 'pnpm', ['run', 'start:desktop',
     ...(buildHarness && missingLinks.length === 0 ? ['--rebuild-runtime'] : [])], harness)
-  return { env, steps }
+  return { env, steps, fingerprintFile, fingerprints }
+}
+
+/** Record the checkouts' current state once they are the state actually running, so the next launch can tell what changed. */
+function saveFingerprints(fingerprintFile, fingerprints) {
+  const { harness, plugins } = fingerprints
+  if (harness === undefined && plugins === undefined) return
+  mkdirSync(join(fingerprintFile, '..'), { recursive: true })
+  writeFileSync(fingerprintFile, JSON.stringify({ harness, plugins }))
 }
 
 /** Electron's singleton marker prevents rebuilding a profile used by a live desktop. */
@@ -125,9 +156,9 @@ export function assertDesktopStopped(userData, kill = process.kill) {
 
 /** Stop on a failed build or install; launch only after all product bundles are ready. */
 export async function runDesktop(options = {}, { run = runCommand, log = console.log } = {}) {
-  const { env, steps } = desktopPlan(options)
+  const { env, steps, fingerprintFile, fingerprints } = desktopPlan(options)
   assertDesktopStopped(env.DSH_DESKTOP_USER_DATA_DIR)
-  if (steps.length === 1) log('复用已有构建。修改插件后运行 npm run dev:plugins；修改底座后运行 npm run dev:rebuild。')
+  if (steps.length === 1) log('复用已有构建：未检测到插件或底座改动。')
   for (const [index, step] of steps.entries()) {
     if (step.label === '初始化桌面配置') assertDesktopStopped(env.DSH_DESKTOP_USER_DATA_DIR)
     log(`\n[${index + 1}/${steps.length}] ${step.label}`)
@@ -136,13 +167,14 @@ export async function runDesktop(options = {}, { run = runCommand, log = console
     catch (error) { throw new Error(`${step.label}失败：${error.message}`, { cause: error }) }
     if (index < steps.length - 1) log(`完成，用时 ${((performance.now() - started) / 1000).toFixed(1)} 秒`)
   }
+  saveFingerprints(fingerprintFile, fingerprints)
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
     const { values } = parseArgs({ options: { plan: { type: 'boolean' }, help: { type: 'boolean' },
       rebuild: { type: 'boolean' }, plugins: { type: 'boolean' } } })
-    if (values.help) console.log('npm run dev           复用已有构建并启动；缺少产物时自动准备\nnpm run dev:plugins   重建产品插件并启动\nnpm run dev:rebuild   完整重建底座和插件并启动\nnpm run dev -- --plan 查看启动步骤，不执行构建或启动')
+    if (values.help) console.log('npm run dev           一键启动：自动检测插件或底座自上次构建以来的改动并重建，其余复用已有构建\nnpm run dev:plugins   强制重建产品插件并启动\nnpm run dev:rebuild   强制完整重建底座和插件并启动\nnpm run dev -- --plan 查看启动步骤，不执行构建或启动')
     else if (values.plan) console.log(JSON.stringify(desktopPlan(values).steps, null, 2))
     else {
       if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('本地启动需要 Node.js 24 或更新版本。')

@@ -36,7 +36,7 @@ async function launchToolboxApp({ appearance = false, hubEndpoint = '' } = {}) {
   const userRoot = join(personalSandbox, 'skills')
   await writeFile(join(personalSandbox, 'package.json'), JSON.stringify({ name: 'toolbox-personal-skills-fixture', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   // A bundle default keeps the test directory editable by the real settings service.
-  await writeFile(join(personalSandbox, 'cordis.patch.yml'), JSON.stringify([{ id: 'tpcowork-toolbox', config: { skills: { userRoot }, prompthub: { endpoint: hubEndpoint, pageSize: 2 } } }]))
+  await writeFile(join(personalSandbox, 'cordis.patch.yml'), JSON.stringify([{ id: 'tpcowork-toolbox', config: { skills: { userRoot }, tpcoworkhub: { endpoint: hubEndpoint, pageSize: 2 } } }]))
   const scaffold = await launchWebScaffold({
     extraOverlayPath: [
       join(root, '../deepseek-harness/apps/web/tests/pin-browse-picker.overlay.yml'),
@@ -58,7 +58,7 @@ async function launchToolboxApp({ appearance = false, hubEndpoint = '' } = {}) {
   await expect.poll(async () => {
     for (const runtime of scaffold.ctx.registry.values()) for (const fiber of runtime.fibers) await fiber.await()
     return (await scaffold.ctx.toolbox.describe()).modules
-  }, { timeout: 30000 }).toEqual({ skills: true, installer: true, mcp: true, teams: true, prompthub: true })
+  }, { timeout: 30000 }).toEqual({ skills: true, installer: true, mcp: true, teams: true, tpcoworkhub: true })
   expect((await scaffold.ctx.toolboxTeams.inventory()).items).toHaveLength(2)
   const { chromium } = requireToolbox('playwright')
   const runtime = JSON.parse(await readFile(join(toolbox, 'runtime/playwright.json'), 'utf8'))
@@ -101,7 +101,7 @@ async function launchToolboxApp({ appearance = false, hubEndpoint = '' } = {}) {
   const tabs = panel.getByRole('navigation', { name: '工具箱' })
   expect(await tabs.getByRole('button').allTextContents()).toEqual(['专家团队', '技能', 'MCP', '技能商店'])
   await expect.poll(() => panel.locator('article').count()).toBe(2)
-  expect((await scaffold.ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: true, prompthub: true })
+  expect((await scaffold.ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: true, tpcoworkhub: true })
   await page.screenshot({ path: join(artifacts, 'teams.png'), fullPage: true })
 
   return { scaffold, page, panel, tabs, adapter, errors, userRoot }
@@ -135,7 +135,7 @@ it('browses compact store rows, previews and installs skills, confirms updates a
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
   onTestFinished(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) })
   const { scaffold, page, panel, tabs, userRoot, errors } = await launchToolboxApp({ appearance: true, hubEndpoint: `http://127.0.0.1:${server.address().port}` })
-  await scaffold.ctx.toolboxPromptHub.acceptBrowserSession({ token: 'isolated-store-token' })
+  await scaffold.ctx.toolboxTpcoworkHub.acceptBrowserSession({ token: 'isolated-store-token' })
   await tabs.getByRole('button', { name: '技能商店', exact: true }).click()
   await panel.getByText('已登录', { exact: true }).waitFor()
   const cards = panel.locator('.tp-store-card')
@@ -167,7 +167,7 @@ it('browses compact store rows, previews and installs skills, confirms updates a
   await search.fill('深度研究')
   await expect.poll(() => cards.count()).toBe(1)
   await panel.getByRole('button', { name: '详情: /research-daily', exact: true }).waitFor()
-  const download = page.waitForResponse(response => new URL(response.url()).pathname === '/api/toolboxPromptHub/install')
+  const download = page.waitForResponse(response => new URL(response.url()).pathname === '/api/toolboxTpcoworkHub/install')
   await panel.getByRole('button', { name: '下载到我的技能: /research-daily', exact: true }).click()
   expect((await (await download).json()).result).toMatchObject({ ok: true, value: { state: 'installed' } })
   await panel.getByText('已下载到我的技能', { exact: true }).waitFor()
@@ -178,7 +178,7 @@ it('browses compact store rows, previews and installs skills, confirms updates a
   await confirm.waitFor()
   expect(await readFile(join(userRoot, 'research-daily/SKILL.md'), 'utf8')).toContain('版本 1')
   version = 2
-  const update = page.waitForResponse(response => new URL(response.url()).pathname === '/api/toolboxPromptHub/install')
+  const update = page.waitForResponse(response => new URL(response.url()).pathname === '/api/toolboxTpcoworkHub/install')
   await confirm.getByRole('button', { name: '更新技能', exact: true }).click()
   expect((await (await update).json()).result).toMatchObject({ ok: true, value: { state: 'installed' } })
   await confirm.waitFor({ state: 'hidden' })
@@ -189,11 +189,11 @@ it('browses compact store rows, previews and installs skills, confirms updates a
   await page.screenshot({ path: join(review, 'store-detail.png'), fullPage: true, animations: 'disabled' })
   await panel.getByRole('button', { name: '返回列表', exact: true }).click()
   expect(await search.inputValue()).toBe('深度研究')
-  await scaffold.ctx.toolboxPromptHub.logout()
+  await scaffold.ctx.toolboxTpcoworkHub.logout()
   await panel.getByText('未登录', { exact: true }).waitFor()
   expect(await panel.getByRole('button', { name: /^(登录|退出登录)$/ }).count()).toBe(0)
   expect(await panel.getByRole('alert').count()).toBe(0)
-  expect(await panel.innerText()).not.toMatch(/PromptHub|会话已失效|服务地址/)
+  expect(await panel.innerText()).not.toMatch(/TP Cowork Hub|会话已失效|服务地址/)
   await page.screenshot({ path: join(review, 'store-signed-out.png'), fullPage: true, animations: 'disabled' })
 
   await tabs.getByRole('button', { name: '技能', exact: true }).click()
@@ -474,7 +474,7 @@ it('manages four real toolbox pages through the native browser', async () => {
   await expect.poll(async () => (await scaffold.ctx.toolboxMcp.inventory()).items.length).toBe(3)
 
   await tabs.getByRole('button', { name: '技能商店', exact: true }).click()
-  expect(await scaffold.ctx.toolboxPromptHub.account()).toMatchObject({ configured: false, state: 'unconfigured' })
+  expect(await scaffold.ctx.toolboxTpcoworkHub.account()).toMatchObject({ configured: false, state: 'unconfigured' })
   await panel.getByText('未登录', { exact: true }).waitFor()
   expect(await panel.getByRole('button', { name: '登录', exact: true }).count()).toBe(0)
   expect(await panel.getByRole('button', { name: '退出登录', exact: true }).count()).toBe(0)

@@ -1,11 +1,11 @@
-/** Show product settings and delegate sign-in to the PromptHub website. */
+/** Show product settings and delegate sign-in to the TP Cowork Hub website. */
 export function createSettingsLauncher(React, primitives) {
   const h = React.createElement;
   const { Menu, IconEllipsisOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium } = primitives;
-  return function SettingsLauncher({ wide, settingsShortcut, openSettings, usePromptHub, startSignIn, cancelSignIn, signOut, refreshAccount, t }) {
+  return function SettingsLauncher({ wide, settingsShortcut, openSettings, useTpcoworkHub, startSignIn, cancelSignIn, signOut, refreshAccount, t }) {
     const [open, setOpen] = React.useState(false);
     const trigger = React.useRef(null);
-    const account = usePromptHub(value => value);
+    const account = useTpcoworkHub(value => value);
     const signedIn = account.status === 'signed_in';
     const busy = account.phase !== 'idle';
     const message = account.error ? t(account.error === 'timeout' ? 'authTimeout' : 'authFailed')
@@ -20,7 +20,7 @@ export function createSettingsLauncher(React, primitives) {
           'aria-label': t('accountMenu'), 'aria-haspopup': 'menu', 'aria-expanded': open,
           onClick: () => { if (!open) void refreshAccount(); setOpen(value => !value); },
         }, h(signedIn ? IconUserOutlineMedium : IconEllipsisOutlineMedium, { size: signedIn ? 24 : 14 }),
-        wide ? h('span', null, signedIn ? account.user?.name || account.user?.username || 'PromptHub' : t('more')) : null),
+        wide ? h('span', null, signedIn ? account.user?.name || account.user?.username || 'TP Cowork Hub' : t('more')) : null),
         items: [
           ...(message ? [{ type: 'label', id: 'account-status', text: message }] : []),
           { id: 'settings', label: t('settings'), icon: h(IconSettingsOutlineMedium, { size: 16 }),

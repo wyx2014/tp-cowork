@@ -93,8 +93,8 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
       try {
         const info = await this.ctx.credentials.describe(credentialRef(ref))
         credentials.push({ ref, configured: info.configured, writable: info.writable })
-        if (!info.configured) reasons.push({ code: 'needs_configuration', message: `请在 DSH 凭证中配置 ${ref}。` })
-      } catch { credentials.push({ ref, configured: false, writable: false }); reasons.push({ code: 'credentials_unavailable', message: 'DSH 凭证服务暂不可用。' }) }
+        if (!info.configured) reasons.push({ code: 'needs_configuration', message: `请在 TP Cowork 凭证中配置 ${ref}。` })
+      } catch { credentials.push({ ref, configured: false, writable: false }); reasons.push({ code: 'credentials_unavailable', message: 'TP Cowork 凭证服务暂不可用。' }) }
     }
     if (!def.enabled) reasons.push({ code: 'disabled', message: '服务器已禁用。' })
     if (!(def.transport === 'stdio' ? def.command.trim() : def.endpoint)) reasons.push({ code: 'needs_configuration', message: def.id === 'playwright' ? '请由默认资源安装器配置已核对版本的 Playwright 启动命令。' : '请配置服务器地址或启动命令。' })
@@ -119,7 +119,7 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
   }
   private async write(rows: McpRecord[], removed?: string[]): Promise<void> {
     const descriptor = this.ctx.settings.describe().find(row => row.ns === this.config.settingsEntry)
-    if (!descriptor) throw new Error('toolbox/mcp-settings-missing: 请检查工具箱的 DSH profile 配置入口。')
+    if (!descriptor) throw new Error('toolbox/mcp-settings-missing: 请检查工具箱的 TP Cowork profile 配置入口。')
     try {
       await this.ctx.settings.mutate(this.config.settingsEntry, [
         { op: 'set', path: [...this.config.settingsPath, 'servers'], value: rows },

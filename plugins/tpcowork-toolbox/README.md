@@ -1,6 +1,6 @@
 # TP Cowork 工具箱
 
-`@tpcowork/dsh-toolbox` 是一个 Host + Client 插件。Host 提供管理能力接口，Client 通过 DSH Remote、slots 和失效事件呈现专家团队、技能、MCP 与 PromptHub 四类页面。管理操作与执行分别由对应 Host 模块和 experts 持有。
+`@tpcowork/dsh-toolbox` 是一个 Host + Client 插件。Host 提供管理能力接口，Client 通过 DSH Remote、slots 和失效事件呈现专家团队、技能、MCP 与 TP Cowork Hub 四类页面。管理操作与执行分别由对应 Host 模块和 experts 持有。
 
 在此目录执行：
 
@@ -43,7 +43,7 @@ Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱
 
 下游入口：
 
-- `./contracts`：技能、MCP、团队、PromptHub、统一安装器、任务与工作台事件类型，以及 `pinTaskContext`、`taskStatus`。
+- `./contracts`：技能、MCP、团队、TP Cowork Hub、统一安装器、任务与工作台事件类型，以及 `pinTaskContext`、`taskStatus`。
 - `./remote`：已实现的 `toolbox.describe` 与可取消的 `toolboxChanges.watch`；管理端点由各模块贡献独立 namespace。
 - `./composition`：单一配置 schema、默认资源初始化及 T5/T6 可选模块挂载函数；实际产物使用共享 ESM chunk，保留统一安装器的类身份。
 - `./web-search-step`：可选的 Step 搜索提供方，注册到 DSH `web`，复用原生 `web_search` 工具及引用卡片。每次请求只读取 `apiKeyRef`（默认 `STEP_API_KEY`），默认调用 `https://api.stepfun.com/v1/search`；`endpoint`、`apiKeyRef`、`defaultMaxResults` 可配置。结果只映射网址、标题、摘要，索引时间不冒充发布日期。缺凭证、HTTP 错误、无效结果或取消直接返回原生 Web 错误，不切换服务商；卸载移除注册。
@@ -72,4 +72,4 @@ Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱
 
 能力选择目录的汇总版本跟随配置和可用性。重新打开会话、Host 重启或其他目录项变化时，若已选技能的版本与内容指纹、MCP 配置及团队版本均保持一致且可用，自动采用当前目录版本，可保留同一组能力继续发送；历史执行快照保持不变。恢复期间发送会等待能力选择读取完成，避免将已选技能的消息当作普通聊天。已选技能内容或 MCP 配置变化要求重新确认，禁用、移除、连接失败和不完整目录仍阻止提交。MCP 正常连接、释放、工具数及观测时间变化不会使选择过期；管理写操作继续使用完整目录的版本检查。
 
-下游可以调用 Client 服务 `toolboxNavigation.open('teams' | 'skills' | 'mcp' | 'prompthub')`。T5/T6 的 UI 入口分别位于 `src/ui/prompthub/index.tsx`、`src/ui/teams/index.tsx`，接线说明见 `../../docs/toolbox/client-handoff.md`。
+下游可以调用 Client 服务 `toolboxNavigation.open('teams' | 'skills' | 'mcp' | 'tpcoworkhub')`。T5/T6 的 UI 入口分别位于 `src/ui/tpcoworkhub/index.tsx`、`src/ui/teams/index.tsx`，接线说明见 `../../docs/toolbox/client-handoff.md`。

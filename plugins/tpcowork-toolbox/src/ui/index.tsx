@@ -34,7 +34,7 @@ const namespace = 'tpcowork.toolbox'
 export const uiDependencies = [
   'slots', 'locale', 'layout', 'sessions', 'uiWorkspace', 'commandUi', 'conversation', 'inputTriggers',
   'remote.session', 'remote.toolbox', 'remote.toolboxChanges', 'remote.toolboxSkills', 'remote.toolboxInstaller',
-  'remote.toolboxMcp', 'remote.toolboxTeams', 'remote.toolboxPromptHub', 'remote.toolboxTasks',
+  'remote.toolboxMcp', 'remote.toolboxTeams', 'remote.toolboxTpcoworkHub', 'remote.toolboxTasks',
 ]
 
 export function registerToolboxUi(ctx: Context): void {
@@ -85,8 +85,8 @@ export function registerToolboxUi(ctx: Context): void {
     mcpProbe: (request, signal) => unwrap(remote.toolboxMcp.probe(request, signal)),
     mcpInventory: () => unwrap(remote.toolboxMcp.inventory()), mcpImport: request => unwrap(remote.toolboxMcp.importDefinitions(request)),
     mcpProbeDraft: (request, signal) => unwrap(remote.toolboxMcp.probeDraft(request, signal)),
-    hubAccount: () => unwrap(remote.toolboxPromptHub.account()), hubLogin: (request, signal) => unwrap(remote.toolboxPromptHub.login(request, signal)), hubLogout: () => unwrap(remote.toolboxPromptHub.logout()),
-    hubList: (request, signal) => unwrap(remote.toolboxPromptHub.list(request, signal)), hubDetail: (request, signal) => unwrap(remote.toolboxPromptHub.detail(request, signal)), hubInstall: (request, signal) => unwrap(remote.toolboxPromptHub.install(request, signal)), hubPublish: (request, signal) => unwrap(remote.toolboxPromptHub.publish(request, signal)),
+    hubAccount: () => unwrap(remote.toolboxTpcoworkHub.account()), hubLogin: (request, signal) => unwrap(remote.toolboxTpcoworkHub.login(request, signal)), hubLogout: () => unwrap(remote.toolboxTpcoworkHub.logout()),
+    hubList: (request, signal) => unwrap(remote.toolboxTpcoworkHub.list(request, signal)), hubDetail: (request, signal) => unwrap(remote.toolboxTpcoworkHub.detail(request, signal)), hubInstall: (request, signal) => unwrap(remote.toolboxTpcoworkHub.install(request, signal)), hubPublish: (request, signal) => unwrap(remote.toolboxTpcoworkHub.publish(request, signal)),
     prepareSkill: prompt => ctx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: false }),
     prepareTeam: (team, prompt) => ctx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: false, reuseBlank: false, onPrepared: sessionId => {
       const binding = ctx.sessions.binding(sessionId)!

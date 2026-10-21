@@ -5,14 +5,14 @@ import type { ChangeFrame, ToolboxDescription } from './contracts/index.ts'
 
 export const descriptionSchema = z.object({
   contractVersion: z.literal(1),
-  modules: z.object({ skills: z.boolean(), mcp: z.boolean(), teams: z.boolean(), installer: z.boolean(), prompthub: z.boolean() }).strict(),
+  modules: z.object({ skills: z.boolean(), mcp: z.boolean(), teams: z.boolean(), installer: z.boolean(), tpcoworkhub: z.boolean() }).strict(),
   defaultMcpIds: z.array(z.string()),
   userSkillsDirectory: z.string().optional(),
 }).strict()
 export const changeFrameSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }).strict(),
   z.object({ type: z.literal('changed'), change: z.object({
-    revision: z.number().int().positive(), domain: z.enum(['skills', 'mcp', 'teams', 'installer', 'prompthub', 'modules']), id: z.string().optional(),
+    revision: z.number().int().positive(), domain: z.enum(['skills', 'mcp', 'teams', 'installer', 'tpcoworkhub', 'modules']), id: z.string().optional(),
   }).strict() }).strict(),
 ])
 const packageName = '@tpcowork/dsh-toolbox'

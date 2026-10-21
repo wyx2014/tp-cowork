@@ -6,7 +6,7 @@ import type { T } from './types.ts'
 interface SubpageProps {
   title: string
   subtitle?: string | undefined
-  section: 'teams' | 'skills' | 'mcp' | 'prompthub'
+  section: 'teams' | 'skills' | 'mcp' | 'tpcoworkhub'
   t: T
   pending?: boolean
   onClose(): void
