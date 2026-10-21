@@ -83,6 +83,37 @@ jobs:
           architecture: x64
       - name: Install product build tools
         run: npm ci
+      - name: Resolve pnpm store directory
+        id: pnpm-store
+        run: |
+          $storePath = node node_modules/pnpm/bin/pnpm.cjs store path
+          "path=$storePath" >> $env:GITHUB_OUTPUT
+      # These caches hold content-addressed or hash-verified downloads (pnpm's store, the
+      # harness's locked interpreter archives, the pinned Chromium build, the pinned wheel).
+      # A stale or missing entry just falls back to a normal download, so a bad cache can
+      # slow a run down but never serves wrong content. Each only pays off once populated
+      # by a prior run with a matching lockfile/pin hash.
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-windows-${{ hashFiles('deepseek-harness/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-windows-
+      - name: Cache harness primary runtime downloads
+        uses: actions/cache@v4
+        with:
+          path: deepseek-harness/apps/desktop/.desktop-build/downloads
+          key: primary-runtime-downloads-windows-${{ hashFiles('deepseek-harness/scripts/primary-runtime/lock.json') }}
+      - name: Cache toolbox Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: tp-cowork/plugins/tpcowork-toolbox/runtime/browsers
+          key: toolbox-playwright-chromium-windows-${{ hashFiles('tp-cowork/plugins/tpcowork-toolbox/package-lock.json') }}
+      - name: Cache toolbox Windows Python wheels
+        uses: actions/cache@v4
+        with:
+          path: tp-cowork/.cache/toolbox-windows-wheels
+          key: toolbox-windows-wheels-${{ hashFiles('tp-cowork/plugins/tpcowork-toolbox/runtime-scripts/requirements-windows-x64-py312.txt') }}
       - name: Install harness build dependencies
         run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
       - name: Verify packaging helpers
