@@ -68,6 +68,9 @@ try {
     await new Promise(done => setTimeout(done, 250))
   }
   assert.ok(page, 'Installed application did not open its main page')
+  // Finish cold-start requests before a reload can cancel them.
+  await page.waitForLoadState('networkidle', { timeout: 60_000 })
+  assert.deepEqual([...errors], [], 'Installed renderer reported errors during first load')
   // Observe a complete document load even when Electron launched before listeners attached.
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 60_000 })
@@ -96,6 +99,7 @@ try {
   await research.waitFor()
   assert.equal(await research.getByRole('button', { name: /^(Use team|使用团队)$/ }).isEnabled(), true,
     'Installed stock research team is unavailable')
+  await page.waitForLoadState('networkidle', { timeout: 60_000 })
   await captureWindow(page, join(output, 'toolbox.png'))
   assert.deepEqual([...errors], [], 'Installed renderer reported errors')
   console.log('TP Cowork: installed appearance, Client modules and expert toolbox verified')
