@@ -1,7 +1,7 @@
+import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import React from 'react'
 import * as ReactDOM from 'react-dom'
@@ -18,7 +18,7 @@ import { adaptSidebar } from '../src/layout-adapter.js'
 import ShortcutsService from '../../../../deepseek-harness/packages/client/shortcuts/src/client/index.ts'
 import { createClientModuleSystem } from '../../../../deepseek-harness/packages/client/modules/src/client/index.ts'
 import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootGraph } from '../../../../deepseek-harness/packages/client/modules/src/client/index.ts'
-const { apply: hostApply } = createRequire(process.cwd() + '/package.json')(resolve('../plugins/tpcowork-ui/index.js'))
+const { apply: hostApply } = createRequire(import.meta.url)('../index.js')
 
 const cleanups: (() => void | Promise<void>)[] = []
 afterEach(async () => {
@@ -39,7 +39,7 @@ it('boots layout without Host config through the browser Loader and retracts the
   ctx!.provide('theme', theme)
   await ctx!.plugin(ShortcutsService).await()
   let entry: ClientBundleRegistration
-  vm.runInNewContext(await readFile(resolve('../plugins/tpcowork-ui/client.js'), 'utf8'), {
+  vm.runInNewContext(await readFile(resolve(import.meta.dirname, '../client.js'), 'utf8'), {
     window: { __ModuleLoader__: { load(value: ClientBundleRegistration) { entry = value } } }, document, URL,
   })
   expect(entry!.id).toBe('@tpcowork/dsh-ui')
@@ -98,6 +98,7 @@ it('boots layout without Host config through the browser Loader and retracts the
   expect(document.body.hasAttribute('data-tpcowork-ui')).toBe(true)
   expect(document.head.querySelectorAll('[data-plugin="@tpcowork/dsh-ui"]')).toHaveLength(1)
   expect(theme.getTheme().active.tokens['--dsw-static-neutral-75']).toBe('rgb(248, 248, 248)')
+  expect(theme.getTheme().active.tokens['--dsh-sidebar-brand-mark-display']).toBe('none')
   const nativeEntry = slotsService.register({ name: 'sidebar.panellist', id: 'schedules', locale: 'schedule.manager' }, () => null)
   await vi.waitFor(() => expect(slotsService.entries('sidebar.panellist')).toHaveLength(2))
   const automationEntry = slotsService.register({ name: 'sidebar.panellist', id: 'schedules', priority: -20, locale: 'tpcowork.automation' }, () => null)
@@ -109,6 +110,7 @@ it('boots layout without Host config through the browser Loader and retracts the
   automationEntry()
   expect(document.body.style.getPropertyValue('--dsh-hero-width')).toBe('672px')
   theme.setTheme('dark')
+  expect(theme.getTheme().active.tokens['--dsh-sidebar-brand-mark-display']).toBe('none')
   expect(theme.getTheme().active.tokens['--dsw-specific-input-major']).toBe('var(--dsw-static-neutral-775)')
   expect(document.body.hasAttribute('data-ds-dark-theme')).toBe(true)
   expect(document.body.style.getPropertyValue('--dsw-menu-surface-fill')).toBe('#2b2b2b')

@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import React from 'react'
 import * as ReactDOM from 'react-dom'
@@ -16,12 +16,11 @@ import { upstreamCss } from '../src/upstream-css.js'
 
 vi.mock('../../../../deepseek-harness/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css', async () => {
   const { readFile } = await import('node:fs/promises')
-  const { resolve } = await import('node:path')
-  const maps = JSON.parse(await readFile(resolve('../plugins/tpcowork-ui/upstream-classes.json'), 'utf8'))
+  const maps = JSON.parse(await readFile(resolve(import.meta.dirname, '../upstream-classes.json'), 'utf8'))
   return { default: maps.hero }
 })
 
-const maps: Record<string, Record<string, string>> = JSON.parse(readFileSync(resolve('../plugins/tpcowork-ui/upstream-classes.json'), 'utf8'))
+const maps: Record<string, Record<string, string>> = JSON.parse(readFileSync(resolve(import.meta.dirname, '../upstream-classes.json'), 'utf8'))
 const styles: HTMLStyleElement[] = []
 afterEach(() => {
   cleanup()
@@ -37,13 +36,13 @@ function style(text: string): void {
 }
 
 it('shows the greeting and sidebar preview badge with shipped upstream styles and restores the Hero when disabled', async () => {
-  const upstream = await upstreamCss(pathToFileURL(resolve('packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css')))
+  const upstream = await upstreamCss(pathToFileURL(resolve(import.meta.dirname, '../../../../deepseek-harness/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css')))
   expect(maps.hero).toEqual(upstream.classes)
   style(upstream.css)
-  style(readFileSync(resolve('../plugins/tpcowork-ui/styles.css'), 'utf8'))
-  style(readFileSync(resolve('../plugins/tpcowork-ui/upstream.css'), 'utf8'))
+  style(readFileSync(resolve(import.meta.dirname, '../styles.css'), 'utf8'))
+  style(readFileSync(resolve(import.meta.dirname, '../upstream.css'), 'utf8'))
   let factory: (require: (id: string) => unknown) => { apply: (ctx: object) => void }
-  vm.runInNewContext(readFileSync(resolve('../plugins/tpcowork-ui/client.js'), 'utf8'), {
+  vm.runInNewContext(readFileSync(resolve(import.meta.dirname, '../client.js'), 'utf8'), {
     window: { __ModuleLoader__: { load(entry: { factory: typeof factory }) { factory = entry.factory } } }, document, URL,
   })
   const plugin = factory!(id => id === 'react-dom' ? ReactDOM : id === 'react' ? React : primitives)
@@ -65,8 +64,11 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
       },
     },
   })
-  const zh = JSON.parse(readFileSync(resolve('../plugins/tpcowork-ui/locale/zh.json'), 'utf8')).ui
+  const zh = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
   const Brand = entries.get('sidebar.brand.name')!
+  const Mark = entries.get('sidebar.brand.mark')!
+  const mark = render(React.createElement(Mark, { t: (key: string) => zh[key] }))
+  expect(mark.container.querySelector('img')?.getAttribute('src')).toBe(`data:image/png;base64,${readFileSync(resolve(import.meta.dirname, '../icon.png')).toString('base64')}`)
   const brand = render(React.createElement(Brand, { t: (key: string) => zh[key] }))
   expect(brand.container.querySelector('.tpcowork-preview-badge')?.textContent).toBe('预览版')
   const view = render(React.createElement(HeroShell, {
@@ -89,7 +91,7 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
 })
 
 it('keeps sidebar rail and hero input rules out of the expanded and docked overrides', () => {
-  style(readFileSync(resolve('../plugins/tpcowork-ui/upstream.css'), 'utf8'))
+  style(readFileSync(resolve(import.meta.dirname, '../upstream.css'), 'utf8'))
   document.body.setAttribute('data-tpcowork-ui', '')
   const sidebar = document.createElement('div')
   sidebar.className = `${maps.sidebar.root} ${maps.sidebar.collapsed}`

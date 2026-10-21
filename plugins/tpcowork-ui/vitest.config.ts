@@ -1,7 +1,12 @@
-import base from '../../../deepseek-harness/vitest.config.ts'
+import { fileURLToPath } from 'node:url'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import { standardDecoratorPlugin, vitestExecArgv } from '../../../deepseek-harness/vitest.shared.ts'
+
+const harnessFile = (path: string) => fileURLToPath(new URL(`../../../deepseek-harness/${path}`, import.meta.url))
 
 export default {
-  ...base,
+  root: fileURLToPath(new URL('../../../deepseek-harness', import.meta.url)),
+  plugins: [tsconfigPaths({ projects: [harnessFile('tsconfig.base.json')] }), standardDecoratorPlugin()],
   resolve: {
     alias: {
       react: new URL('../../../deepseek-harness/packages/client/ui-layout/node_modules/react', import.meta.url).pathname,
@@ -9,11 +14,11 @@ export default {
     },
   },
   test: {
-    ...base.test,
-    projects: undefined,
-    include: [new URL('./tests/*.spec.ts', import.meta.url).pathname],
+    setupFiles: [harnessFile('scripts/test-proxy-environment.ts'), harnessFile('scripts/test-dom-environment.ts')],
+    include: [fileURLToPath(new URL('./tests/*.spec.ts', import.meta.url))],
     environment: 'jsdom',
-    pool: 'threads',
+    pool: 'forks',
+    execArgv: vitestExecArgv,
     maxWorkers: 2,
   },
 }

@@ -1,11 +1,11 @@
 /** Create a Client plugin using the host's React instance and the bundle's visual resources. */
-export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, defaultSidebarWidth) {
+export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, defaultSidebarWidth, brandIcon) {
   const id = '@tpcowork/dsh-ui';
   const h = React.createElement;
   const Brand = ({ t }) => h('span', { className: 'tpcowork-brand' },
     h('span', { className: 'tpcowork-brand-name' }, t('brand')),
     h('span', { className: 'tpcowork-preview-badge' }, t('preview')));
-  const Mark = () => h('span', { className: 'tpcowork-brand-mark', 'aria-hidden': true }, 'TP');
+  const Mark = () => h('img', { className: 'tpcowork-brand-mark', src: brandIcon, alt: '', width: 24, height: 24, 'aria-hidden': true });
   const Greeting = ({ t }) => h('h1', { className: 'tpcowork-greeting' }, t('greeting'));
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);

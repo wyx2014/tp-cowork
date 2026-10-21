@@ -48,10 +48,10 @@
 
 ## 验证
 
-在 `deepseek-harness` 目录执行 `node node_modules/vitest/vitest.mjs run --config ../plugins/tpcowork-ui/vitest.config.ts`。测试通过真实浏览器 Loader 加载生成的 Client 模块，使用原版布局、主题服务与插槽注册表，检查主题切换、侧栏拖动和开关、窄屏行为及卸载恢复；还使用 DSH 实际交付的 Hero 样式验证首页问候、原标题的隐藏与恢复，以及侧栏中的预览版标签。样式测试检查展开侧栏和停靠输入框的覆盖规则不会影响收起轨道与首页输入框的原有特殊规则。视觉验收仍需要在真实桌面进行。
+在同级 `deepseek-harness` 目录执行 `node node_modules/vitest/vitest.mjs run --config ../tp-coworkdsh/plugins/tpcowork-ui/vitest.config.ts`。测试通过真实浏览器 Loader 加载生成的 Client 模块，使用原版布局、主题服务与插槽注册表，检查主题切换、侧栏拖动和开关、窄屏行为及卸载恢复；还使用 DSH 实际交付的 Hero 样式验证首页问候、原标题的隐藏与恢复，以及侧栏中的预览版标签。样式测试检查展开侧栏和停靠输入框的覆盖规则不会影响收起轨道与首页输入框的原有特殊规则。视觉验收仍需要在真实桌面进行。
 
 任务卡测试覆盖原生任务插槽的替换及卸载恢复、实时状态更新、多面板定位、跨会话偏好重置、宽窄屏默认状态、空清单和全完成清单。
 
 身份与独立启停的回归测试位于 core 插件；在同一目录执行 `node node_modules/vitest/vitest.mjs run --config ../plugins/tpcowork-core/vitest.config.ts`。
 
-`icon.png` 来自用户提供的 `tp-cowork/packages/ui/src/assets/tpcowork-logo.png`，沿用现有项目品牌图。Electron/macOS 兼容性属于桌面壳，独立于本外观插件。
+`icon.png` 来自用户提供的 `tp-cowork/packages/ui/src/assets/tpcowork-logo.png`，侧栏展开时保留纯文字 TP Cowork，收起后的导航图标使用这张品牌图。产品构建先运行 `scripts/desktop-branding.mjs`，由同一资源生成登录欢迎页标志、浏览器图标、Windows 托盘 ICO 和 macOS ICNS，并将桌面中英文菜单、关于窗口、登录页、更新提示及开发版应用名称统一为 TP Cowork。Windows 安装包构建已自动执行此步骤；本地开发在产品目录运行 `npm run dev`，自动准备品牌、构建并启动。`npm run desktop:preview` 将现有桌面产物复制到 `.desktop-build/branded-desktop`，用于查看品牌资源，不修改底座源码。

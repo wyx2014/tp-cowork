@@ -44,9 +44,12 @@ body[data-tpcowork-ui] [data-composer-selection]:has(> [data-slot="conversation.
 }
 
 .tpcowork-brand-mark {
-  font-size: 14px;
-  line-height: 24px;
-  font-weight: 500;
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: contain;
 }
 
 .tpcowork-greeting {

@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import { createSettingsLauncher } from '../src/settings-launcher.js'
 import { createPromptHubAccount } from '../src/prompt-hub-account.js'
 
 const SettingsLauncher = createSettingsLauncher(React, primitives)
-const labels = JSON.parse(readFileSync(resolve('../plugins/tpcowork-ui/locale/zh.json'), 'utf8')).ui
+const labels = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
 const t = (key: string) => labels[key]
 const signedOut: PromptHubAccountState = { status: 'signed_out', phase: 'idle' }
 const signedIn: PromptHubAccountState = { status: 'signed_in', phase: 'idle', user: { id: 'user-1', username: 'fixture-user', name: '测试账号' } }

@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -9,7 +9,7 @@ import { createTaskDock } from '../src/task-panel.js'
 type Todo = { content: string; status: 'completed' | 'in_progress' | 'pending' }
 const h = React.createElement
 const TaskDock = createTaskDock(React, createPortal)
-const labels = JSON.parse(readFileSync(resolve('../plugins/tpcowork-ui/locale/zh.json'), 'utf8')).ui
+const labels = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
 const t = (key: string, params: Record<string, number> = {}) => labels[key].replace(/\{(\w+)\}/g, (_: string, name: string) => params[name])
 
 class Observer {
