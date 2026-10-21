@@ -46,7 +46,7 @@ DSH 版的安装标识是 `com.tparuyi.tpcowork.dsh`，与旧 nanobot 版 `com.t
 
 `test` 和 `production` 保留底座原有策略校验。地址必须是 HTTPS origin，不带路径；测试登录 origin 多个时用逗号分隔，也可设为仓库 Variables `PACKAGE_POLICY_ORIGIN`、`PACKAGE_LOGIN_ORIGINS`。这三种模式均不是签名正式发布流程。
 
-模型服务地址可用 Variable `TPCOWORK_DEEPSEEK_BASE_URL` 配置；用户在应用内设置自己的凭证，开发机 API Key 不进入仓库和安装包。
+模型服务地址可用 Variable `TPCOWORK_DEEPSEEK_BASE_URL` 配置。设置仓库 Secret `TPCOWORK_DEEPSEEK_API_KEY` 后，该密钥会随安装包一起打包，应用首次启动即可直接调用默认的 DeepSeek 服务，无需用户手动添加凭证——仅建议用于密钥可随包分发的内网部署，因为任何拿到该 EXE 的人都能还原出这个密钥。不设置该 Secret 时，安装包保持不含密钥，用户需在应用内自行添加凭证。本地打包不受影响：`plugins/tpcowork-core/deployment.local.json`（已在 `.gitignore` 中）仍只用于开发机，`scripts/stage-core-bundle.mjs` 打包时永远重新生成这个文件，不会读取或泄露该本地文件的内容。
 
 ## 本地开发与构建
 

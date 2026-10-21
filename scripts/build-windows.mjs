@@ -54,7 +54,10 @@ export async function buildWindows(argv = process.argv.slice(2)) {
   }
   const prepareSettings = join(harnessRoot, 'apps/desktop/scripts/prepare-windows-ci.mjs')
   if (!existsSync(prepareSettings)) throw new Error('TP Cowork: deepseek-harness is missing; check out the harness fork beside the product directory first')
-  const env = { ...process.env, TPCOWORK_NPM_CLI: npmCli(), DSH_TELEMETRY_DISABLED: '1' }
+  const env = { ...process.env, TPCOWORK_NPM_CLI: npmCli(), DSH_TELEMETRY_DISABLED: '1',
+    // electron-builder falls back to its own "DeepSeek Harness" identity otherwise; the artifact
+    // name in particular isn't covered by the text-substitution branding pass below.
+    DSH_DESKTOP_PRODUCT_NAME: product.productName, DSH_DESKTOP_ARTIFACT_PREFIX: product.artifactPrefix }
   const deployment = env.PACKAGE_DEPLOYMENT ?? 'standalone'
   if (!['standalone', 'test', 'production'].includes(deployment)) throw new Error('TP Cowork: unsupported PACKAGE_DEPLOYMENT')
   const standalone = deployment === 'standalone'

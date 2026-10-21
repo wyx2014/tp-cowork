@@ -91,7 +91,7 @@ test('Mac and Linux Windows builds stop before installing or preparing files', {
   await assert.rejects(buildWindows([]), /Windows x64/)
 })
 
-test('core staging excludes local and ambient API keys and preserves developer files', async () => {
+test('core staging ignores the developer deployment file but forwards an explicit deployment API key', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tpcowork-core-staging-'))
   try {
     const source = join(root, 'source')
@@ -105,10 +105,27 @@ test('core staging excludes local and ambient API keys and preserves developer f
     const destination = join(root, 'release')
     await stageCoreBundle(source, destination, { TPCOWORK_DEEPSEEK_API_KEY: 'ambient-example-secret', TPCOWORK_DEEPSEEK_BASE_URL: 'https://release.example.com/v1' })
     const staged = JSON.parse(await readFile(join(destination, 'deployment.local.json'), 'utf8'))
-    assert.equal(staged.apiKey, undefined)
+    assert.equal(staged.apiKey, 'ambient-example-secret')
     assert.equal(staged.apiBase, 'https://release.example.com/v1')
     assert.equal(await readFile(join(source, 'deployment.local.json'), 'utf8'), local)
     assert.equal(await readFile(join(source, 'model.patch.yml'), 'utf8'), 'local patch')
     assert.equal(await readFile(join(source, 'model.js'), 'utf8'), 'local model')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('core staging stays credential-free when no deployment API key is provided', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tpcowork-core-staging-default-'))
+  try {
+    const source = join(root, 'source')
+    await mkdir(source)
+    await writeFile(join(source, 'package.json'), JSON.stringify({ name: '@example/core', files: ['index.js', 'deployment.local.json', 'model.patch.yml', 'model.js'] }))
+    await writeFile(join(source, 'index.js'), 'export const example = true\n')
+    await writeFile(join(source, 'deployment.local.json'), JSON.stringify({ apiKey: 'local-example-secret' }))
+    await writeFile(join(source, 'model.patch.yml'), 'local patch')
+    await writeFile(join(source, 'model.js'), 'local model')
+    const destination = join(root, 'release')
+    await stageCoreBundle(source, destination, {})
+    const staged = JSON.parse(await readFile(join(destination, 'deployment.local.json'), 'utf8'))
+    assert.equal(staged.apiKey, undefined)
   } finally { await rm(root, { recursive: true, force: true }) }
 })

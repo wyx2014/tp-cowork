@@ -94,6 +94,7 @@ jobs:
           PACKAGE_POLICY_ORIGIN: ${{ inputs.policy_origin || vars.PACKAGE_POLICY_ORIGIN }}
           PACKAGE_LOGIN_ORIGINS: ${{ inputs.deployment == 'test' && (inputs.login_origins || vars.PACKAGE_LOGIN_ORIGINS) || '' }}
           TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
         run: npm run build:win
       - name: Verify EXE installation and installed product
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory dist/installers
