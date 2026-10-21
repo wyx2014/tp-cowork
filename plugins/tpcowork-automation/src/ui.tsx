@@ -100,7 +100,8 @@ export function registerAutomationUi(ctx: Context, remote?: Pick<ClientRemote, '
       subscribe: listener => projectSource.subscribe(listener),
     },
     askAssistant: prompt => ctx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: false }),
-    openSession: (id, title, signal) => openRunSession(ctx.sessions, target => ctx.uiWorkspace.openSession(target), id, title, signal),
+    openSession: (id, title, signal) => openRunSession(ctx.sessions, target => ctx.uiWorkspace.openSession(target), id, title, signal,
+      error => ctx.logger.warn('Automation result title update failed; existing conversation remains readable.', error)),
   }
   const t = ctx.locale.bind(namespace)
   registerAutomationSessionGroup(ctx, t)

@@ -24,6 +24,6 @@ export interface AutomationUiServices {
   executionOptions?(): Promise<AutomationExecutionOptions>
   projects: { getSnapshot(): readonly AutomationProject[]; subscribe(listener: () => void): () => void }
   askAssistant(prompt: string): void
-  /** Open only an existing result, await its history, and pin the standard run title. */
+  /** Open an existing result after reading its history; a title update may fail independently. */
   openSession(id: SessionId, title: string, signal: AbortSignal): Promise<void>
 }

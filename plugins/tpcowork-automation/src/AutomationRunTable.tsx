@@ -8,6 +8,7 @@ import { uiFailureKey, type UiText } from './ui-locales.ts'
 import { canOpenResult, collectRuns, isUnread, runTitle, type RunEntry } from './run-history.ts'
 import { AutomationIcon } from './AutomationIcon.tsx'
 import { DeleteConfirmation } from './AutomationDeleteConfirmation.tsx'
+import { runSessionFailureKey } from './open-run-session.ts'
 
 interface Props { tasks: readonly ScheduledTask[]; showTask?: boolean; catalog: AutomationCatalog; state: CatalogSnapshot; services: AutomationUiServices; t: UiText; locale: string }
 
@@ -21,7 +22,7 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
   const [menu, setMenu] = React.useState<string>()
   const [deleting, setDeleting] = React.useState<string>()
   const [opening, setOpening] = React.useState(false)
-  const [openFailed, setOpenFailed] = React.useState(false)
+  const [openFailed, setOpenFailed] = React.useState<{ runId: string; reason: 'missingResult' | 'openFailed' }>()
   const [followed, setFollowed] = React.useState<string>()
   const attemptedRead = React.useRef<string>()
   const table = React.useRef<HTMLTableElement>(null)
@@ -32,6 +33,7 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
     return () => { controller.abort(); lifetime.current = undefined }
   }, [])
   const entries = collectRuns(tasks)
+  const retryEntry = entries.find(({ run }) => run.id === openFailed?.runId)
   const deletion = entries.find(({ run }) => run.id === deleting)
   React.useEffect(() => { if (deleting && !deletion) setDeleting(undefined) }, [deleting, deletion])
   const followedEntry = entries.find(({ run }) => run.id === followed)
@@ -50,14 +52,14 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
     if (openingRef.current || state.pending || !canOpenResult(entry.run)) return
     const controller = lifetime.current
     if (!controller) return
-    openingRef.current = true; setOpening(true); setOpenFailed(false)
+    openingRef.current = true; setOpening(true); setOpenFailed(undefined)
     try {
-      if (isUnread(entry.run) && !await catalog.mutate(() => services.automation.markRunViewed({ taskId: entry.task.id, runId: entry.run.id }))) return
       controller.signal.throwIfAborted()
       await services.openSession(entry.run.conversationId!, runTitle(entry, locale), controller.signal)
+      if (isUnread(entry.run)) await catalog.mutate(() => services.automation.markRunViewed({ taskId: entry.task.id, runId: entry.run.id }))
       if (!controller.signal.aborted) { attemptedRead.current = undefined; setFollowed(entry.run.id) }
-    } catch {
-      if (!controller.signal.aborted) setOpenFailed(true)
+    } catch (error) {
+      if (!controller.signal.aborted) setOpenFailed({ runId: entry.run.id, reason: runSessionFailureKey(error) })
     } finally {
       openingRef.current = false
       if (!controller.signal.aborted) setOpening(false)
@@ -72,7 +74,7 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
   }
   return <div className="tp-auto-editor-history">
     {state.error && !deletion && <p role="alert">{t(uiFailureKey(state.failure) === 'error' ? 'runFailure' : uiFailureKey(state.failure))} <button type="button" onClick={() => { void catalog.refresh() }}>{t('retry')}</button></p>}
-    {openFailed && <p role="alert">{t('openFailed')}</p>}
+    {openFailed && retryEntry && <p role="alert">{t(openFailed.reason)} <button type="button" disabled={opening || state.pending || !canOpenResult(retryEntry.run)} onClick={() => { void open(retryEntry) }}>{t('retry')}</button></p>}
     {entries.length === 0 ? <div className="tp-auto-empty">{t('emptyRuns')}</div> : <div className="tp-auto-history-table-wrap"><table ref={table} className="tp-auto-history-table" data-show-task={showTask} aria-label={t(showTask ? 'runs' : 'editorHistory')}>
       <thead><tr>{showTask && <th scope="col">{t('name')}</th>}<th scope="col">{t('triggeredAt')}</th><th scope="col">{t('triggerSource')}</th><th scope="col">{t('status')}</th><th scope="col">{t('historyDuration')}</th><th scope="col"><span className="tp-auto-sr-only">{t('runActions')}</span></th></tr></thead>
       <tbody>{entries.map(entry => {

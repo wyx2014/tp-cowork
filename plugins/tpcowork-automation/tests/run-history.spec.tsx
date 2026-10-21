@@ -70,21 +70,42 @@ it.each(['en', 'zh'] as const)('shows a compact %s table including archived runs
   expect(h.services.openSession).not.toHaveBeenCalled()
 })
 
-it('opens terminal results directly, archives once only after durable read, and retries navigation failures', async () => {
+it('leaves a failed open unread and retries that result directly from the error', async () => {
   const h = await harness(); const { task } = await h.create('once', 'completed', { once: true })
   h.services.openSession = vi.fn().mockRejectedValueOnce(new Error('missing')).mockResolvedValue(undefined)
   await h.show()
   expect((await h.read(task))!.runs[0]!.viewedAt).toBeUndefined()
   fireEvent.click(button('once', en.jumpToSession))
   await screen.findByText(en.openFailed)
-  expect((await h.read(task))!.runs[0]!.viewedAt).toBeDefined()
-  fireEvent.click(button('once', en.jumpToSession))
+  expect((await h.read(task))!.runs[0]!.viewedAt).toBeUndefined()
+  expect(within(row('once')).getByLabelText(en.unread)).toBeDefined()
+  fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: en.retry }))
   await waitFor(() => expect(h.services.openSession).toHaveBeenCalledTimes(2))
+  await waitFor(async () => expect((await h.read(task))!.runs[0]!.viewedAt).toBeDefined())
   expect(h.services.openSession).toHaveBeenLastCalledWith('session-once', expect.stringContaining(' - once'), expect.any(AbortSignal))
   expect(screen.queryByRole('region', { name: en.details })).toBeNull()
   fireEvent.click(screen.getByRole('tab', { name: /^Tasks/ }))
   expect(screen.queryByRole('heading', { name: 'once', exact: true })).toBeNull()
   await h.reopen(); expect((await h.read(task))!.runs[0]!.viewedAt).toBeDefined()
+})
+
+it('reports an explicitly deleted result separately and preserves unread state', async () => {
+  const h = await harness(); const { task } = await h.create('deleted result')
+  h.services.openSession = vi.fn().mockRejectedValue({ code: 'session/not-found' })
+  await h.show(); fireEvent.click(button('deleted result', en.jumpToSession))
+  await screen.findByText(en.missingResult)
+  expect(screen.queryByText(en.openFailed)).toBeNull()
+  expect((await h.read(task))!.runs[0]!.viewedAt).toBeUndefined()
+})
+
+it('opens the conversation even when saving its read status fails', async () => {
+  const h = await harness(); const { task } = await h.create('read failure')
+  vi.spyOn(h.ctx.automation, 'markRunViewed').mockRejectedValue({ code: 'automation/storage_failure' })
+  await h.show(); fireEvent.click(button('read failure', en.jumpToSession))
+  await screen.findByText(en.storageFailure)
+  expect(h.services.openSession).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText(en.openFailed)).toBeNull()
+  expect((await h.read(task))!.runs[0]!.viewedAt).toBeUndefined()
 })
 
 it('follows a running result without marking read, then acknowledges the followed result when it finishes', async () => {

@@ -213,7 +213,7 @@ try {
   await page.getByRole('region', { name: 'Existing result conversation' }).getByText(/DURABLE_HISTORY_RESULT/).waitFor();
   assert.equal(await page.evaluate(() => window.openedSession), historyRun.sessionId);
   assert.ok(ctx.automation.getTask(historyTask.id).runs[0].viewedAt);
-  assert.match(await page.getByRole('region', { name: 'Existing result conversation' }).getByRole('heading').innerText(), / - History report$/);
+  await page.getByRole('region', { name: 'Existing result conversation' }).getByRole('heading').filter({ hasText: / - History report$/ }).waitFor();
   await page.screenshot({ path: resolve(output, 'cold-history.png'), fullPage: true });
   await page.evaluate(() => window.fixture.closeConversation());
   await page.getByRole('tab', { name: /^Tasks/ }).click(); assert.equal(await page.getByRole('heading', { name: 'History report', exact: true }).count(), 0);
@@ -226,7 +226,7 @@ try {
   }
   const createCalls = requests.filter(x => x === 'session/create').length;
   await row('Stale result').getByRole('button', { name: 'Go to conversation', exact: true }).click();
-  await page.getByText('Could not open the existing result. It may be missing or temporarily unavailable. Retry or refresh.', { exact: true }).waitFor();
+  await page.getByRole('alert').getByText('Could not load the result conversation. Please retry.', { exact: false }).waitFor();
   assert.equal(requests.filter(x => x === 'session/create').length, createCalls);
   assert.equal(await ctx.sessionPersistence.stat('does-not-exist'), undefined);
   await row('One reminder').getByRole('button', { name: 'Confirm', exact: true }).click(); await row('One reminder').waitFor({ state: 'detached' });
