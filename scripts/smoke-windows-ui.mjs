@@ -68,6 +68,9 @@ try {
     await new Promise(done => setTimeout(done, 250))
   }
   assert.ok(page, 'Installed application did not open its main page')
+  // Observe a complete document load even when Electron launched before listeners attached.
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 60_000 })
   const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
   console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
   assert.equal(await page.locator('body[data-tpcowork-ui]').count(), 1, 'TP Cowork appearance plugin did not activate')
