@@ -128,6 +128,8 @@ jobs:
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
         run: npm run build:win
       - name: Verify EXE installation and installed product
+        env:
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory dist/installers
       - name: Diagnose browser bridge and expert toolbox (non-blocking)
         continue-on-error: true

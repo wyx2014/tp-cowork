@@ -40,6 +40,7 @@ jobs:
         shell: pwsh
         env:
           CLEAN_MACHINE: ${{ inputs.clean_machine }}
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -CleanMachine:($env:CLEAN_MACHINE -eq 'true')
       - name: Diagnose browser bridge and expert toolbox (non-blocking)
         continue-on-error: true
