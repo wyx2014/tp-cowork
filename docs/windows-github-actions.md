@@ -48,6 +48,8 @@ DSH 版的安装标识是 `com.tparuyi.tpcowork.dsh`，与旧 nanobot 版 `com.t
 
 模型服务地址可用 Variable `TPCOWORK_DEEPSEEK_BASE_URL` 配置。设置仓库 Secret `TPCOWORK_DEEPSEEK_API_KEY` 后，该密钥会随安装包一起打包，应用首次启动即可直接调用默认的 DeepSeek 服务，无需用户手动添加凭证——仅建议用于密钥可随包分发的内网部署，因为任何拿到该 EXE 的人都能还原出这个密钥。不设置该 Secret 时，安装包保持不含密钥，用户需在应用内自行添加凭证。本地打包不受影响：`plugins/tpcowork-core/deployment.local.json`（已在 `.gitignore` 中）仍只用于开发机，`scripts/stage-core-bundle.mjs` 打包时永远重新生成这个文件，不会读取或泄露该本地文件的内容。
 
+底座的编译与打包结果会按底座 commit 缓存。只改 TP Cowork 插件时，后续打包会恢复上次的底座构建（日志显示 `desktop build cache: restored`），只重新构建插件、安装包和冒烟测试。底座 commit、品牌文件（`desktop-product.json`、图标、`scripts/desktop-branding.mjs`）、Node 版本或公开构建配置任一变化，底座都会自动完整重建（日志显示 `no build for ...; building`）。本地打包设置 `DSH_DESKTOP_BUILD_CACHE_DIR` 环境变量后，也能用上同一缓存。
+
 ## 本地开发与构建
 
 ```sh
