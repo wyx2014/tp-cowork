@@ -6,11 +6,9 @@ on:
       run_id:
         description: 'Build run containing the installer artifact'
         required: true
-        default: '39392660853'
       artifact_name:
         description: 'Installer artifact name'
         required: true
-        default: TPCowork-windows-x64-4-1
       clean_machine:
         description: 'Diagnose an existing installer without the legacy nanobot registration'
         type: boolean
@@ -43,6 +41,10 @@ jobs:
         env:
           CLEAN_MACHINE: ${{ inputs.clean_machine }}
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -CleanMachine:($env:CLEAN_MACHINE -eq 'true')
+      - name: Diagnose browser bridge and expert toolbox (non-blocking)
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -Diagnostics
       - name: Upload verified installer
         uses: actions/upload-artifact@v4
         with:

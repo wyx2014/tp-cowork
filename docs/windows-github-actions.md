@@ -24,9 +24,15 @@
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 
-上传前还会在临时目录实际运行 EXE，验证首次安装、同目录覆盖升级及安装后的插件和 Python，再卸载测试应用。每次安装后启动真实桌面程序，用私有数据目录检查 TP Cowork 外观、客户端插件、原生浏览器启用状态及工具箱专家团队入口；截图和启动记录保存在 `installed-ui-…` Artifact。测试同时登记旧 nanobot 版的安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。独立的 **Verify Windows installer** 工作流可按构建运行 ID 和 Artifact 名称检查已有安装包，无需重新编译；仅在诊断旧包的干净机器行为时勾选 `clean_machine`，正式打包始终验证旧版并存。真实安装检查仅用于一次性 GitHub Actions runner。
+上传前实际运行 EXE，阻断验收包括首次安装、同目录覆盖升级、离线 Python 和插件完整性；每次安装后启动真实桌面程序，要求 TP Cowork 外观已激活、核心客户端插件齐全、控制台零错误。测试同时登记旧 nanobot 版安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。测试应用在检查结束后卸载；真实安装检查仅用于一次性 GitHub Actions runner。
 
-若 EXE 已生成，但后续验收失败，工作流会保留 `unverified-installer-<run_id>` 诊断产物 7 天。可将该运行 ID 和产物名称填入 **Verify Windows installer** 复查；它尚未通过完整验收，不作为交付包。正式测试包以通过安装和界面验收后上传的 `TPCowork-windows-x64-…` 为准。
+浏览器桥接、专家工具箱入口及个股团队按钮放在单独的非阻断诊断步骤，使用产品 UI 的 `data-testid` 定位，不依赖语言或显示名称。诊断失败保留报告和截图，但不阻止已通过基础验收的安装包上传。两种检查的 `report.json`、截图及启动记录均保存在 `installed-ui-…` Artifact。
+
+**UI 验证失败时先复用已有包：** 下载最后失败运行的 `installed-ui-<run_id>`，一起查看 `report.json` 的具体 URL、错误和截图后再修改。将已有构建运行 ID 和 Artifact 名称填入 **Verify Windows installer**，即可使用最新验证脚本复查原 EXE，无需重新编译；仅在诊断干净机器行为时勾选 `clean_machine`。旧包若缺少新增的测试标识，功能诊断会失败，基础验收仍独立执行。应用代码修复需要生成新包；只改验证脚本时不运行完整构建。
+
+若 EXE 已生成但阻断验收失败，工作流保留 `unverified-installer-<run_id>` 7 天供复查。正式测试包以通过基础安装及启动验收后上传的 `TPCowork-windows-x64-…` 为准。每次推送前在本地运行 `npm run build:win -- --plan` 和 `npm run test:packaging`，Windows runner 用于真实 EXE 构建和安装行为。
+
+产品品牌准备会修改同级 DSH 工作区。每次全新构建前先检查并备份未提交的开发改动，再在 DSH 目录执行 `git checkout -- .` 清除上次品牌输出；需要的开发改动可从备份恢复。流水线通过全新 checkout 构建。底座打包修复单独提交，仅包含打包相关文件。
 
 DSH 版的安装标识是 `com.tparuyi.tpcowork.dsh`，与旧 nanobot 版 `com.tparuyi.app` 独立，两者可并存。安装 DSH 版时选择默认目录或其他空目录；旧版会话与配置不自动迁移。
 

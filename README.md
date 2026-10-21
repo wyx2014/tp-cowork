@@ -18,6 +18,8 @@
 
 详细设置、构建模式及本地命令见 [Windows 云端打包操作](docs/windows-github-actions.md)。
 
+安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
+
 ## 源码目录
 
 两个仓库放在同一个父目录下：

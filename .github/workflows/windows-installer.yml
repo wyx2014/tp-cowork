@@ -97,6 +97,10 @@ jobs:
         run: npm run build:win
       - name: Verify EXE installation and installed product
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory dist/installers
+      - name: Diagnose browser bridge and expert toolbox (non-blocking)
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory dist/installers -Diagnostics
       - name: Record packaged sources
         run: |
           Get-Content -LiteralPath dist/installers/build-info.json | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

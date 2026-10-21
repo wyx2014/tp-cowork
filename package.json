@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build:win": "node scripts/build-windows.mjs",
-    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs"
+    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs scripts/tests/desktop-branding.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.61.1",

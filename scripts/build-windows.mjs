@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { harnessRoot, npmCli, productRoot, runCommand } from './package-command.mjs'
 import { withStagedWindowsApplication } from './stage-windows-smoke.mjs'
+import { prepareDesktopBranding } from './desktop-branding.mjs'
 import { desktopBuildVersionPrefix, validateDesktopBuildVersion } from '../../deepseek-harness/apps/desktop/scripts/desktop-build-version.mjs'
 
 /** Number an unpublished CI artifact without an update server or signing credentials. */
@@ -73,6 +74,7 @@ export async function buildWindows(argv = process.argv.slice(2)) {
       version = prepared.version
     }
     await runCommand('pnpm', ['install', '--frozen-lockfile'], { cwd: harnessRoot, env })
+    if (!values.check) await prepareDesktopBranding()
     const args = ['run', 'package:desktop:win:x64:unsigned', '--product', productConfig,
       ...(standalone ? ['--standalone'] : []),
       ...(version ? ['--build-version', version] : []), ...(values.check ? ['--check'] : [])]
