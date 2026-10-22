@@ -65,60 +65,35 @@ body[data-tpcowork-ui] [data-composer-selection]:has(> [data-slot="conversation.
   text-wrap: balance;
 }
 
-.tpcowork-settings-launcher {
-  flex: 1;
-  min-width: 0;
+/* Profile footer mirrors TP Cowork: a round avatar, account name, and separate gear. */
+.tpcowork-settings-launcher { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
+.tpcowork-settings-anchor { flex: 1; min-width: 0; }
+.tpcowork-settings-trigger, .tpcowork-settings-button {
+  display: flex; align-items: center; box-sizing: border-box; height: 40px;
+  border: 0; border-radius: var(--dsw-radius-md, 8px); background: transparent;
+  color: var(--dsw-alias-label-primary); font: inherit; cursor: pointer; user-select: none;
 }
-
-.tpcowork-settings-anchor {
-  width: 100%;
+.tpcowork-settings-trigger { gap: 8px; width: 100%; min-width: 0; padding: 4px 0; text-align: left; }
+.tpcowork-profile-avatar {
+  display: inline-flex; flex: none; align-items: center; justify-content: center; box-sizing: border-box;
+  width: 32px; height: 32px; border: 1px solid var(--dsw-alias-border-l2, #ddd); border-radius: 50%;
+  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 600;
 }
-
-.tpcowork-settings-trigger {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 32px;
-  gap: 8px;
-  padding: 6px 2px 6px 6px;
-  border: 0;
-  border-radius: var(--dsw-radius-md);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 14px;
-  line-height: 20px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.tpcowork-settings-trigger:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.tpcowork-settings-trigger[data-collapsed='true'] {
-  box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-}
-
-.tpcowork-settings-menu[role='menu'] {
-  min-width: 124px;
-  max-width: 280px;
-  padding: 4px;
-}
-
-.tpcowork-settings-menu [role='menuitem'] {
-  min-height: 40px;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--dsw-radius-md);
-  font-size: 14px;
-  line-height: 22px;
-}
+.tpcowork-profile-avatar[data-loading='true'] { opacity: .5; }
+.tpcowork-profile-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 600; }
+.tpcowork-settings-button { flex: none; justify-content: center; width: 32px; height: 32px; padding: 0; }
+.tpcowork-settings-trigger:hover, .tpcowork-settings-button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.tpcowork-settings-trigger:focus-visible, .tpcowork-settings-button:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }
+.tpcowork-settings-launcher[data-collapsed='true'] { flex-direction: column; gap: 4px; }
+.tpcowork-settings-trigger[data-collapsed='true'] { width: 36px; height: 36px; justify-content: center; gap: 0; padding: 0; }
+.tpcowork-settings-menu[role='menu'] { min-width: 208px; max-width: min(280px, calc(100vw - 24px)); padding: 4px; }
+.tpcowork-settings-menu [role='menuitem'] { min-height: 36px; gap: 8px; padding: 7px 10px; border-radius: var(--dsw-radius-md, 8px); font-size: 13px; line-height: 20px; }
+.tpcowork-profile-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.tpcowork-profile-detail { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tpcowork-profile-header { display: flex; align-items: center; gap: 8px; padding: 6px 2px; color: var(--dsw-alias-label-primary); }
+.tpcowork-profile-identity { flex: 1; min-width: 0; }
+.tpcowork-profile-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.tpcowork-settings-menu [role='status'] { display: block; max-width: 244px; white-space: normal; line-height: 18px; }
 
 .tpcowork-task-panel {
   position: absolute;
@@ -277,3 +252,6 @@ body[data-tpcowork-ui] [data-composer-selection]:has(> [data-slot="conversation.
 @media (max-width: 640px) {
   .tpcowork-greeting { font-size: 20px; }
 }
+.tpcowork-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.tpcowork-setting-title { font-size: 14px; line-height: 20px; }
+.tpcowork-setting-description { margin-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }

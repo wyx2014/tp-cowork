@@ -11,7 +11,7 @@
     "accountMenu": "Account menu",
     "more": "More",
     "settings": "Settings",
-    "signIn": "Sign in",
+    "signIn": "Connect to use",
     "signOut": "Sign out",
     "cancelSignIn": "Cancel sign-in",
     "authCommitting": "Syncing your account…",
@@ -25,6 +25,22 @@
     "tasksProgress": "{done} of {total} tasks completed",
     "tasksStatus_completed": "Completed",
     "tasksStatus_in_progress": "In progress",
-    "tasksStatus_pending": "Pending"
+    "tasksStatus_pending": "Pending",
+    "notifyTitle": "Task notifications",
+    "notifyDescription": "Show a system notification when a task finishes or needs you while TP Cowork is in the background.",
+    "notifyTask": "Task: {title}",
+    "notifyCompleted": "Task completed",
+    "notifyApproval": "Needs your confirmation",
+    "notifyQuestion": "Needs your reply",
+    "notifyPlan": "Plan awaiting confirmation",
+    "notifyPlanBody": "Review the plan to continue",
+    "interfaceLanguage": "Interface language",
+    "interfaceTheme": "Interface theme",
+    "systemDefault": "System default",
+    "theme_dark": "Dark",
+    "theme_light": "Light",
+    "accountId": "Account ID: {id}",
+    "authLoading": "Checking account…",
+    "preferenceFailed": "Could not save this setting. Try again."
   }
 }

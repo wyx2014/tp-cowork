@@ -1,8 +1,9 @@
 // Build against installed DSH declarations without modifying its workspace or shared automation files.
 import { createRequire } from 'node:module'
-import { readdir, readFile, writeFile, mkdir, cp, rm, access } from 'node:fs/promises'
+import { readdir, readFile, writeFile, mkdir, cp, rm, access, chmod } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
+import { loadImageExtractDeployment } from './src/host/skills/image-extract-deployment.ts'
 const root = dirname(fileURLToPath(import.meta.url))
 const harness = resolve(root, '../../../deepseek-harness')
 const requireHarness = createRequire(resolve(harness, 'package.json'))
@@ -54,6 +55,10 @@ for (const face of ['host', 'client']) {
 }
 if (checking) { console.log('Toolbox Host, Client and contract examples typecheck passed.'); process.exit(0) }
 await mkdir(output, { recursive: true })
+const imageExtractDeployment = await loadImageExtractDeployment(new URL('./', import.meta.url))
+const imageExtractFile = resolve(output, 'image-extract.local.json')
+await writeFile(imageExtractFile, JSON.stringify(imageExtractDeployment, null, 2) + '\n', { mode: 0o600 })
+await chmod(imageExtractFile, 0o600)
 const common = {
   bundle: true, format: 'esm', platform: 'node', target: 'node22',
   nodePaths: [resolve(harness, 'node_modules')], external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/*'],

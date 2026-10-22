@@ -21,8 +21,7 @@ import { en, zh, type UiKey } from './ui-locales.ts'
 import css from './ui.css'
 import { openRunSession } from './open-run-session.ts'
 import { AutomationCatalog } from './ui-state.ts'
-import { AutomationRunMonitor } from './run-monitor.ts'
-import { AutomationNotices } from './AutomationNotices.tsx'
+import { AutomationRunMonitor, type SystemNotifications } from './run-monitor.ts'
 import { AutomationIcon } from './AutomationIcon.tsx'
 import { isUnread } from './run-history.ts'
 import { registerAutomationSessionGroup } from './session-groups.ts'
@@ -105,8 +104,10 @@ export function registerAutomationUi(ctx: Context, remote?: Pick<ClientRemote, '
   }
   const t = ctx.locale.bind(namespace)
   registerAutomationSessionGroup(ctx, t)
+  const notifications = (globalThis as { dshDesktop?: { notifications?: SystemNotifications } }).dshDesktop?.notifications
   const monitor = new AutomationRunMonitor(catalog, {
     ...(remote ? { remote } : {}),
+    ...(notifications ? { notifications } : {}),
     text: notice => ({ title: t(notice.status === 'error' ? 'notificationError' : 'notificationCompleted'), body: notice.taskName }),
     open: target => { catalog.openRun(target); ctx.layout.selectPanel('schedules' as MainPanelId) },
     report: error => ctx.logger.warn('Automation notification channel unavailable; catalog polling remains active.', error),
@@ -122,11 +123,6 @@ export function registerAutomationUi(ctx: Context, remote?: Pick<ClientRemote, '
     const unread = state.catalog?.tasks.reduce((count, task) => count + task.runs.filter(isUnread).length, 0) ?? 0
     return <span className="tp-auto-sidebar-icon"><AutomationIcon name="clock" size={size} />{unread > 0 && <span className="tp-auto-sidebar-unread" aria-label={`${t('unread')} ${unread}`} />}</span>
   }
-  const Notices = () => {
-    React.useSyncExternalStore(listener => ctx.locale.subscribe(listener), () => ctx.locale.getSnapshot())
-    return <AutomationNotices monitor={monitor} t={t} />
-  }
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'schedules', priority: -20, locale: namespace }, Page))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'schedules', priority: -20, order: 10, locale: namespace, label: () => t('title') }, Icon))
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'automation.results', locale: namespace }, Notices))
 }

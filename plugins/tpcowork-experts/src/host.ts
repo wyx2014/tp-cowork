@@ -122,8 +122,10 @@ export class ExpertsRuntime extends TypertRemoteService implements ExpertsApi {
       if (!exec.agent) return
       const live = this.childRuns.get(exec.agent.id)
       const member = live?.children.get(exec.agent.id)
+      // Every Session's tool results arrive here; only team members' logs are worth scanning.
+      if (!live || !member) return
       const call = exec.agent.session.snapshotEvents().findLast(event => event.type === 'tool/call' && event.data.callId === exec.callId)
-      if (live && member && call) this.event(live, { type: 'member_progress', memberId: member.memberId, sessionEventId: `${exec.agent.id}:${call.seq}` })
+      if (call) this.event(live, { type: 'member_progress', memberId: member.memberId, sessionEventId: `${exec.agent.id}:${call.seq}` })
     })
     // Awaited publication hook: a fresh child cannot run before its selected MCP scope is ready.
     ctx.on('agent/created', async ({ agent }) => {
@@ -173,7 +175,9 @@ export class ExpertsRuntime extends TypertRemoteService implements ExpertsApi {
   private event(live: LiveRun, value: Omit<TeamRunEvent, 'runId' | 'taskId' | 'sequence' | 'at'>): void {
     const event = { taskId: live.state.context.taskId, runId: live.state.runId, sequence: live.state.events.length + 1, at: Date.now(), ...value }
     live.state.events.push(event)
-    this.save(live)
+    // Each record holds the whole run, so per-tool progress waits for the next save (at the latest
+    // the member's own member_finished); live watchers still receive it at once.
+    if (value.type !== 'member_progress') this.save(live)
     for (const observer of this.observers) observer(event)
   }
   private recover(agent: Agent): void {

@@ -91,6 +91,25 @@ it('refreshes an undiscovered result before retaining its existing history', asy
   expect(h.mock.remote.session.list).toHaveBeenCalledTimes(2)
 })
 
+it('opens persisted history when the live Host Session is released during loading', async () => {
+  const h = await harness()
+  const opening = Promise.withResolvers<ReturnType<typeof history>>()
+  h.mock.stream('session/follow', followScript(opening.promise))
+  const pending = openRunSession(h.sessions, h.navigate, id, title, h.signal)
+  const opened = expect(pending).resolves.toBeUndefined()
+  await h.mock.streams.opened('session/follow', 1)
+  // The executor disposes its live Agent after persisting the completed run.
+  h.sessions.handleSessionRemoved(id)
+  opening.resolve(history([
+    ev.turnStart(SessionSeq(0), 1), ev.user(SessionSeq(1), 'Daily report'),
+    ev.assistant(SessionSeq(2), 1, 'Persisted automation result'), ev.turnEnd(SessionSeq(3), 1),
+  ]))
+  await opened
+  expect(h.navigate).toHaveBeenCalledWith(id)
+  expect(h.sessions.binding(id)?.session.getSnapshot()).toMatchObject({ openState: 'open', removed: true })
+  expect(JSON.stringify(h.sessions.binding(id)?.eventSource.getSnapshot().entries)).toContain('Persisted automation result')
+})
+
 it('does not report a missing conversation when catalog discovery fails', async () => {
   const h = await harness()
   h.sessions.handleSessionRemoved(id)

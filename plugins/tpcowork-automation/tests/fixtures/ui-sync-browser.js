@@ -77,12 +77,10 @@ const plugin = registration.factory(name => {
 })
 const fiber = await ctx.plugin(plugin)
 const main = ctx.slots.entries('main').find(entry => entry.options.key === 'schedules')
-const overlay = ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'automation.results')
-if (!main || !overlay) throw new Error('automation slots missing')
+// Results are system notifications; the plugin draws nothing over the shell.
+if (!main || ctx.slots.entries('shell.overlay').length) throw new Error('automation slots missing')
 const root = createRoot(document.getElementById('app'))
-render = () => root.render(React.createElement(React.Fragment, null,
-  panel === 'schedules' ? React.createElement(main.component) : React.createElement('p', { 'data-other-panel': true }, 'Another page'),
-  React.createElement(overlay.component)))
+render = () => root.render(panel === 'schedules' ? React.createElement(main.component) : React.createElement('p', { 'data-other-panel': true }, 'Another page'))
 render()
 window.fixture = {
   leave: () => { panel = null; render() },

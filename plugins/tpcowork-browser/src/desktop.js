@@ -10,7 +10,16 @@ import { BrowserError, CHANNEL, VERSION, PARTITION, IPC, envelope, failure, Oper
 
 const SCOPE = 'dsh-desktop';
 const BROWSER = 'tpcowork-dsh-iab';
-const USER_OPERATIONS = new Set(['snapshot', 'humanOpen', 'command', 'close', 'pause', 'resume', 'ensure', 'surfaceReady', 'importChrome', 'clearData', 'permissionRespond', 'permissionSet', 'external', 'revealDownload', 'saveScreenshot', 'saveRecording', 'presentation']);
+const USER_OPERATIONS = new Set(['snapshot', 'humanOpen', 'command', 'close', 'pause', 'resume', 'ensure', 'surfaceReady', 'importChrome', 'clearData', 'permissionRespond', 'permissionSet', 'security', 'devtools', 'external', 'revealDownload', 'saveScreenshot', 'saveRecording', 'presentation']);
+
+/** Favicons the renderer may load: page-supplied web or inline image addresses only. */
+function faviconUrl(candidates) {
+  for (const value of candidates ?? []) {
+    try { const url = new URL(value); if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) return url.href; if (url.protocol === 'data:' && /^data:image\//u.test(value) && value.length <= 65536) return value; }
+    catch {}
+  }
+  return undefined;
+}
 
 /** Create the Electron adapter; all renderer calls are admitted by the shell's primary-frame check. */
 export function createDesktopBrowser(options) { return new DesktopBrowser(options); }
@@ -160,11 +169,15 @@ class DesktopBrowser {
       row.ready = true; row.error = undefined;
       const update = () => {
         if (guest.isDestroyed()) return;
-        Object.assign(row, { url: guest.getURL(), title: guest.getTitle(), loading: guest.isLoading(), ...(guest.isLoading() ? { error: undefined } : {}), canGoBack: guest.navigationHistory.canGoBack(), canGoForward: guest.navigationHistory.canGoForward() });
+        Object.assign(row, { url: guest.getURL(), title: guest.getTitle(), loading: guest.isLoading(), ...(guest.isLoading() ? { error: undefined, loadErrorCode: undefined } : {}), canGoBack: guest.navigationHistory.canGoBack(), canGoForward: guest.navigationHistory.canGoForward() });
         this.publish();
       };
       for (const event of ['did-navigate', 'did-navigate-in-page', 'page-title-updated', 'did-start-loading', 'did-stop-loading']) guest.on(event, update);
-      guest.on('did-fail-load', (_e, code, message, _url, main) => { if (main && code !== -3) { row.error = message; this.publish(); } });
+      // A new document has not announced its favicon yet; the previous site's icon must not linger.
+      guest.on('did-navigate', () => { if (row.favicon) { row.favicon = undefined; this.publish(); } });
+      guest.on('page-favicon-updated', (_event, favicons) => { const favicon = faviconUrl(favicons); if (favicon !== row.favicon) { row.favicon = favicon; this.publish(); } });
+      // The Chromium net error code lets the pane explain certificate failures, as the reference does.
+      guest.on('did-fail-load', (_e, code, message, _url, main) => { if (main && code !== -3) { row.error = message; row.loadErrorCode = code; this.publish(); } });
       guest.on('render-process-gone', () => { row.ready = false; row.error = 'Page process exited. Restoring the tab.'; this.publish(); if (!guest.isDestroyed()) guest.close({ waitForBeforeUnload: false }); });
       guest.once('destroyed', () => { if (row.guest === guest) { delete row.guest; row.ready = false; row.attaching = false; this.publish(); } });
       if (row.initialUrl) { const url = row.initialUrl; delete row.initialUrl; void guest.loadURL(url).catch(error => { row.error = error.message; this.publish(); }); }
@@ -242,6 +255,7 @@ class DesktopBrowser {
       if (message.op === 'enable') result = await this.enable(message.payload);
       else if (message.op === 'disable') { await this.disable(); result = {}; }
       else if (message.op === 'command') result = await this.command(message.payload?.sessionId, message.payload?.command, message.id, controller.signal);
+      else if (message.op === 'ambient') result = this.ambient(message.payload?.sessionId);
       else throw new BrowserError('invalid_operation', 'Unknown browser bridge operation');
       reply({ type: CHANNEL, version: VERSION, kind: 'result', id: message.id, value: result });
     } catch (error) { reply({ type: CHANNEL, version: VERSION, kind: 'result', id: message.id, error: failure(error) }); }
@@ -284,6 +298,7 @@ class DesktopBrowser {
     });
     if (op === 'permissionRespond') { await this.data.respond(payload.id, payload.allow, payload.remember); return {}; }
     if (op === 'permissionSet') { await this.data.setPermission(payload.origin, payload.permission, payload.decision); return {}; }
+    if (op === 'security') { await this.data.setSecurity(payload); return {}; }
     if (op === 'external') { if (!this.allowedUrl(payload.url)) throw new BrowserError('invalid_url', 'Invalid external URL'); await shell.openExternal(payload.url); return {}; }
     if (op === 'revealDownload') { const file = this.downloads.get(payload.id); if (!file || file.status !== 'completed') throw new BrowserError('not_ready', 'Download has not completed'); shell.showItemInFolder(file.path); return {}; }
     const row = this.records.get(payload.tabId);
@@ -293,6 +308,11 @@ class DesktopBrowser {
       if (typeof payload.visible !== 'boolean') throw new BrowserError('invalid_request', 'Expected page visibility');
       row.visible = payload.visible; row.active = payload.visible;
       if (row.ready && !row.restoring) await this.report(row);
+    }
+    if (op === 'devtools') {
+      if (app.isPackaged) throw new BrowserError('unavailable', 'Developer tools are available in development builds only');
+      if (!row.guest || row.guest.isDestroyed()) throw new BrowserError('tab_unavailable', 'This browser tab is not loaded');
+      row.guest.openDevTools({ mode: 'detach' });
     }
     if (op === 'close') { await this.manager.closeTabFromRenderer({ tabId: row.id, windowId: this.window().id, workspaceKey: SCOPE, sessionId: row.sessionId }); this.closeRecord(row.id); }
     if (op === 'pause' || op === 'resume') {
@@ -312,12 +332,19 @@ class DesktopBrowser {
     }
     return {};
   }
+  /** Read-only: no tab restore, operation status or page access; the Host sanitizes the address. */
+  ambient(sessionId) {
+    if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 256) throw new BrowserError('invalid_session', 'A browser session identity is required');
+    const rows = this.enabled ? [...this.records.values()].filter(row => row.sessionId === sessionId) : [];
+    const current = rows.find(row => row.active) ?? rows.find(row => row.origin === 'user') ?? rows.at(-1);
+    return { tabCount: rows.length, ...(current?.url ? { currentUrl: current.url } : {}) };
+  }
   async report(row) {
     if (!this.manager.getTabOwner(row.id)) return;
     await this.manager.reportResidency({ tabId: row.id, windowId: this.window().id, workspaceKey: SCOPE, sessionId: row.sessionId, restoreUrl: row.url?.startsWith('http') ? row.url : undefined, title: row.title, loading: row.loading === true, selected: row.active === true, visible: row.visible === true, currentTask: row.visible === true });
   }
   snapshot() {
-    return { version: VERSION, enabled: this.enabled, generation: this.generation,
+    return { version: VERSION, enabled: this.enabled, generation: this.generation, devTools: !app.isPackaged,
       tabs: [...this.records.values()].map(({ guest, ...row }) => ({ ...row, guestId: guest && !guest.isDestroyed() ? guest.id : undefined })),
       downloads: [...this.downloads.values()], ...this.data.snapshot() };
   }

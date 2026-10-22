@@ -1,3 +1,7 @@
+- id: ui-plugin-manager
+  disabled: true
+- id: ui-settings-plugins
+  disabled: true
 - insert:
     - id: tpcowork-ui
       name: '@tpcowork/dsh-ui'

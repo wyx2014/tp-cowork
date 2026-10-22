@@ -24,6 +24,7 @@ const resultSchema = z.object({ operationId: z.string(), state: z.enum(['install
 const catalogSchema = z.object({ revision: z.number().int().nonnegative(), complete: z.boolean(), items: z.array(skillSchema) }).strict()
 const itemRequest = scopeSchema.extend({ id: z.string().min(1) })
 const packageName = '@tpcowork/dsh-toolbox-skills'
+const callSetupSchema = z.object({ caller: z.string(), phoneUrl: z.string(), pbx: z.string(), outgoingPrefix: z.string(), sourceDirectory: z.string(), usernameConfigured: z.boolean(), passwordConfigured: z.boolean(), confirmed: z.boolean(), issues: z.array(z.string()) }).strict()
 function descriptor(service: string, method: string, input: z.ZodType, output: z.ZodType): InvocationDescriptor {
   return { id: `${packageName}#${service}/${method}`, service, namespace: service, method,
     invocation: { kind: 'direct' }, parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'strict', typeSymbol: `${packageName}#${service}-${method}-request`, create: () => input } }],
@@ -31,6 +32,8 @@ function descriptor(service: string, method: string, input: z.ZodType, output: z
   }
 }
 export const descriptors = [
+  descriptor('toolboxSkills', 'callSetup', z.object({ caller: z.string().max(20).optional(), sourceDirectory: z.string().max(4096).optional() }).strict(), callSetupSchema),
+  descriptor('toolboxSkills', 'saveCallSetup', z.object({ caller: z.string().max(20), sourceDirectory: z.string().max(4096).optional(), phoneUrl: z.string().max(2048), pbx: z.string().max(255), outgoingPrefix: z.string().max(20), username: z.string().max(255).optional(), password: z.string().max(1024).optional() }).strict(), callSetupSchema),
   descriptor('toolboxSkills', 'inventory', scopeSchema, catalogSchema),
   descriptor('toolboxSkills', 'install', installSchema, resultSchema),
   descriptor('toolboxSkills', 'remove', itemRequest.extend({ expectedRevision: z.number().int().nonnegative() }), z.void()),

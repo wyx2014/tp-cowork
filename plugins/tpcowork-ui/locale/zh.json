@@ -11,7 +11,7 @@
     "accountMenu": "账号菜单",
     "more": "更多",
     "settings": "设置",
-    "signIn": "登录",
+    "signIn": "连接使用",
     "signOut": "退出登录",
     "cancelSignIn": "取消登录",
     "authCommitting": "正在同步登录状态…",
@@ -25,6 +25,22 @@
     "tasksProgress": "已完成 {done} 项，共 {total} 项",
     "tasksStatus_completed": "已完成",
     "tasksStatus_in_progress": "进行中",
-    "tasksStatus_pending": "待处理"
+    "tasksStatus_pending": "待处理",
+    "notifyTitle": "任务通知",
+    "notifyDescription": "TP Cowork 在后台时，任务完成或需要你处理时显示系统通知。",
+    "notifyTask": "任务：{title}",
+    "notifyCompleted": "任务已完成",
+    "notifyApproval": "需要你的确认",
+    "notifyQuestion": "需要你的回复",
+    "notifyPlan": "计划等待确认",
+    "notifyPlanBody": "请确认计划后继续执行",
+    "interfaceLanguage": "界面语言",
+    "interfaceTheme": "界面主题",
+    "systemDefault": "系统默认",
+    "theme_dark": "深色",
+    "theme_light": "浅色",
+    "accountId": "账号 ID：{id}",
+    "authLoading": "正在确认账号…",
+    "preferenceFailed": "设置未能保存，请重试"
   }
 }

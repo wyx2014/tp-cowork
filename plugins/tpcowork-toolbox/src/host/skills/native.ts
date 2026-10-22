@@ -5,6 +5,8 @@ import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
+import { loadImageExtractDeployment } from './image-extract-deployment.ts'
+import { activeCallSettings, phoneEndpoint } from './call-settings.ts'
 export interface NativeOptions {
   requestTimeoutMs: number; imageMaxBytes: number; visionMaxTokens: number
   callUsernameRef: string; callPasswordRef: string; visionKeyRef: string
@@ -13,28 +15,14 @@ async function secret(ctx: Context, ref: string): Promise<string | undefined> {
   try { return (await ctx.get('credentials')?.resolve(credentialRef(ref)))?.value }
   catch { throw new Error('凭证服务暂不可用，请检查 TP Cowork 凭证配置。') }
 }
-function endpoint(value: string | undefined): URL | undefined {
-  if (!value) return undefined
-  try {
-    const url = new URL(value)
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return undefined
-    return url
-  } catch { return undefined }
-}
 /** Presence checks only: readiness never dials or sends user images to an external service. */
 export async function nativeMissing(ctx: Context, name: string, config: NativeOptions): Promise<string[]> {
   if (name === 'call') {
-    const missing: string[] = []
-    if (!endpoint(process.env.DSH_YEALINK_URL)) missing.push('DSH_YEALINK_URL')
-    if (!/^\d{4}$/.test(process.env.DSH_YEALINK_CALLER ?? '')) missing.push('DSH_YEALINK_CALLER')
-    if (!/^[a-zA-Z0-9.:-]+$/.test(process.env.DSH_YEALINK_PBX ?? '')) missing.push('DSH_YEALINK_PBX')
-    for (const ref of [config.callUsernameRef, config.callPasswordRef]) if (!await secret(ctx, ref)) missing.push(ref)
-    return missing
+    return (await activeCallSettings(ctx, config)).missing
   }
   if (name === 'image-extract') {
+    await loadImageExtractDeployment()
     const missing: string[] = []
-    if (!endpoint(process.env.DSH_IMAGE_EXTRACT_URL)) missing.push('DSH_IMAGE_EXTRACT_URL')
-    if (!process.env.DSH_IMAGE_EXTRACT_MODEL?.trim()) missing.push('DSH_IMAGE_EXTRACT_MODEL')
     if (!await secret(ctx, config.visionKeyRef)) missing.push(config.visionKeyRef)
     return missing
   }
@@ -57,19 +45,19 @@ async function boundedBody(response: Response, maxBytes: number): Promise<string
   } finally { await reader.cancel(); reader.releaseLock() }
 }
 export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
-  if ((await nativeMissing(ctx, 'call', config)).length) throw new Error('电话尚未配置；请补充部署设置和 TP Cowork 凭证引用。')
+  const active = await activeCallSettings(ctx, config)
+  if (active.missing.length || !active.settings) throw new Error('电话尚未配置；请打开工具箱 → 技能 → call → 设置电话，确认自己的办公分机号。')
   if (!['dial','hangup'].includes(args.action) || (args.action === 'dial' && !/^\d{3,20}$/.test(args.number ?? ''))) throw new Error('拨号需要明确的数字号码。')
-  const url = new URL('/cgi-bin/ConfigManApp.com', endpoint(process.env.DSH_YEALINK_URL)!)
+  const url = new URL('/cgi-bin/ConfigManApp.com', phoneEndpoint(active.settings.phoneUrl)!)
   if (args.action === 'hangup') url.searchParams.set('key', 'CALLEND')
   else {
-    const prefix = process.env.DSH_YEALINK_OUTGOING_PREFIX ?? ''
+    const prefix = active.settings.outgoingPrefix
     if (!/^\d*$/.test(prefix)) throw new Error('电话拨出前缀配置无效。')
     const number = args.number!
     url.searchParams.set('number', number.length === 4 || number.startsWith(prefix) ? number : prefix + number)
-    url.searchParams.set('outgoing_url', `${process.env.DSH_YEALINK_CALLER}@${process.env.DSH_YEALINK_PBX}`)
+    url.searchParams.set('outgoing_url', `${active.settings.caller}@${active.settings.pbx}`)
   }
-  const user = await secret(ctx, config.callUsernameRef)
-  const password = await secret(ctx, config.callPasswordRef)
+  const { username: user, password } = active
   try {
     const response = await fetch(url, { headers: { Authorization: `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}` }, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]) })
     const body = await boundedBody(response, 2048)
@@ -79,6 +67,7 @@ export async function sendCall(ctx: Context, args: { action: string; number?: st
 }
 export async function extractImage(ctx: Context, args: { image_path: string; prompt?: string | undefined }, signal: AbortSignal, config: NativeOptions, cwd?: string): Promise<string> {
   if ((await nativeMissing(ctx, 'image-extract', config)).length) throw new Error('图片提取尚未配置；请补充多模态服务和 TP Cowork 凭证引用。')
+  const deployment = await loadImageExtractDeployment()
   const fs = ctx.get('fs')
   if (!fs) throw new Error('当前会话未提供文件读取能力。')
   const target = await fs.resolve(args.image_path, cwd === undefined ? {} : { cwd })
@@ -93,10 +82,10 @@ export async function extractImage(ctx: Context, args: { image_path: string; pro
   if (!mime) throw new Error('仅支持有效的 PNG/JPEG/GIF/WebP 图片。')
   const key = await secret(ctx, config.visionKeyRef)
   try {
-    const response = await fetch(endpoint(process.env.DSH_IMAGE_EXTRACT_URL)!, {
+    const response = await fetch(deployment.apiUrl, {
       method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, redirect: 'error',
       signal: AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]),
-      body: JSON.stringify({ model: process.env.DSH_IMAGE_EXTRACT_MODEL, stream: false, max_tokens: config.visionMaxTokens, temperature: 0.01,
+      body: JSON.stringify({ model: deployment.model, stream: false, max_tokens: config.visionMaxTokens, temperature: 0.01,
         messages: [{ role: 'user', content: [{ type: 'text', text: args.prompt?.trim() || '提取图中的全部内容' }, { type: 'image_url', image_url: { url: `data:${mime};base64,${Buffer.from(bytes).toString('base64')}` } }] }],
       }),
     })

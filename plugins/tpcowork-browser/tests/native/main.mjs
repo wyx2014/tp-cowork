@@ -6,7 +6,7 @@ import { importFixture } from './chrome-fixture.mjs';
 
 app.setPath('userData', process.env.BROWSER_TEST_HOME);
 app.whenReady().then(async () => {
-const window = new BrowserWindow({ width: 1200, height: 900, show: true, webPreferences: {
+const window = new BrowserWindow({ width: Number(process.env.BROWSER_TEST_WIDTH ?? 1200), height: Number(process.env.BROWSER_TEST_HEIGHT ?? 900), show: true, webPreferences: {
   preload: fileURLToPath(new URL('preload.cjs', import.meta.url)), contextIsolation: true, sandbox: true, webviewTag: true,
 } });
 const browser = createDesktopBrowser({ userData: app.getPath('userData'), window: () => window, hostUrl: () => 'http://127.0.0.1:1' });
@@ -19,6 +19,6 @@ globalThis.testBrowser = browser;
 globalThis.testWindow = window;
 globalThis.testChromeImport = () => importFixture(app.getPath('userData'),browser.browserSession);
 await browser.enable();
-await window.loadFile(fileURLToPath(new URL('index.html', import.meta.url)));
+await window.loadFile(fileURLToPath(new URL(process.env.BROWSER_TEST_PAGE ?? 'index.html', import.meta.url)));
 
 }).catch(error => { console.error(error); app.exit(1); });

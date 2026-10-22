@@ -11,6 +11,8 @@ export type UiActions = {
   skillEnable: SkillsClientApi['setEnabled']
   skillRemove: SkillsClientApi['remove']
   skillCheck: SkillsClientApi['checkReadiness']
+  callSetup: SkillsClientApi['callSetup']
+  saveCallSetup: SkillsClientApi['saveCallSetup']
   prepareImport: InstallerClientApi['prepareLocalImport']
   prepareSkillArchive(file: File): Promise<{ importId: string; name: string }>
   pickSkillDirectory(): Promise<string | null>

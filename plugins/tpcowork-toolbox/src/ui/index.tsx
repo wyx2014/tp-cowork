@@ -75,6 +75,8 @@ export function registerToolboxUi(ctx: Context): void {
     refresh: () => model.refresh(), refreshSkills: () => model.refresh('skills'), setTab: tab => model.setTab(tab),
     skillDetail: request => unwrap(remote.toolboxSkills.detail(request)), skillEnable: request => model.setSkillEnabled(request),
     skillRemove: request => unwrap(remote.toolboxSkills.remove(request)), skillCheck: request => model.checkSkill(request),
+    callSetup: request => unwrap(remote.toolboxSkills.callSetup(request)),
+    saveCallSetup: request => unwrap(remote.toolboxSkills.saveCallSetup(request)),
     prepareImport: request => unwrap(remote.toolboxInstaller.prepareLocalImport(request)), skillInstall: request => unwrap(remote.toolboxInstaller.install(request)),
     prepareSkillArchive: file => prepareSkillArchive(file, request => unwrap(remote.toolboxInstaller.prepareLocalImport(request)), request => unwrap(remote.toolboxInstaller.prepareArchive(request))),
     pickSkillDirectory: () => pickSkillDirectory(() => ctx.uiWorkspace.pickDirectory()),

@@ -9,23 +9,38 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
   const Greeting = ({ t }) => h('h1', { className: 'tpcowork-greeting' }, t('greeting'));
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);
+  const NotificationSetting = createNotificationSetting(React, primitives);
   return {
-    inject: ['theme', 'slots', 'locale', 'layout'],
+    inject: ['theme', 'slots', 'locale', 'layout', 'configForms'],
     apply(ctx) {
       ctx.effect(() => adaptSidebar(ctx.slots, 264, defaultSidebarWidth), 'tpcowork: sidebar width');
       ctx.effect(() => ctx.theme.overrideTokens(id, tokens), 'tpcowork: theme overrides');
       ctx.effect(() => ctx.locale.register('tpcowork', locales), 'tpcowork: localized labels');
       const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub);
       ctx.effect(() => () => account.dispose(), 'tpcowork: TpcoworkHub account lifetime');
+      const preferences = createInterfacePreferences(ctx);
+      ctx.effect(() => () => preferences.dispose(), 'tpcowork: interface preferences lifetime');
       ctx.slots.inject('settings.launcher', () => ctx.slots.register({
         name: 'settings.launcher', priority: -10, locale: 'tpcowork', inject: () => ({
-          hooks: { tpcoworkHub: account.source }, startSignIn: account.startSignIn, cancelSignIn: account.cancelSignIn,
+          hooks: { tpcoworkHub: account.source, interfacePreferences: preferences.source },
+          setInterfacePreference: preferences.setInterfacePreference, refreshPreferences: preferences.refreshPreferences,
+          startSignIn: account.startSignIn, cancelSignIn: account.cancelSignIn,
           signOut: account.signOut, refreshAccount: account.refreshAccount,
         }),
       }, SettingsLauncher));
       ctx.slots.inject('settings.general.item', () => ctx.slots.register({
         name: 'settings.general.item', id: 'session-log-deepseek', priority: -10,
       }, () => null));
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item', id: 'tpcowork-notifications', order: 12, locale: 'tpcowork',
+      }, NotificationSetting));
+      // Native notifications belong to the desktop shell; a plain browser has no bridge.
+      const notifications = window.dshDesktop?.notifications;
+      if (notifications) {
+        ctx.inject(['sessions', 'uiSession', 'uiWorkspace'], scope => {
+          scope.effect(() => watchSessionNotifications(scope, notifications, ctx.locale.bind('tpcowork')), 'tpcowork: session notifications');
+        });
+      }
       ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
         name: 'conversation.input.dock', id: 'todo', order: 0, priority: -10, locale: 'tpcowork',
       }, TaskDock));

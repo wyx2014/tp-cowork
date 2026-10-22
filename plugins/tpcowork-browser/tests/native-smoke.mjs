@@ -3,6 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createServer } from 'node:http';
+import { createServer as createSecureServer } from 'node:https';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -18,10 +20,17 @@ const server = createServer((req, res) => {
     res.on('close',()=>clearInterval(timer)); return;
   }
   res.setHeader('Content-Type', 'text/html');
-  res.end('<!doctype html><title>Browser acceptance</title><h1>Browser acceptance</h1><label>Username<input id="name"></label><button onclick="document.querySelector(\'h1\').textContent=\'Hello \'+document.querySelector(\'input\').value">Sign in</button><a href="/file">Download</a><a href="/popup" target="_blank">Popup</a><button onclick="window.confirmed=confirm(\'Continue?\')">Dialog</button><button id="target" style="position:absolute;left:30px;top:200px;width:100px;height:60px;background:#1234ab;border:0;color:white" onclick="window.manualClicks=(window.manualClicks||0)+1">Manual</button><script>window.seed=async()=>{document.cookie="login=fixture;max-age=86400;path=/";localStorage.setItem("login","fixture");await new Promise((yes,no)=>{const req=indexedDB.open("acceptance",1);req.onupgradeneeded=()=>req.result.createObjectStore("state");req.onsuccess=()=>{const tx=req.result.transaction("state","readwrite");tx.objectStore("state").put("fixture","login");tx.oncomplete=yes;tx.onerror=no;};});return true;}</script>');
+  res.end('<!doctype html><title>Browser acceptance</title><link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="><h1>Browser acceptance</h1><label>Username<input id="name"></label><button onclick="document.querySelector(\'h1\').textContent=\'Hello \'+document.querySelector(\'input\').value">Sign in</button><a href="/file">Download</a><a href="/popup" target="_blank">Popup</a><button onclick="window.confirmed=confirm(\'Continue?\')">Dialog</button><button id="target" style="position:absolute;left:30px;top:200px;width:100px;height:60px;background:#1234ab;border:0;color:white" onclick="window.manualClicks=(window.manualClicks||0)+1">Manual</button><script>window.seed=async()=>{document.cookie="login=fixture;max-age=86400;path=/";localStorage.setItem("login","fixture");await new Promise((yes,no)=>{const req=indexedDB.open("acceptance",1);req.onupgradeneeded=()=>req.result.createObjectStore("state");req.onsuccess=()=>{const tx=req.result.transaction("state","readwrite");tx.objectStore("state").put("fixture","login");tx.oncomplete=yes;tx.onerror=no;};});return true;}</script>');
 });
 await new Promise(yes => server.listen(0, '127.0.0.1', yes));
 const url = `http://127.0.0.1:${server.address().port}`;
+// A self-signed HTTPS site checks the certificate setting applies to this browser's partition.
+execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1',
+  '-keyout', resolve(home, 'key.pem'), '-out', resolve(home, 'cert.pem')], { stdio: 'ignore' });
+const secureServer = createSecureServer({ key: await readFile(resolve(home, 'key.pem')), cert: await readFile(resolve(home, 'cert.pem')) },
+  (_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Secure fixture</title><p>TLS'); });
+await new Promise(yes => secureServer.listen(0, '127.0.0.1', yes));
+const secureUrl = `https://127.0.0.1:${secureServer.address().port}/`;
 const executablePath = resolve(root, '../../../deepseek-harness/apps/desktop/.desktop-build/development/Harness Dev.app/Contents/MacOS/Electron');
 let app;
 const launch = async () => {
@@ -55,6 +64,23 @@ try {
   assert.ok(tabId);
   await command({method:'navigate', tabId, url});
   await command({method:'playwright', tabId, action:{name:'domSnapshot'}});
+  const ambient = await app.evaluate((_e)=>[globalThis.testBrowser.ambient('acceptance'), globalThis.testBrowser.ambient('nobody')]);
+  assert.equal(ambient[0].tabCount, 1); assert.ok(ambient[0].currentUrl.startsWith(url), JSON.stringify(ambient));
+  assert.deepEqual(ambient[1], {tabCount:0});
+  let favicon;
+  for (let attempt=0;attempt<40 && !favicon;attempt++) { favicon=await app.evaluate((_e,tabId)=>globalThis.testBrowser.snapshot().tabs.find(row=>row.id===tabId)?.favicon,tabId); if(!favicon) await new Promise(r=>setTimeout(r,50)); }
+  assert.match(favicon ?? '', /^data:image\/png;base64,/);
+  const titleAfter = async target => { await app.evaluate(async(_e,{tabId,target})=>globalThis.testBrowser.command('acceptance',{method:'navigate',tabId,url:target},crypto.randomUUID()).catch(()=>{}),{tabId,target});
+    let title;
+    for (let attempt=0;attempt<50;attempt++) { title=await app.evaluate((_e,tabId)=>{const guest=globalThis.testBrowser.records.get(tabId).guest;return guest&&!guest.isLoading()?guest.getTitle():undefined},tabId); if(title==='Secure fixture') break; await new Promise(r=>setTimeout(r,100)); }
+    return title; };
+  assert.notEqual(await titleAfter(secureUrl), 'Secure fixture', 'Certificates are verified by default');
+  await app.evaluate(async()=>globalThis.testBrowser.request('security',{allowInsecureCertificates:true}));
+  // Saved for the next start: this process keeps verifying.
+  assert.deepEqual((await app.evaluate(()=>globalThis.testBrowser.snapshot())).security,{allowInsecureCertificates:true,restartRequired:true});
+  assert.notEqual(await titleAfter(secureUrl), 'Secure fixture', 'The running process keeps its certificate decision');
+  await command({method:'navigate', tabId, url});
+  await command({method:'playwright', tabId, action:{name:'waitForLoadState', state:'domcontentloaded'}});
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('.tpcb-guest-host')?.style.left === '520px');
   await writeFile(resolve(root,'test-results/native-position.png'),Buffer.from(await app.evaluate(async()=>(await globalThis.testWindow.webContents.capturePage()).toPNG().toString('base64')),'base64'));
@@ -182,18 +208,22 @@ try {
   const restored = await app.evaluate(async () => globalThis.testBrowser.request('snapshot',{sessionId:'acceptance'}));
   assert.ok(restored.tabs.some(row=>row.id===tabId));
   assert.equal(restored.permissions[url].notifications,'deny');
+  assert.deepEqual(restored.security,{allowInsecureCertificates:true,restartRequired:false});
   const login = await command({method:'evaluate',tabId,expression:'({cookie:document.cookie,local:localStorage.getItem("login")})'});
   assert.equal(login.value.local,'fixture'); assert.match(login.value.cookie,/login=fixture/);
   const indexed=await command({method:'playwright',tabId,action:{name:'evaluate',expressionKind:'string',expression:'new Promise(resolve=>{const request=indexedDB.open("acceptance");request.onsuccess=()=>{const read=request.result.transaction("state").objectStore("state").get("login");read.onsuccess=()=>resolve(read.result);};})'}});
   assert.equal(indexed.value,'fixture');
+  assert.equal(await titleAfter(secureUrl), 'Secure fixture', 'After a restart the browser partition accepts the self-signed site');
+  assert.equal((await command({method:'navigate', tabId, url})).ok, true);
+  await command({method:'playwright', tabId, action:{name:'waitForLoadState', state:'domcontentloaded'}});
   await app.evaluate(async ()=>globalThis.testBrowser.request('clearData',{mode:'cache'}));
   assert.equal((await command({method:'evaluate',tabId,expression:'localStorage.getItem("login")'})).value,'fixture');
   await assert.rejects(app.evaluate(async()=>globalThis.testBrowser.request('clearData',{mode:'all'})),/Confirm/);
   await app.evaluate(async()=>globalThis.testBrowser.request('clearData',{mode:'all',confirmed:true}));
   const cleared=await app.evaluate(async()=>({tabs:globalThis.testBrowser.snapshot().tabs,permissions:globalThis.testBrowser.snapshot().permissions,cookies:await globalThis.testBrowser.browserSession.cookies.get({})}));
   assert.deepEqual(cleared,{tabs:[],permissions:{},cookies:[]});
-  console.log('PASS native actions, right-pane pixels/clicks, ownership, takeover and recording cancellation, downloads and cleanup, WebM, visible/hidden screenshots, viewport, popup/dialog, crash/reload recovery, encrypted Chrome-cookie fixture, sandbox, cache/all cleanup, restart recovery, cookies, localStorage, IndexedDB and permission prompts');
+  console.log('PASS native actions, ambient tabs, favicons, certificate setting, right-pane pixels/clicks, ownership, takeover and recording cancellation, downloads and cleanup, WebM, visible/hidden screenshots, viewport, popup/dialog, crash/reload recovery, encrypted Chrome-cookie fixture, sandbox, cache/all cleanup, restart recovery, cookies, localStorage, IndexedDB and permission prompts');
 } finally {
   if (app) { await app.evaluate(async () => globalThis.testBrowser.dispose()).catch(()=>{}); await app.close(); }
-  await new Promise(yes=>server.close(yes)); await rm(home,{recursive:true,force:true});
+  await new Promise(yes=>server.close(yes)); await new Promise(yes=>secureServer.close(yes)); await rm(home,{recursive:true,force:true});
 }

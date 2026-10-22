@@ -139,6 +139,9 @@ jobs:
           PACKAGE_LOGIN_ORIGINS: ${{ inputs.deployment == 'test' && (inputs.login_origins || vars.PACKAGE_LOGIN_ORIGINS) || '' }}
           TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
+          TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
+          TPCOWORK_IMAGE_EXTRACT_MODEL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_MODEL }}
+          TPCOWORK_IMAGE_EXTRACT_API_KEY: ${{ secrets.TPCOWORK_IMAGE_EXTRACT_API_KEY }}
         run: npm run build:win
       - name: Save harness build
         if: >-

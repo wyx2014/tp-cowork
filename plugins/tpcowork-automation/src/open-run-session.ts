@@ -20,7 +20,8 @@ export async function openRunSession(sessions: ISessions, navigate: (id: Session
     signal.throwIfAborted()
     const session = reference.binding.session
     const snapshot = session.getSnapshot()
-    if (snapshot.openState !== 'open' || snapshot.removed) throw snapshot.openError ?? new Error('Run conversation is unavailable')
+    // A released Host Agent also sets removed; successful history remains readable.
+    if (snapshot.openState !== 'open') throw snapshot.openError ?? new Error('Run conversation is unavailable')
     signal.throwIfAborted()
     navigate(id)
     // Renaming can require a Host Agent resume; that must not prevent reading persisted history.

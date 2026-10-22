@@ -2,6 +2,8 @@ import { expect, it, onTestFinished } from 'vitest'
 import { fixture } from './fixture.ts'
 import { ToolboxModel } from '../../tpcowork-toolbox/src/client/model.ts'
 import { managementContribution } from '../../tpcowork-toolbox/src/client/remote.ts'
+import { ToolboxService } from '../../tpcowork-toolbox/src/host.ts'
+import { join } from 'node:path'
 import { bundledTeamIds } from '../src/teams.ts'
 
 it.each(bundledTeamIds)('current Client → codecs → Gateway → native %s preserves pins, uploads and request identity', async teamId => {
@@ -12,7 +14,9 @@ it.each(bundledTeamIds)('current Client → codecs → Gateway → native %s pre
     const value = await h.ctx.typertGateway.invoke({ namespace: 'toolboxTasks', method, args: { request } })
     return { ok: true, value: descriptor.result.create().parse(value) }
   }]))
-  const model = new ToolboxModel({ toolboxTasks: remote } as never)
+  // The Client reads the Host's module description before any task choice; it answers from the loaded services.
+  const toolbox = new ToolboxService(h.ctx, { skills: { userRoot: join(h.root, 'personal-skills') } } as never)
+  const model = new ToolboxModel({ toolbox: { describe: async () => ({ ok: true, value: await toolbox.describe() }) }, toolboxTasks: remote } as never)
   onTestFinished(() => model.dispose())
   const id = h.agent.id
   await model.loadChoice(id)

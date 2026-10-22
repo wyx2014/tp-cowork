@@ -57,7 +57,10 @@ export async function readiness(ctx: Context, files: readonly SkillFile[], optio
   }
   const entry = files.find(file => file.path === 'SKILL.md')
   try {
-    if (entry) for (const ref of await nativeMissing(ctx, parseSkill(entry.bytes).name, native)) reasons.push({ code: 'needs-configuration', message: `尚未配置：${ref}` })
+    if (entry) {
+      const name = parseSkill(entry.bytes).name
+      for (const ref of await nativeMissing(ctx, name, native)) reasons.push({ code: 'needs-configuration', message: name === 'call' ? ref : `尚未配置：${ref}` })
+    }
   } catch { reasons.push({ code: 'credentials-unavailable', message: '无法检查 TP Cowork 凭证服务，请检查配置后重试。' }) }
   return { state: reasons.some(reason => reason.code === 'credentials-unavailable') ? 'error' : reasons.length ? 'blocked' : 'ready', checkedAt: Date.now(), reasons }
 }

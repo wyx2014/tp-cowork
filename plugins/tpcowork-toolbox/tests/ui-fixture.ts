@@ -3,6 +3,9 @@ import type { SelectionCatalog } from '../src/contracts/index.ts'
 import type { UiActions } from '../src/ui/types.ts'
 import { skillCatalog, mcpCatalog, teamCatalog } from '../src/examples.ts'
 import { en, type UiKey } from '../src/ui/locales.ts'
+import type { CallSetup } from '../src/contracts/call.ts'
+
+export const phoneSetup: CallSetup = { caller: '', phoneUrl: '', pbx: 'pbx.test', outgoingPrefix: '9', sourceDirectory: '/local/call', usernameConfigured: true, passwordConfigured: true, confirmed: false, issues: [] }
 
 export const catalog = (): SelectionCatalog => structuredClone({ revision: 8, skills: skillCatalog, mcp: mcpCatalog, teams: teamCatalog })
 export const t = (key: UiKey, params?: Record<string, unknown>): string => en[key].replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
@@ -11,6 +14,7 @@ export function actions(): UiActions {
     refresh: vi.fn(async () => {}), refreshSkills: vi.fn(async () => {}), setTab: vi.fn(),
     skillDetail: vi.fn(async () => ({ item: skillCatalog.items[0]!, content: '# Office skill\nFull resources.' })),
     skillEnable: vi.fn(async () => skillCatalog), skillRemove: vi.fn(async () => {}), skillCheck: vi.fn(async () => skillCatalog.items[0]!),
+    callSetup: vi.fn(async request => ({ ...phoneSetup, ...request })), saveCallSetup: vi.fn(async request => ({ ...phoneSetup, ...request, confirmed: true })),
     prepareImport: vi.fn(async () => ({ importId: 'import-1', name: 'office-docx' })), skillInstall: vi.fn(async () => ({ operationId: 'operation-1', state: 'installed' as const })),
     prepareSkillArchive: vi.fn(async () => ({ importId: 'archive-1', name: 'skillhub-sample' })),
     pickSkillDirectory: vi.fn(async () => '/local/skill-folder'), openSkillDirectory: vi.fn(async () => {}),

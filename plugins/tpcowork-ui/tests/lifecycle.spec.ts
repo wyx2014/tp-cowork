@@ -35,6 +35,7 @@ it('boots layout without Host config through the browser Loader and retracts the
   cleanups.push(() => owner.dispose())
   await ctx!.plugin(SlotRegistry).await()
   ctx!.provide('locale', new LocaleRuntime(ctx!))
+  ctx!.provide('configForms', { get: () => stubConfigForm().scope } as never)
   const theme = new ThemeRuntime(ctx!, stubConfigForm().scope)
   ctx!.provide('theme', theme)
   await ctx!.plugin(ShortcutsService).await()

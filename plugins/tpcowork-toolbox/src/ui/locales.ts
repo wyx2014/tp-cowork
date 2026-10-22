@@ -1,8 +1,10 @@
 /** Toolbox UI copy; wire names and user resources remain verbatim. */
 import { teamZh, teamEn } from './teams/locales.ts'
 import { mcpZh, mcpEn } from './mcp-locales.ts'
+import { callZh, callEn } from './call-locales.ts'
 
 export const zh = {
+  ...callZh,
   ...mcpZh,
   ...teamZh,
   sidebarLabel: '专家 · 技能 · 连接器',
@@ -57,6 +59,7 @@ export const zh = {
 } as const
 export type UiKey = keyof typeof zh
 export const en: Record<UiKey, string> = {
+  ...callEn,
   ...mcpEn,
   ...teamEn,
   sidebarLabel: 'Experts · Skills · Connectors',

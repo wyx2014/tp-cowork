@@ -1,5 +1,6 @@
 import type { Catalog, Readiness, RevisionRequest } from './common.ts'
 import type { InstallRequest, InstallResult } from './installer.ts'
+import type { CallSetup, CallSetupRequest, SaveCallSetup } from './call.ts'
 
 /** Inventory includes disabled installs; a winning registry entry alone cannot provide it. */
 export interface SkillItem {
@@ -23,6 +24,8 @@ export interface SkillItem {
 }
 export interface SkillScope { sessionId?: string }
 export interface SkillsApi {
+  callSetup(request: CallSetupRequest): Promise<CallSetup>
+  saveCallSetup(request: SaveCallSetup): Promise<CallSetup>
   inventory(request: SkillScope): Promise<Catalog<SkillItem>>
   install(request: InstallRequest): Promise<InstallResult>
   remove(request: SkillScope & RevisionRequest & { id: string }): Promise<void>

@@ -10,7 +10,7 @@ const alias = Object.entries(paths).map(([key, paths]) => ({
   find: new RegExp('^' + key.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace('*', '(.*)') + '$'),
   replacement: resolve(harness, (paths as string[])[0]).replace('*', '$1'),
 }))
-for (const name of ['react/jsx-runtime', 'react-dom/client', 'react-dom', 'react', '@testing-library/react']) {
+for (const name of ['react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom/client', 'react-dom', 'react', '@testing-library/react']) {
   alias.push({find: new RegExp('^'+name+'$'), replacement:clientRequire.resolve(name)})
 }
 export default {

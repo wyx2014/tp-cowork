@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as React from 'react'
+import * as ReactDom from 'react-dom'
 import * as jsx from 'react/jsx-runtime'
 import { render, fireEvent, cleanup } from '@testing-library/react'
 import * as stores from '@deepseek-ai/dsh-client-store'
@@ -12,13 +13,13 @@ import { BrowserClient } from '../src/client-controller.js'
 
 const ID = '@tpcowork/dsh-browser'
 let plugin
-const modules = { react: React, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores }
+const modules = { react: React, 'react-dom': ReactDom, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores }
 window.__ModuleLoader__ = { load: registration => { plugin = registration.factory(name => {
   if (!(name in modules)) throw new Error(`Unexpected client external ${name}`)
   return modules[name]
 }) } }
 // Load the distributable through the same factory used by the desktop Client Loader.
-new Function(readFileSync(resolve('../plugins/tpcowork-browser', process.env.BROWSER_TEST_OUTPUT ?? 'lib', 'client.js'), 'utf8'))()
+new Function(readFileSync(resolve(import.meta.dirname, '..', process.env.BROWSER_TEST_OUTPUT ?? 'lib', 'client.js'), 'utf8'))()
 delete window.__ModuleLoader__
 const assembled = createClientTest({ roster: ClientRoster.of([...webApp.rows, {name:ID,inject:[],immediately:false}]), provide: {[ID]:plugin, '@deepseek-ai/dsh-client-ui-cordis':CordisUI} })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })

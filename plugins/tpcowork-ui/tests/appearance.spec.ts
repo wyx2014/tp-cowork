@@ -53,7 +53,9 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
     subscribe: () => () => {} }
   plugin.apply({
     effect: (effect: () => () => void) => { disposers.push(effect()) },
-    theme: { overrideTokens: () => () => {} }, locale: { register: () => () => {}, bind: () => () => '' },
+    theme: { overrideTokens: () => () => {}, getTheme: () => ({ preference: 'system' }) },
+    locale: { register: () => () => {}, bind: () => () => '', getLocale: () => ({ locales: [] }), subscribe: () => () => {} },
+    configForms: { get: () => ({ getSnapshot: () => ({}), subscribe: () => () => {} }) }, on: () => () => {},
     slots: {
       entries: () => [{ store: { create: () => instance } }],
       subscribe: () => () => {},

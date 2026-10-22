@@ -1,8 +1,9 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
+import { OPERATION_LINGER_MS } from './operation.js';
 
 /** Native facts enter one observable; only viewport anchors are retained outside serializable state. */
 export class BrowserClient {
-  state = createSnapshotStore({ enabled: false, tabs: [], downloads: [], permissions: {}, requests: [], bindings: {}, operations: {}, surface: null, error: null });
+  state = createSnapshotStore({ enabled: false, tabs: [], downloads: [], permissions: {}, requests: [], bindings: {}, operations: {}, operationUntil: {}, security: { allowInsecureCertificates: false }, surface: null, error: null });
   anchors = new Map();
   opening = new Set();
   mounting = new Map();
@@ -30,7 +31,12 @@ export class BrowserClient {
     }
     if (kind === 'surface') this.state.update(draft => { draft.surface = payload; });
     if (kind === 'surfaceReleased') this.state.update(draft => { if (draft.surface?.requestId === payload.requestId) draft.surface = null; });
-    if (kind === 'operation') this.state.update(draft => { draft.operations[payload.tabId ?? payload.sessionId] = payload.active; });
+    if (kind === 'operation') this.state.update(draft => {
+      const key = payload.tabId ?? payload.sessionId;
+      draft.operations[key] = payload.active;
+      // Keep the indicator steady between consecutive steps, as the reference does.
+      if (!payload.active) draft.operationUntil[key] = Date.now() + OPERATION_LINGER_MS;
+    });
     if (kind === 'activate' && payload.visible && payload.tabId) { this.pending.set(payload.tabId, payload.sessionId); this.reveal(payload.sessionId, payload.tabId); }
     if (kind === 'activate' && !payload.visible && this.ctx.sidebarRight.mounted.getSnapshot() === payload.sessionId && this.ctx.sidebarRight.isExpanded()) this.ctx.sidebarRight.toggleExpanded();
     if (kind === 'closed') {

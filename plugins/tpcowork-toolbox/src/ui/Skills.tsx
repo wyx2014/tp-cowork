@@ -8,6 +8,7 @@ import type { InstallResult } from '../contracts/index.ts'
 import { SectionLayout } from './layout.tsx'
 import { ToolboxIcon } from './Icon.tsx'
 import { ToolboxDetail, ToolboxEditor, EditorField } from './Editor.tsx'
+import { CallSetup } from './CallSetup.tsx'
 
 function installed(result: InstallResult): void {
   if (result.state !== 'installed' && result.state !== 'unchanged') throw result.error ?? { code: 'skills/installation-failed' }
@@ -16,6 +17,7 @@ function installed(result: InstallResult): void {
 export function Skills({ load, available, t, query, actions }: SectionProps & { load: Load<Catalog<SkillItem>>; available: boolean }) {
   const operation = useOperation(t)
   const [detail, setDetail] = React.useState<{ item: SkillItem; scrollTop: number } | null>(null)
+  const [phone, setPhone] = React.useState<{ id: string; scrollTop: number } | null>(null)
   const [removing, setRemoving] = React.useState<{ item: SkillItem; revision: number } | null>(null)
   const [imported, setImported] = React.useState(false)
   const [creating, setCreating] = React.useState(false)
@@ -48,6 +50,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
     }, null)
   }
   if (creating) return <CreateSkill available={mutable} actions={actions} t={t} returnFocusId={`${editorId}-create`} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); setSource('mine') }} />
+  if (phone) return <CallSetup actions={actions} t={t} returnFocusId={`${editorId}-phone-${phone.id}`} returnScrollTop={phone.scrollTop} onClose={() => setPhone(null)} />
   if (detail) return <SkillDetail key={detail.item.id} item={detail.item} read={actions.skillDetail} openDirectory={actions.openSkillDirectory} t={t} returnFocusId={`${editorId}-detail-${detail.item.id}`} returnScrollTop={detail.scrollTop} onClose={() => setDetail(null)} />
   return <SectionLayout actions={<>
     <Button icon={<ToolboxIcon name="wand" />} onClick={() => actions.prepareSkill(t('createPrompt'))}>{t('createSkill')}</Button>
@@ -73,6 +76,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
       <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')} · {t(item.enabled ? 'enabled' : 'disabled')} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'tpcoworkhub' ? 'tpcoworkhub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
       <Reasons value={item.readiness} /></div>
       <div className="tp-toolbox-actions"><Button id={`${editorId}-detail-${item.id}`} onClick={event => setDetail({ item, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button>
+        {item.name === 'call' && <Button id={`${editorId}-phone-${item.id}`} data-testid="call-setup" disabled={!mutable} onClick={event => setPhone({ id: item.id, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('callSetup')}</Button>}
         <Button disabled={!mutable || !item.installed} onClick={() => mutate(() => actions.skillEnable({ id: item.id, enabled: !item.enabled, expectedRevision: load.value!.revision }))}>{t(item.enabled ? 'disable' : 'enable')}</Button>
         <Button disabled={!mutable} onClick={() => mutate(() => actions.skillCheck({ id: item.id }))}>{t('check')}</Button>
         {item.origin === 'user' && item.managed !== false && <Button id={`${editorId}-update-${item.id}`} disabled={!mutable || !item.installed} onClick={() => importSkill(item)}>{t('update')}</Button>}

@@ -34,6 +34,8 @@ npm run dev
 
 安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建和本地启动自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
 
+Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命令”。
+
 ## 源码目录
 
 两个仓库放在同一个父目录下：

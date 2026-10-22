@@ -97,6 +97,13 @@ function developmentBrand(text) {
     .replace('const values = {', "const values = {\n      CFBundleIconFile: 'tpcowork.icns',")
 }
 
+/** Filter the Windows caption's Application popup using its current localized labels. */
+function windowsApplicationMenu(text) {
+  return text.replace(/name === (['"])application\1 \? applicationItems\(\)(?!\.filter\()/u, expression =>
+    `${expression}.filter(item => ![currentDesktopLocale().messages.checkUpdatesMenu, currentDesktopLocale().messages.cliCommandMenu].includes(item.label ?? ''))`
+    + ".filter((item, index, items) => item.type !== 'separator' || (index > 0 && index < items.length - 1 && items[index - 1]?.type !== 'separator'))")
+}
+
 /** Product builds run this before the framework compiler and runtime inventories. */
 export async function prepareDesktopBranding({ harness = harnessRoot, product = productRoot, imageProcessor } = {}) {
   const config = JSON.parse(await readFile(join(product, 'desktop-product.json'), 'utf8'))
@@ -111,7 +118,8 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     'packages/client/locale/src/locales/en.ts', 'packages/client/locale/src/locales/zh.ts',
   ]
   for (const file of textFiles) {
-    await transform(join(harness, file), text => productText(file.endsWith('development-app.ts') ? developmentBrand(text) : text, name)
+    await transform(join(harness, file), text => productText(file.endsWith('development-app.ts') ? developmentBrand(text)
+      : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, name)
       .replaceAll('com.deepseek.harness.dev.', `${config.appId}.dev.`)
       .replace(/label:(\s*)darwin \? app\.name/g, 'label:$1darwin ? currentDesktopLocale().messages.aboutProduct'))
   }
@@ -152,7 +160,7 @@ export async function stageBrandedDesktop(destination = join(productRoot, '.desk
   await writeFile(join(destination, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
   for (const entry of await readdir(join(destination, 'lib'), { withFileTypes: true })) {
     if (entry.isFile() && /\.(?:c?js)$/u.test(entry.name)) {
-      await transform(join(destination, 'lib', entry.name), text => productText(text, config.productName)
+      await transform(join(destination, 'lib', entry.name), text => productText(windowsApplicationMenu(text), config.productName)
         .replace(/label:(\s*)darwin \? app\.name/g, 'label:$1darwin ? currentDesktopLocale().messages.aboutProduct'))
     }
   }

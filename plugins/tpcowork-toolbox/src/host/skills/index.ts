@@ -21,7 +21,10 @@ import { fingerprint, markerName, parseSkill, readTree, sha256 } from '../instal
 import { PythonModuleChecks, readiness } from './readiness.ts'
 import { hostContribution } from './remote.ts'
 import { applyNativeTools, type NativeOptions } from './native.ts'
+import { imageExtractCredentialRef, initializeImageExtractCredential, loadImageExtractDeployment } from './image-extract-deployment.ts'
 import { userSkillsDirectory } from './user-directory.ts'
+import { getCallSetup, saveCallSetup } from './call-settings.ts'
+import type { CallSetupRequest, SaveCallSetup } from '../../contracts/call.ts'
 
 export const name = 'toolbox-skills'
 export const inject = ['skills', 'typert', 'settings', 'profileContext']
@@ -44,7 +47,7 @@ export const Config = z.object({
   python: z.string().default('python3'), maxBytes: z.number().min(1).default(64 * 1024 * 1024), maxFiles: z.number().min(1).default(2048),
   disabledNames: z.array(z.string()).default([]).volatile(), removedBundled: z.array(z.string()).default([]).volatile(),
   requestTimeoutMs: z.number().min(1).default(120000), imageMaxBytes: z.number().min(1).default(25 * 1024 * 1024), visionMaxTokens: z.number().min(1).default(4096),
-  callUsernameRef: z.string().default('DSH_YEALINK_USERNAME').role('credential-ref'), callPasswordRef: z.string().default('DSH_YEALINK_PASSWORD').role('credential-ref'), visionKeyRef: z.string().default('DSH_IMAGE_EXTRACT_API_KEY').role('credential-ref'),
+  callUsernameRef: z.string().default('DSH_YEALINK_USERNAME').role('credential-ref'), callPasswordRef: z.string().default('DSH_YEALINK_PASSWORD').role('credential-ref'), visionKeyRef: z.string().default(imageExtractCredentialRef).role('credential-ref'),
 })
 /** Stable Host access for T5; the public Remote service exposes only InstallerApi methods. */
 export function requireInstaller(ctx: Context): SkillInstaller {
@@ -130,6 +133,14 @@ export class ToolboxSkills extends TypertRemoteService implements SkillsApi {
     })
   }
   async install(request: InstallRequest) { return this.installer.install(request) }
+  async callSetup(request: CallSetupRequest) { return getCallSetup(this.ctx, this.config, request) }
+  async saveCallSetup(request: SaveCallSetup) {
+    return this.installer.serialize(async () => {
+      const result = await saveCallSetup(this.ctx, this.config, request)
+      if (result.confirmed) this.changed()
+      return result
+    })
+  }
   async checkReadiness(request: SkillScope & { id: string }): Promise<SkillItem> {
     this.pythonChecks.clear()
     const item = (await this.inventory(request)).items.find(item => item.id === request.id)
@@ -217,6 +228,9 @@ export function applySkillsModule(ctx: Context, config: Config): void {
     invalidatePolicy()
   })
   ctx.on('skills/change', () => service?.changed())
-  ctx.inject(['tools', 'credentials'], inner => applyNativeTools(inner, config))
+  ctx.inject(['tools', 'credentials'], async inner => {
+    await initializeImageExtractCredential(inner.credentials, config.visionKeyRef, await loadImageExtractDeployment())
+    applyNativeTools(inner, config)
+  })
 }
 export const apply = applySkillsModule

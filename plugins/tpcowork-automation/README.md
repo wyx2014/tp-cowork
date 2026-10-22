@@ -25,11 +25,11 @@ node scripts/desktop-plugin.mjs install automation
 
 `src/run-monitor.ts` 与 `src/ui.tsx` 在插件生命周期内共用一个 `AutomationCatalog`，不依赖任务页挂载。Host 推送、Connection reset 和两秒刷新共同同步状态；异常结束的只读流会重新建立。刷新期间的失效会丢弃旧响应并补读，写入期间的失效等待写入后补读，已知 viewedAt 只取较大值，不恢复 Host 已移除的行。编辑器草稿保持独立。
 
-首次成功目录只建立终态基线，不弹历史通知。后续按 runId 去重 completed/error，running/run_bound 不通知，已读终态不再通知；重连、Host revision 重置、离页及临时移除不清空去重集合。`shell.overlay` 中的 Toast 保留八秒，Toast 与桌面通知点击都选择 schedules 下的指定 task/run 详情，不创建 Session。none 详情等待明确确认；once reminder 的确认移除任务和记录，循环提醒保留已读历史。目标已不在最近20条记录中时显示记录已移除。
+首次成功目录只建立终态基线，不弹历史通知。后续按 runId 去重 completed/error，running/run_bound 不通知，已读终态不再通知；重连、Host revision 重置、离页及临时移除不清空去重集合。结果只以系统通知告知，不在页面内绘制 Toast；通知点击选择 schedules 下的指定 task/run 详情，不创建 Session。none 详情等待明确确认；once reminder 的确认移除任务和记录，循环提醒保留已读历史。目标已不在最近20条记录中时显示记录已移除。
 
-桌面投递复用 Electron Chromium 的 Web Notification 通道，仅在现有权限为 granted 时尝试；不请求或修改系统权限。原生 click 处理聚焦应用并调用相同的详情导航。Client 卸载清除刷新和 Toast 定时器、订阅、原生 click 处理器及通知；Host 停用也会唤醒并结束等待中的订阅。数据仍由 Host 保留。
+桌面应用中经 `dshDesktop.notifications` 由主进程显示原生系统通知（参照 ZCode：任一应用窗口聚焦时不显示，同一运行三秒内去重，点击先恢复并聚焦窗口再打开详情）；Windows 安装版以安装器快捷方式的 AppUserModelID 投递。普通浏览器中回退到 Web Notification，仅在现有权限为 granted 时尝试，不请求或修改系统权限。设置 › 通用中的“任务通知”开关同时控制自动化结果与会话通知。Client 卸载清除刷新定时器、订阅、通知点击订阅及原生处理器；Host 停用也会唤醒并结束等待中的订阅。数据仍由 Host 保留。
 
-`tests/run-monitor.spec.ts` 和 `tests/transport.spec.ts` 覆盖终态去重、初次失败后基线、旧读/推送/写入竞争、已读单调、两秒离页刷新、晚响应、真实 Gateway 流与双端卸载。`tests/sync-browser-smoke.mjs` 验证构建产物的真实 Host/Client Gateway、JSON 存储、HTTP 流、跨页 Toast、第二客户端已读/删除、断线和 Host 重开；外层 layout 是夹具。`--electron` 额外要求真实原生 show 事件；`--native-click` 还要求120秒内发生可信系统点击，并验证窗口由失焦转为聚焦及准确的 task/run 详情（同一任务含多条运行），none 仍须显式确认。本机 Electron 43 主进程仍返回 `Notifications are not allowed for this application`。成员已授权开启 Electron 通知，但 macOS 拒绝 osascript 辅助访问，无法操作系统开关及横幅；历史08交付曾因该缺口 blocked；当前状态与复验结果以 TPCO-10-delivery.md 为准。需人工开启通知并点击，或取得辅助功能访问后复验；未更改系统权限。
+`tests/run-monitor.spec.ts` 和 `tests/transport.spec.ts` 覆盖终态去重、初次失败后基线、旧读/推送/写入竞争、已读单调、两秒离页刷新、晚响应、真实 Gateway 流与双端卸载。`tests/sync-browser-smoke.mjs` 验证构建产物的真实 Host/Client Gateway、JSON 存储、HTTP 流、跨页系统通知（页面内以桥接桩记录）、第二客户端已读/删除、断线和 Host 重开；外层 layout 是夹具。`--electron` 额外要求真实原生 show 事件；`--native-click` 还要求120秒内发生可信系统点击，并验证窗口由失焦转为聚焦及准确的 task/run 详情（同一任务含多条运行），none 仍须显式确认。本机 Electron 43 主进程仍返回 `Notifications are not allowed for this application`。成员已授权开启 Electron 通知，但 macOS 拒绝 osascript 辅助访问，无法操作系统开关及横幅；历史08交付曾因该缺口 blocked；当前状态与复验结果以 TPCO-10-delivery.md 为准。需人工开启通知并点击，或取得辅助功能访问后复验；未更改系统权限。
 
 ```sh
 node plugins/tpcowork-automation/tests/sync-browser-smoke.mjs
@@ -229,7 +229,7 @@ Chromium 产物验证使用真实 Cordis、SlotRegistry、LocaleRuntime、宿主
 
 `src/AutomationRunCenter.tsx` 复用任务页的 `AutomationCatalog`，聚合全部任务（含已读 once 归档任务）的历史，按 `startedAt` 降序。全局记录和编辑器历史共用 `src/AutomationRunTable.tsx`：列出触发时间、来源、状态、紧凑时长和操作；全局表格增加任务名称、未读标记和“跳到会话”按钮。编辑器按当前任务隔离历史，记录菜单提供跳到会话和删除记录；skipped 原因及执行错误通过状态悬停查看。运行页直接进入结果会话；不再展示卡片、搜索筛选或详情页。客户端两秒计时器仅刷新 Host 状态。打开终态会话时通过 `markRunViewed` 持久化；运行中不标已读，已跟随的会话结束后补记已读。`resultType=none` 仅确认，once reminder 的确认按 Host 规则删除任务及记录，循环提醒保留；旧轮询不能恢复已删除内容。
 
-完整结果仅接受 `resultType=conversation`、`conversationAvailable=true`、明确 `conversationId` 且无 unavailable reason。`src/open-run-session.ts` 先刷新 DSH Session 目录，再通过既有 `sessions.using` 等待历史，检查 `openState/removed`，通过 Session.rename 持久化标准运行标题（遵守宿主现有长度规范），最后调用 `uiWorkspace.openSession`。导航先取得 mainView 引用，临时 automationResult 引用随后释放；离开记录表格会取消尚未完成的打开请求。缺失、legacy、读取/重命名失败均明确显示，不根据 sessionId/sessionKey 猜测，不调用 create/startSession 兜底。会话运行时、模型和凭证沿用 DSH。
+完整结果仅接受 `resultType=conversation`、`conversationAvailable=true`、明确 `conversationId` 且无 unavailable reason。`src/open-run-session.ts` 在目录尚未发现目标时刷新 DSH Session 目录，通过既有 `sessions.using` 等待历史，以 `openState` 判断读取是否成功；`removed` 也会在执行器释放 Host Agent 时出现，不能据此判定持久化结果丢失。历史读取成功后调用 `uiWorkspace.openSession`，再异步通过 Session.rename 保存标准运行标题；重命名失败只记录警告，不阻止查看结果。导航先取得 mainView 引用，临时 automationResult 引用随后释放；离开记录表格会取消尚未完成的打开请求。缺失、legacy 和读取失败明确显示，不根据 sessionId/sessionKey 猜测，不调用 create/startSession 兜底。会话运行时、模型和凭证沿用 DSH。
 
 冷会话删除通过 `session-persistence/deleted` 转发 `api-session/removed`，同步撤销各客户端侧栏的会话入口；当前客户端删除成功后还会刷新 Session 目录；分组初始化时也刷新目录，清除旧版本或重连时遗留的失效入口。只有确实删除持久化会话才发布移除；共享旧会话仅移除记录。运行删除独立调用 `deleteRun`，确认框支持取消、焦点恢复与 pending 防重，运行中禁删。清理失败保留确认框、历史和错误提示，可重试。不能用任务删除替代运行删除；活跃 Session 必须先由其拥有者释放。单纯关闭客户端视图不保证释放 Host Agent，无法自主释放时可在停止相关 Host 生命周期后重试。
 

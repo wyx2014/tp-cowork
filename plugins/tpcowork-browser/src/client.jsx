@@ -3,6 +3,12 @@ import { defineStore } from '@deepseek-ai/dsh-client-store';
 import { BrowserClient } from './client-controller.js';
 import { BrowserTool } from './tool-card.jsx';
 import { Guest } from './guest.jsx';
+import { importSummary } from './import-summary.js';
+import { ImportPrompt, importPromptPending } from './import-prompt.jsx';
+import { useOperationActive, useResizeWarning } from './viewport.jsx';
+import { BrowserSurface, BrowserToolbar, DEFAULT_RESPONSIVE_VIEWPORT, MoreMenu, PageState, SiteSettings, ViewportToolbar } from './pane.jsx';
+import { Icon } from './icons.jsx';
+import { displayBrowserUrl, isCertificateBrowserLoadErrorCode, normalizeBrowserUrl } from '../vendor/tpcowork/packages/ui/src/embeddedBrowserHelpers.ts';
 import { zh, en } from './locales.js';
 import styles from './styles.css';
 
@@ -10,7 +16,6 @@ const ID = '@tpcowork/dsh-browser';
 const NS = 'tpcoworkBrowser';
 export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'];
 
-function ToolButton({ label, children, ...props }) { return <button type="button" className="tpcb-tool" title={label} aria-label={label} {...props}>{children}</button>; }
 
 
 function Runtime({ useBrowser, anchor, request, fail, t }) {
@@ -32,18 +37,20 @@ function BrowserBody(props) {
   const { tab } = useTabInfo();
   const state = useBrowser(value => value);
   const savedId = useStore(value => value.byTab[tab.id]);
+  const importChoice = useStore(value => value.importPrompt);
   const nativeId = state.bindings[tab.id] ?? savedId ?? tab.navigation.params?.nativeId;
   const row = state.tabs.find(row => row.id === nativeId);
   const anchor = useRef();
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
-  const [responsive, setResponsive] = useState(false);
-  const [width, setWidth] = useState(1280);
-  const [height, setHeight] = useState(720);
   const [zoom, setZoom] = useState('fit');
   const [recording, setRecording] = useState(null);
-  const [duration, setDuration] = useState(10);
+  // The last free size a person chose, restored when they re-enter responsive mode.
+  const freeSize = useRef(DEFAULT_RESPONSIVE_VIEWPORT);
+  const surface = useRef();
+  // A finished import keeps its card open until the person has read the result.
+  const [importOpen, setImportOpen] = useState(false);
   const run = async (op, payload = {}) => {
     setError('');
     try { return await request(op, { sessionId, tabId: nativeId, ...payload }); }
@@ -66,55 +73,97 @@ function BrowserBody(props) {
   }, [recording?.id, recording?.status, nativeId]);
   const submit = event => {
     event.preventDefault();
-    const url = draft.includes('://') ? draft : `https://${draft}`;
-    setEditing(false); invoke(command('navigate', { url }));
+    // The reference's address rules: local and port-qualified hosts use HTTP, public names HTTPS.
+    const url = normalizeBrowserUrl(draft);
+    if (!url || !/^https?:/i.test(url)) { setError(t('invalidAddress')); return; }
+    setEditing(false); event.currentTarget.querySelector('input')?.blur(); invoke(command('navigate', { url }));
   };
   useEffect(() => { if (nativeId && row?.ready) void request('presentation', { sessionId, tabId: nativeId, visible: tab.visible }).catch(fail); }, [nativeId, row?.ready, tab.visible, sessionId]);
-  const busy = state.operations[nativeId] || state.operations[sessionId];
-  return <div className="tpcb-browser" data-tpcowork-browser={nativeId ?? ''}>
-    <form className="tpcb-toolbar" onSubmit={submit}>
-      <ToolButton label={t('back')} disabled={!row?.canGoBack} onClick={() => invoke(command('back'))}>‹</ToolButton>
-      <ToolButton label={t('forward')} disabled={!row?.canGoForward} onClick={() => invoke(command('forward'))}>›</ToolButton>
-      <ToolButton label={t('reload')} disabled={!row?.ready} onClick={() => invoke(command('reload'))}>↻</ToolButton>
-      <input aria-label={t('address')} placeholder={t('address')} value={editing ? draft : row?.url?.startsWith('about:blank') ? '' : row?.url ?? ''} onFocus={() => { setDraft(row?.url?.startsWith('http') ? row.url : ''); setEditing(true); }} onChange={event => setDraft(event.target.value)} spellCheck={false} />
-      <button type="submit" className="tpcb-tool" title={t('go')} aria-label={t('go')}>↵</button>
-      <ToolButton label={t('newTab')} onClick={() => invoke(run('humanOpen'))}>＋</ToolButton>
-      <ToolButton label={t('external')} disabled={!row?.url?.startsWith('http')} onClick={() => invoke(run('external', { url: row.url }))}>↗</ToolButton>
-    </form>
-    {state.tabs.filter(item => item.sessionId === sessionId).length > 1 && <select aria-label={t('tabs')} value={nativeId ?? ''} onChange={event => props.reveal(sessionId, event.target.value)}>{state.tabs.filter(item => item.sessionId === sessionId).map(item => <option key={item.id} value={item.id}>{item.title || item.url || t('title')}</option>)}</select>}
-    <div className="tpcb-status"><span className={busy ? 'tpcb-busy' : ''}>{row?.paused ? t('manual') : busy ? t('automation') : t('ready')}</span>
-      <button onClick={() => invoke(run(row?.paused ? 'resume' : 'pause'))}>{t(row?.paused ? 'resume' : 'takeover')}</button>
-      <ToolButton label={t('responsive')} onClick={() => setResponsive(!responsive)}>▣</ToolButton>
-      <ToolButton label={t('screenshot')} disabled={!row?.ready} onClick={() => invoke(run('saveScreenshot'))}>▧</ToolButton>
-      <ToolButton label={t('record')} onClick={() => invoke(command('recordingStart', { options: { fps: 25, maxDurationMs: Math.min(90000, duration * 1000 + 2000), actions: [{ type: 'wait', durationMs: duration * 1000 }] } }).then(result => setRecording(result.recording)))}>●</ToolButton>
-      <input className="tpcb-duration" type="number" min="1" max="85" value={duration} aria-label={t('recordSeconds')} onChange={event => setDuration(Number(event.target.value))} />
-    </div>
-    {responsive && <div className="tpcb-viewport-controls"><label>{t('width')}<input type="number" min="320" max="3840" value={width} onChange={event => setWidth(Number(event.target.value))} /></label><span>×</span><label>{t('height')}<input type="number" min="320" max="2160" value={height} onChange={event => setHeight(Number(event.target.value))} /></label>
-      <button onClick={() => invoke(command('browserViewportSet', { width, height }))}>{t('apply')}</button><button onClick={() => invoke(command('browserViewportReset'))}>{t('normal')}</button>
-      <select aria-label={t('fit')} value={zoom} onChange={event => setZoom(event.target.value)}>{['fit', '50', '75', '100', '125', '150', '200'].map(value => <option key={value} value={value}>{value === 'fit' ? t('fit') : value + '%'}</option>)}</select></div>}
-    {(error || row?.error || state.error) && <div className="tpcb-error" role="alert">{error || row?.error || state.error}</div>}
-    {recording && <div className="tpcb-recording" role="status">{recording.status === 'completed' ? t('recordReady') : recording.status === 'running' ? t('recording') : recording.error ?? t('cancelled')}{recording.status === 'running' && <button onClick={() => invoke(command('recordingCancel', { recordingId: recording.id }).then(result => setRecording(result.recording)))}>{t('stopRecord')}</button>}{recording.artifact && <button onClick={() => invoke(run('saveRecording', { recordingId: recording.id }))}>{t('save')}</button>}</div>}
-    <div className="tpcb-viewport" ref={anchor} data-browser-zoom={zoom}>
-      {!state.enabled ? <p>{t('unavailable')}</p> : row?.suspended ? <button onClick={() => invoke(run('ensure'))}>{t('restore')}</button> : !row?.url || row.url.startsWith('about:blank') ? <p>{t('empty')}</p> : null}
-    </div>
+  const busy = useOperationActive(state, [nativeId, sessionId]);
+  const [resizeWarning, resized] = useResizeWarning(busy && tab.visible);
+  // As in the reference, a tab with a viewport override is in free-size mode, whoever set it.
+  const responsive = Boolean(row?.viewport);
+  const viewport = row?.viewport ?? freeSize.current;
+  const resize = size => { freeSize.current = size; resized(); invoke(command('browserViewportSet', size)); };
+  const toggleResponsive = () => invoke(responsive ? command('browserViewportReset') : command('browserViewportSet', freeSize.current));
+  const origin = (() => { try { const value = new URL(row?.url ?? ''); return /^https?:$/.test(value.protocol) ? value.origin : undefined; } catch { return undefined; } })();
+  const pages = state.tabs.filter(item => item.sessionId === sessionId);
+  const record = seconds => invoke(command('recordingStart', { options: { fps: 25, maxDurationMs: Math.min(90000, seconds * 1000 + 2000), actions: [{ type: 'wait', durationMs: seconds * 1000 }] } }).then(result => setRecording(result.recording)));
+  const menu = <MoreMenu t={t} items={[
+    { icon: 'ExternalLink', label: t('external'), disabled: !row?.url?.startsWith('http'), onSelect: () => invoke(run('external', { url: row.url })) },
+    { icon: 'Bug', label: t('devtools'), disabled: !row?.ready || state.devTools !== true, onSelect: () => invoke(run('devtools')) },
+    { separator: true },
+    { icon: 'MousePointer2', label: t(row?.paused ? 'resume' : 'takeover'), disabled: !row, onSelect: () => invoke(run(row?.paused ? 'resume' : 'pause')) },
+    { label: t('screenshot'), disabled: !row?.ready, onSelect: () => invoke(run('saveScreenshot')) },
+    ...[10, 30, 60].map(seconds => ({ label: t('recordFor').replace('{seconds}', String(seconds)), disabled: !row?.ready || recording?.status === 'running', onSelect: () => record(seconds) })),
+    { separator: true },
+    { label: t('newTab'), onSelect: () => invoke(run('humanOpen')) },
+    ...(pages.length > 1 ? pages.filter(item => item.id !== nativeId).map(item => ({ icon: 'Globe', label: item.title || item.url || t('title'), onSelect: () => props.reveal(sessionId, item.id) })) : []),
+  ]} />;
+  const showImport = state.enabled && tab.visible && (importOpen || importPromptPending(importChoice));
+  const importChrome = async () => {
+    setImportOpen(true);
+    const result = await request('importChrome');
+    // Pages already open load the imported sign-ins on their next request.
+    if (result.success && row?.url?.startsWith('http')) invoke(command('reload'));
+    return result;
+  };
+  const decideImport = choice => { setImportOpen(false); actions.importPrompt(choice); };
+  const blank = !row?.url || row.url.startsWith('about:blank');
+  const pageState = !state.enabled ? <PageState kind="unavailable" t={t} />
+    : row?.suspended ? <PageState kind="empty" onRetry={() => invoke(run('ensure'))} t={t} />
+    : row?.error && row.loadErrorCode ? <PageState kind="error" message={row.error} certificate={isCertificateBrowserLoadErrorCode(row.loadErrorCode)} onRetry={() => invoke(command('reload'))} t={t} />
+    : row?.error ? <PageState kind="crashed" message={row.error} t={t} />
+    : blank ? <PageState kind={row && !row.ready ? 'starting' : 'empty'} t={t} /> : null;
+  return <div className="tpcb-browser" ref={surface} data-tpcowork-browser={nativeId ?? ''}>
+    {showImport && <ImportPrompt anchor={surface} onImport={importChrome} onDecide={decideImport} t={t} />}
+    <BrowserToolbar row={row} t={t} editing={editing} address={editing ? draft : displayBrowserUrl(row?.url ?? 'about:blank')}
+      onAddressChange={setDraft} onAddressFocus={() => { setDraft(row?.url?.startsWith('http') ? row.url : ''); setEditing(true); }} onAddressBlur={() => setEditing(false)}
+      onSubmit={submit} onBack={() => invoke(command('back'))} onForward={() => invoke(command('forward'))} onReload={() => invoke(command('reload'))}
+      responsive={responsive} onToggleResponsive={toggleResponsive} menu={menu}
+      siteControl={origin ? <SiteSettings origin={origin} rules={state.permissions?.[origin]} t={t}
+        onChange={(permission, decision) => invoke(run('permissionSet', { origin, permission, decision }))} /> : null} />
+    {responsive && <ViewportToolbar viewport={viewport} zoom={zoom} onViewportChange={resize} onZoomChange={setZoom} t={t} />}
+    {(error || state.error) && <div className="tpcb-error" role="alert">{error || state.error}</div>}
+    {recording && <div className="tpcb-recording" role="status">{recording.status === 'completed' ? t('recordReady') : recording.status === 'running' ? t('recording') : recording.error ?? t('cancelled')}{recording.status === 'running' && <button type="button" onClick={() => invoke(command('recordingCancel', { recordingId: recording.id }).then(result => setRecording(result.recording)))}>{t('stopRecord')}</button>}{recording.artifact && <button type="button" onClick={() => invoke(run('saveRecording', { recordingId: recording.id }))}>{t('save')}</button>}</div>}
+    <BrowserSurface anchorRef={anchor} responsive={responsive && !pageState} viewport={viewport} zoom={zoom} onResize={resize} warning={resizeWarning} resized={resized} zoomLabel={t('viewportLabel')} t={t}
+      overlay={pageState} hidePage={Boolean(pageState)}
+      banner={row?.paused && tab.visible ? <><Icon name="MousePointer2" /><span>{t('manual')}</span><button type="button" onClick={() => invoke(run('resume'))}>{t('resume')}</button></> : null} />
   </div>;
+}
+
+/** The page's favicon, or a stable globe when it is missing or fails to load. */
+function Favicon({ url }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [url]);
+  // A favicon request carrying the app's Referer is refused by some CDNs; the page's own request had none.
+  if (!url || failed) return <Icon name="Globe" size={14} className="tpcb-favicon" />;
+  return <img className="tpcb-favicon" src={url} alt="" draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
 function BrowserTitle({ useTabInfo, useBrowser, useStore, t }) {
   const { tab } = useTabInfo(); const state = useBrowser(value => value);
   const saved = useStore(value => value.byTab[tab.id]);
   const id = state.bindings[tab.id] ?? saved ?? tab.navigation.params?.nativeId;
-  return <span>{state.tabs.find(row => row.id === id)?.title || t('title')}</span>;
+  const row = state.tabs.find(item => item.id === id);
+  const operating = useOperationActive(state, [id, row?.sessionId]);
+  return <span className="tpcb-title">{operating ? <span className="tpcb-operating" role="img" aria-label={t('automation')}><Icon name="MousePointer2" size={14} /></span> : <Favicon url={row?.favicon} />}<span>{row?.title || t('title')}</span></span>;
 }
+
 
 function Settings({ useBrowser, request, t }) {
   const state = useBrowser(value => value); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [confirm, setConfirm] = useState(false);
-  const run = async (op, payload) => { setBusy(true); setMessage(''); try { const result = await request(op, payload); setMessage(op === 'importChrome' ? result.success ? t(result.issues?.length ? 'importPartial' : 'imported') : t(result.error === 'chrome_cookie_access_denied' ? 'importDenied' : 'importUnavailable') : t('done')); } catch (error) { setMessage(`${t('error')}: ${error.message}`); } finally { setBusy(false); } };
+  const run = async (op, payload) => { setBusy(true); setMessage(''); try { const result = await request(op, payload); setMessage(op === 'importChrome' ? importSummary(result, t) : t('done')); } catch (error) { setMessage(`${t('error')}: ${error.message}`); } finally { setBusy(false); } };
   return <section className="tpcb-settings"><h2>{t('settings')}</h2><p>{t('settingsIntro')}</p>
     {!state.enabled && <p role="alert">{t('unavailable')}</p>}
     <div className="tpcb-settings-card"><strong>{t('import')}</strong><p>{t('importHelp')}</p><button disabled={busy || !state.enabled} onClick={() => { void run('importChrome'); }}>{t('import')}</button></div>
     <div className="tpcb-settings-card"><button disabled={busy || !state.enabled} onClick={() => { void run('clearData', { mode: 'cache' }); }}>{t('clearCache')}</button><button disabled={busy || !state.enabled} onClick={() => setConfirm(true)}>{t('clearAll')}</button>
       {confirm && <div role="alertdialog" aria-label={t('clearAll')}><p>{t('clearConfirm')}</p><button onClick={() => setConfirm(false)}>{t('cancel')}</button><button disabled={busy} onClick={() => { setConfirm(false); void run('clearData', { mode: 'all', confirmed: true }); }}>{t('confirm')}</button></div>}</div>
+    <h3>{t('security')}</h3>
+    <div className="tpcb-settings-card"><label className="tpcb-permission-rule"><span><strong>{t('insecureCertificates')}</strong><br /><span className="tpcb-hint">{t('insecureCertificatesHelp')}</span></span>
+      <input type="checkbox" role="switch" aria-label={t('insecureCertificates')} checked={state.security?.allowInsecureCertificates === true} disabled={busy || !state.enabled}
+        onChange={event => { void run('security', { allowInsecureCertificates: event.target.checked }); }} /></label>
+      {state.security?.restartRequired && <p role="status" className="tpcb-hint">{t('insecureCertificatesRestart')}</p>}</div>
     <div role="status">{busy ? t('busy') : message}</div>
     <h3>{t('permissions')}</h3>{Object.keys(state.permissions).length === 0 && <p>{t('noPermissions')}</p>}
     {Object.entries(state.permissions).map(([origin, rules]) => <div key={origin} className="tpcb-settings-card"><strong>{origin}</strong>{Object.entries(rules).map(([permission, value]) => <label className="tpcb-permission-rule" key={permission}>{permission}<select aria-label={`${origin} ${permission}`} value={value} disabled={busy} onChange={event => { void run('permissionSet', { origin, permission, decision: event.target.value }); }}>{['ask', 'allow', 'deny'].map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label>)}</div>)}
@@ -127,7 +176,10 @@ export function apply(ctx) {
   ctx.effect(() => () => client.dispose(), 'tpcowork-browser: client');
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'tpcowork-browser: copy');
   ctx.effect(() => { const style = document.createElement('style'); style.dataset.plugin = ID; style.textContent = styles; document.head.appendChild(style); return () => style.remove(); }, 'tpcowork-browser: styles');
-  const store = defineStore({ init: () => ({ byTab: {} }), persist: 'tpcowork.browser-tabs.v1', actions: { bind(draft, tab, nativeId) { draft.byTab[tab] = nativeId; } } });
+  const store = defineStore({ init: () => ({ byTab: {} }), persist: 'tpcowork.browser-tabs.v1', actions: {
+    bind(draft, tab, nativeId) { draft.byTab[tab] = nativeId; },
+    importPrompt(draft, choice) { draft.importPrompt = choice; },
+  } });
   const injected = { hooks: { browser: client.state }, request: (op, payload) => client.request(op, payload), fail: error => client.fail(error),
     reveal: (sessionId, nativeId) => client.reveal(sessionId, nativeId), anchor: id => client.anchor(id), mount: value => client.mount(value), unmount: id => client.unmount(id) };
   const t = ctx.locale.bind(NS);
@@ -144,3 +196,6 @@ export function apply(ctx) {
   });
   void client.refresh().catch(error => client.fail(error));
 }
+
+// The native visual harness renders these with the real desktop adapter.
+export { BrowserBody, BrowserTitle, Runtime };

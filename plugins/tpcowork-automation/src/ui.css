@@ -231,8 +231,3 @@
   .tp-auto-run-facts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .tp-auto-toggle > span { transition: none; } }
-.tp-auto-toasts { position: fixed; right: 24px; bottom: 24px; display: grid; gap: 8px; max-width: min(420px, calc(100vw - 48px)); pointer-events: none; }
-.tp-auto-toast { display: flex; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-panel); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); pointer-events: auto; }
-.tp-auto-toast button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 12px; text-align: left; font: inherit; }
-.tp-auto-toast button:first-child { display: grid; gap: 4px; flex: 1; overflow-wrap: anywhere; }
-.tp-auto-toast button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: -3px; }

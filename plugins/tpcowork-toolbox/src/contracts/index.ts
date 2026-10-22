@@ -1,5 +1,6 @@
 export type * from './common.ts'
 export type * from './skills.ts'
+export type * from './call.ts'
 export type * from './mcp.ts'
 export type * from './installer.ts'
 export type * from './tpcoworkhub.ts'

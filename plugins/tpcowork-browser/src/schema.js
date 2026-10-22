@@ -1,18 +1,10 @@
 import { z } from 'zod';
 import { browserCommandSchema } from '../vendor/tpcowork/packages/shared/src/browser-use/commands.ts';
 export { browserCommandSchema };
+// One bundled Zod instance for every Host module that validates.
+export { z };
 
-export const toolGroups = {
-  browser_tabs: ['list', 'listUserTabs', 'newTab', 'activateTab', 'claimTab', 'close', 'finalizeTabs', 'markDeliverable', 'markHandoff', 'nameSession', 'browserVisibilityGet', 'browserVisibilitySet'],
-  browser_navigate: ['navigate', 'back', 'forward', 'reload', 'getState'],
-  browser_snapshot: ['snapshot'],
-  browser_act: ['playwright', 'click', 'fill', 'type', 'press', 'cuaKeypress', 'scroll', 'cuaScroll', 'domCuaScroll', 'hover', 'select', 'check', 'drag', 'cuaDrag', 'elementInfo', 'evaluate', 'waitFor', 'playwrightWaitForTimeout'],
-  browser_screenshot: ['screenshot'],
-  browser_dialog: ['getDialog', 'handleDialog'],
-  browser_download: ['playwright'],
-  browser_viewport: ['browserViewportSet', 'browserViewportReset', 'getState'],
-  browser_recording: ['recordingStart', 'recordingStatus', 'recordingCancel'],
-};
+export { toolGroups } from './tool-routing.js';
 
 /** DSH's schema vocabulary supplies documentation; Zod enforces the full reference constraints. */
 function spec(node) {

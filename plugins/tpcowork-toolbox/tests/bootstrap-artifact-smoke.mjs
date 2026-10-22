@@ -41,7 +41,12 @@ try {
       Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
         sessions: Sessions.default, agents: Agents.default, projections: Projections.default, fs: Fs.default, directory: Directory.default, experts,
         credentials: { apply(inner) {
-          inner.provide('credentials', { describe: async () => ({ configured: false, writable: false }) })
+          const credentials = new Map()
+          inner.provide('credentials', {
+            describe: async ref => ({ configured: credentials.has(ref), writable: true }),
+            resolve: async ref => credentials.has(ref) ? { value: credentials.get(ref), source: 'test' } : undefined,
+            set: async (ref, value) => { credentials.set(ref, value) },
+          })
           // Discovery only; the native workflow/AgentLoop execution is exercised by experts tests.
           inner.provide('sessionController', { inspect: async () => ({ events: [] }) })
           inner.provide('workflowEngine', {})

@@ -20,7 +20,8 @@
     "NOTICE.md"
   ],
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2"
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.2"
   },
   "dsh": {
     "bundle": {
@@ -29,9 +30,9 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-tool"
       ]
     }

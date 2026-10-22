@@ -1,6 +1,6 @@
 # TP Cowork 外观插件
 
-把本地 `tp-cowork` 的中性灰浅色/深色配色、264px 侧栏、居中工作问候、672px 首页输入区和紧凑圆角控件应用到 DSH。聊天、工作区、设置、插件管理及工具执行继续使用 DSH 的现有组件与服务。助手身份和通用提示词由独立的 [tpcowork-core](../tpcowork-core/README.md) 维护。
+把本地 `tp-cowork` 的中性灰浅色/深色配色、264px 侧栏、居中工作问候、672px 首页输入区和紧凑圆角控件应用到 DSH。聊天、工作区、设置及工具执行继续使用 DSH 的现有组件与服务。助手身份和通用提示词由独立的 [tpcowork-core](../tpcowork-core/README.md) 维护。
 
 ## 维护位置
 
@@ -12,7 +12,7 @@
 | `src/runtime.js` | 主题覆盖、已有品牌插槽注册，以及卸载清理 |
 | `src/layout-adapter.js` | 通过上游共享布局 store 的现有动作适配侧栏宽度 |
 | `src/task-panel.js` | 当前会话任务投影、右上角任务卡及展开/收起交互 |
-| `src/settings-launcher.js`、`src/tpcoworkhub-account.js` | 首页账号菜单与 TP Cowork Hub 桌面账号状态 |
+| `src/settings-launcher.js`、`src/tpcoworkhub-account.js`、`src/interface-preferences.js` | 侧栏账号、外观菜单与 TP Cowork Hub 桌面账号状态 |
 | `src/upstream-css.js`、`src/upstream-styles.js` | 读取 DSH 已构建的 CSS 类名并生成原版组件的覆盖样式 |
 | `locale/zh.json`、`locale/en.json` | 插件列表说明和界面文字 |
 | `cordis.patch.yml` | 插件组合 |
@@ -24,7 +24,9 @@
 
 通用设置通过 `settings.general.item` 插槽覆盖移除 Session Log 上传选项及说明，禁用插件后恢复原版设置项。
 
-首页侧栏的「更多」菜单通过 `settings.launcher` 插槽保留设置入口，移除意见反馈入口。点击「登录」使用系统默认浏览器打开 TP Cowork Hub 授权页；浏览器已登录时直接确认账号，未登录时使用网站现有的用户名、密码页面。确认后侧栏显示账号名称，并与技能商店共享登录、重启恢复和退出状态。需要包含 TP Cowork Hub 桥接的桌面壳、已启用的 toolbox 插件，以及支持 `/desktop/authorize` 的网站；网站地址和等待时限由 toolbox 的 `tpcoworkhub` 配置提供，见[工具箱使用说明](../../docs/toolbox/user-guide.md)。等待认证时菜单仅保留设置和取消登录操作，不显示额外提示；可在桌面或网站取消，关闭浏览器标签页后可从桌面取消，未取消则等待超时。失败或超时显示重试提示，禁用外观插件会取消尚未提交的登录并恢复 DSH 原版菜单。
+产品组合通过 `cordis.patch.yml` 禁用 `ui-plugin-manager` 与 `ui-settings-plugins` 两个管理界面，隐藏侧栏「插件」和设置中的「内置插件」入口。已安装插件及其 Host 服务继续加载，开发维护仍可使用 DSH 插件 CLI。
+
+侧栏底部通过 `settings.launcher` 插槽显示圆形头像与「连接使用」，已登录时显示账号首字头像和名称，右侧保留独立设置按钮。点击账号入口显示「界面语言」「界面主题」和「连接使用／退出登录」。语言使用全局语言设置，支持系统默认及已注册语言；主题支持系统默认、深色、浅色，并与通用设置同步。菜单支持键盘操作、关闭后焦点返回、长账号名称截断和收起侧栏布局。点击菜单中的「连接使用」使用系统默认浏览器打开 TP Cowork Hub 授权页；浏览器已登录时直接确认账号，未登录时使用网站现有的用户名、密码页面。确认后侧栏显示账号名称，并与技能商店共享登录、重启恢复和退出状态。需要包含 TP Cowork Hub 桥接的桌面壳、已启用的 toolbox 插件，以及支持 `/desktop/authorize` 的网站；网站地址和等待时限由 toolbox 的 `tpcoworkhub` 配置提供，见[工具箱使用说明](../../docs/toolbox/user-guide.md)。等待认证时保留外观选项和独立设置按钮，可从账号菜单取消登录；可在桌面或网站取消，关闭浏览器标签页后可从桌面取消，未取消则等待超时。失败或超时显示重试提示，禁用外观插件会取消尚未提交的登录并恢复 DSH 原版菜单。
 
 输入框顶部沿用 DSH 的 8px 外框留白和 4px 编辑区留白，普通首行内容起点距外框顶部 12px；技能/MCP 选择区没有提示内容时隐藏其空插槽容器，避免额外产生 8px 间距，有加载、提交或错误提示时正常显示。
 
@@ -48,7 +50,7 @@
 
 ## 验证
 
-在同级 `deepseek-harness` 目录执行 `node node_modules/vitest/vitest.mjs run --config ../tp-coworkdsh/plugins/tpcowork-ui/vitest.config.ts`。测试通过真实浏览器 Loader 加载生成的 Client 模块，使用原版布局、主题服务与插槽注册表，检查主题切换、侧栏拖动和开关、窄屏行为及卸载恢复；还使用 DSH 实际交付的 Hero 样式验证首页问候、原标题的隐藏与恢复，以及侧栏中的预览版标签。样式测试检查展开侧栏和停靠输入框的覆盖规则不会影响收起轨道与首页输入框的原有特殊规则。视觉验收仍需要在真实桌面进行。
+在同级 `deepseek-harness` 目录执行 `node node_modules/vitest/vitest.mjs run --config ../tp-coworkdsh/plugins/tpcowork-ui/vitest.config.ts --configLoader native --cache=false`。测试通过真实浏览器 Loader 加载生成的 Client 模块，使用原版布局、主题服务与插槽注册表，检查主题切换、侧栏拖动和开关、窄屏行为及卸载恢复；还使用 DSH 实际交付的 Hero 样式验证首页问候、原标题的隐藏与恢复，以及侧栏中的预览版标签。样式测试检查展开侧栏和停靠输入框的覆盖规则不会影响收起轨道与首页输入框的原有特殊规则。视觉验收仍需要在真实桌面进行。
 
 任务卡测试覆盖原生任务插槽的替换及卸载恢复、实时状态更新、多面板定位、跨会话偏好重置、宽窄屏默认状态、空清单和全完成清单。
 

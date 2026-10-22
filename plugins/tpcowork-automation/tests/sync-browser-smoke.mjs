@@ -84,31 +84,43 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 } }); page.setDefaultTimeout(12000);
+  // The desktop shell's notification bridge: results arrive as system notifications, never as page UI.
+  await page.addInitScript(() => {
+    window.shownNotifications = [];
+    window.dshDesktop = { notifications: {
+      show: notification => { window.shownNotifications.push(notification); return Promise.resolve(true); },
+      subscribe: listener => { window.clickNotification = listener; return () => { window.clickNotification = undefined; }; },
+    } };
+  });
+  const shown = body => page.evaluate(text => window.shownNotifications.filter(notification => notification.body === text), body);
+  const waitShown = body => page.waitForFunction(text => window.shownNotifications.some(notification => notification.body === text), body);
   page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.message); });
   page.on('console', message => { if (message.type() === 'warning' || message.type() === 'error') console.error('Browser console:', message.text()); });
   await page.goto(origin); await page.waitForFunction(() => window.ready && window.streamFrames.some(frame => frame.type === 'ready'));
   await page.getByRole('heading', { name: 'Cross-page report', exact: true }).waitFor();
-  assert.equal(await page.locator('.tp-auto-toast').count(), 0);
+  assert.deepEqual(await page.evaluate(() => window.shownNotifications), []);
   await page.evaluate(() => window.fixture.leave()); await page.locator('[data-other-panel]').waitFor();
   const run = await begin(task);
   await ctx.automation.bindRun({ taskId: task.id, runId: run.id, sessionId: 'allocated-only', ownsSession: false });
   await page.waitForFunction(() => window.streamFrames.some(frame => frame.change?.reason === 'run_bound'));
-  assert.equal(await page.locator('.tp-auto-toast').count(), 0);
+  assert.deepEqual(await page.evaluate(() => window.shownNotifications), []);
   await finish(task, run);
-  const toast = page.locator('.tp-auto-toast').filter({ hasText: 'Cross-page report' }); await toast.waitFor();
+  await waitShown('Cross-page report');
+  assert.deepEqual(await shown('Cross-page report'), [{ id: `automation:${run.id}`, key: `automation:${run.id}`, title: 'Automation completed', body: 'Cross-page report' }]);
+  assert.equal(await page.locator('[role="status"]').count(), 0);
   await page.screenshot({ path: resolve(output, 'off-page.png'), fullPage: true });
   await ctx.parallel('automation/changed', { revision: 1, taskId: task.id, runId: run.id, reason: 'run_finished' });
   await page.evaluate(() => window.fixture.reconnect());
   await page.waitForFunction(() => window.streamFrames.filter(frame => frame.change?.reason === 'run_finished').length >= 2);
-  assert.equal(await toast.count(), 1);
-  await toast.locator('button').first().click();
+  assert.equal((await shown('Cross-page report')).length, 1);
+  await page.evaluate(id => window.clickNotification(id), `automation:${run.id}`);
   await page.getByRole('heading', { name: / - Cross-page report$/ }).waitFor();
   await page.getByRole('button', { name: 'Confirm', exact: true }).waitFor();
   assert.equal((await ctx.automation.list()).tasks.find(item => item.id === task.id).runs[0].viewedAt, undefined);
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm', exact: true }).waitFor({ state: 'hidden' });
   const viewedAt = (await ctx.automation.list()).tasks.find(item => item.id === task.id).runs[0].viewedAt; assert.ok(viewedAt);
-  evidence.push('Initial history silent; run_bound is not terminal; off-page Host finish pushes a single toast; duplicate revision/reconnect cannot re-alert; click opens exact task/run and none awaits explicit confirmation.');
+  evidence.push('Initial history silent; run_bound is not terminal; off-page Host finish sends a single system notification and no page UI; duplicate revision/reconnect cannot re-alert; click opens exact task/run and none awaits explicit confirmation.');
   // A second Client's acknowledgement/deletion must invalidate the first Client's shared catalog.
   const second = await browser.newPage();
   await second.goto(origin); await second.waitForFunction(() => window.ready && window.streamFrames.some(frame => frame.type === 'ready'));
@@ -121,15 +133,15 @@ try {
   evidence.push('A second real Client acknowledges without moving viewedAt, then deletes via Gateway; first Client drops its selected detail from Host invalidation without resurrecting the run.');
   await page.evaluate(() => window.fixture.leave()); suppressPush = true;
   await finish(failed, await begin(failed), 'error');
-  const failureToast = page.locator('.tp-auto-toast').filter({ hasText: 'Failed report' }); await failureToast.waitFor();
-  assert.match(await failureToast.innerText(), /Automation failed/); suppressPush = false;
+  await waitShown('Failed report');
+  assert.equal((await shown('Failed report'))[0].title, 'Automation failed'); suppressPush = false;
   evidence.push('Missing push delivery still reports a new error through the two-second global read fallback.');
   for (const stream of streams) stream.destroy();
   await serviceFiber.dispose(); serviceFiber = await ctx.plugin(host.AutomationService);
   const newTask = await create('After Host restart'); await finish(newTask, await begin(newTask));
-  await page.locator('.tp-auto-toast').filter({ hasText: 'After Host restart' }).waitFor();
+  await waitShown('After Host restart');
   await page.waitForFunction(() => window.streamFrames.filter(frame => frame.type === 'ready').length >= 2);
-  assert.equal(await page.locator('.tp-auto-toast').filter({ hasText: 'Cross-page report' }).count(), 0);
+  assert.equal((await shown('Cross-page report')).length, 1);
   evidence.push('Gateway stream reconnects after actual HTTP carrier loss and Host reactivation; revision reset does not replay old results.');
   if (process.argv.includes('--electron') || nativeClick) {
     const nativeTask = await create('TPCO-9 native delivery');

@@ -1,4 +1,4 @@
-/** Plugin-wide terminal observation, native delivery and toast lifetime. */
+/** Plugin-wide terminal observation and system notification delivery. */
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import type { AutomationCatalog } from './ui-state.ts'
 import type { AutomationRunRequest, ScheduledTask } from './types.ts'
@@ -8,7 +8,23 @@ export interface RunNotice extends AutomationRunRequest { taskName: string; stat
 export interface DesktopNotice { title: string; body: string; target: AutomationRunRequest; open(): void; closed?(): void }
 export type DesktopDelivery = (notice: DesktopNotice) => (() => void) | undefined
 
-/** Existing Electron Chromium notification bridge; permission remains owned by the shell/OS. */
+/** The desktop shell's native notifications: shown only while no application window is focused. */
+export interface SystemNotifications {
+  show(notification: { id: string; key: string; title: string; body: string }): Promise<boolean>
+  subscribe(listener: (id: string) => void): () => void
+}
+
+/** The product-wide notification switch, shared with the TP Cowork settings page. */
+export const NOTIFICATIONS_ENABLED_KEY = 'tpcowork-notification-enabled'
+export function notificationsEnabled(): boolean {
+  try { return globalThis.localStorage?.getItem(NOTIFICATIONS_ENABLED_KEY) !== 'false' }
+  catch { return true }
+}
+
+const NOTIFICATION_PREFIX = 'automation:'
+const MAX_CLICK_TARGETS = 100
+
+/** Web fallback outside the desktop shell; permission remains owned by the browser. */
 export function desktopDelivery(notice: DesktopNotice): (() => void) | undefined {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
   const notification = new Notification(notice.title, { body: notice.body, tag: `automation:${notice.target.runId}` })
@@ -36,6 +52,8 @@ export class RunNotificationTracker {
 interface MonitorOptions {
   open(target: AutomationRunRequest): void
   text(notice: RunNotice): { title: string; body: string }
+  /** Desktop shell notifications; absent in a plain browser. */
+  notifications?: SystemNotifications
   deliver?: DesktopDelivery
   remote?: Pick<ClientRemote, '$stream' | 'automationChanges'>
   report(error: unknown): void
@@ -44,10 +62,10 @@ interface MonitorOptions {
 /** Timers only reread Host state. Disposal cancels and joins the supervised Gateway subscription. */
 export class AutomationRunMonitor {
   private readonly tracker = new RunNotificationTracker()
-  private notices: readonly RunNotice[] = []
-  private readonly listeners = new Set<() => void>()
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly native = new Map<string, () => void>()
+  // Clicked system notifications name a run; only results this monitor announced are opened.
+  private readonly targets = new Map<string, RunNotice>()
+  private readonly stopClicks: () => void
   private readonly stopCatalog: () => void
   private readonly timer: ReturnType<typeof setInterval>
   private stream: ReturnType<ClientRemote['$stream']> | undefined
@@ -55,6 +73,10 @@ export class AutomationRunMonitor {
   private reconnecting: Promise<void> = Promise.resolve()
   private stopped = false
   constructor(private readonly catalog: AutomationCatalog, private readonly options: MonitorOptions) {
+    this.stopClicks = options.notifications?.subscribe(id => {
+      const notice = this.targets.get(id)
+      if (notice) this.open(notice)
+    }) ?? (() => {})
     this.stopCatalog = catalog.subscribe(() => this.observe())
     this.observe()
     this.timer = setInterval(() => {
@@ -68,20 +90,20 @@ export class AutomationRunMonitor {
     }
     catalog.start()
   }
-  getSnapshot = (): readonly RunNotice[] => this.notices
-  subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
-  private publish(notices: readonly RunNotice[]): void { this.notices = notices; for (const listener of this.listeners) listener() }
-  dismiss(runId: string): void {
-    clearTimeout(this.timers.get(runId)); this.timers.delete(runId)
-    this.publish(this.notices.filter(notice => notice.runId !== runId))
-  }
-  open(notice: RunNotice): void { if (!this.stopped) { this.options.open(notice); this.dismiss(notice.runId) } }
+  open(notice: RunNotice): void { if (!this.stopped) this.options.open(notice) }
   private observe(): void {
     const snapshot = this.catalog.getSnapshot()
     if (this.stopped || !snapshot.catalog || snapshot.loading || snapshot.error) return
     for (const notice of this.tracker.consume(snapshot.catalog.tasks)) {
-      this.publish([...this.notices, notice])
-      this.timers.set(notice.runId, setTimeout(() => this.dismiss(notice.runId), 8000))
+      if (!notificationsEnabled()) continue
+      const notifications = this.options.notifications
+      if (notifications) {
+        const id = `${NOTIFICATION_PREFIX}${notice.runId}`
+        this.targets.set(id, notice)
+        if (this.targets.size > MAX_CLICK_TARGETS) this.targets.delete(this.targets.keys().next().value!)
+        void notifications.show({ id, key: id, ...this.options.text(notice) }).catch(error => this.options.report(error))
+        continue
+      }
       try {
         const dispose = (this.options.deliver ?? desktopDelivery)({ ...this.options.text(notice), target: notice, open: () => this.open(notice), closed: () => { this.native.delete(notice.runId) } })
         if (dispose) this.native.set(notice.runId, dispose)
@@ -114,11 +136,9 @@ export class AutomationRunMonitor {
   async dispose(): Promise<void> {
     if (this.stopped) return
     this.stopped = true
-    clearInterval(this.timer); this.stopCatalog()
-    for (const timer of this.timers.values()) clearTimeout(timer)
-    this.timers.clear()
+    clearInterval(this.timer); this.stopCatalog(); this.stopClicks()
     for (const close of this.native.values()) { try { close() } catch (error) { this.options.report(error) } }
-    this.native.clear(); this.listeners.clear(); this.catalog.dispose()
+    this.native.clear(); this.targets.clear(); this.catalog.dispose()
     await this.reconnecting
     await this.stream?.dispose()
     await this.pumping

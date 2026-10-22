@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { AutomationCatalog } from '../src/ui-state.ts'
-import { AutomationRunMonitor, RunNotificationTracker, desktopDelivery } from '../src/run-monitor.ts'
+import { AutomationRunMonitor, NOTIFICATIONS_ENABLED_KEY, RunNotificationTracker, desktopDelivery } from '../src/run-monitor.ts'
 import { payloadSchema } from '../src/schemas.ts'
 import { watchChanges } from '../src/changes.ts'
 import type { AutomationServiceApi, ScheduleTasksPayload } from '../src/types.ts'
@@ -83,7 +83,6 @@ describe('global monitor lifetime', () => {
     current = payload('completed'); await vi.advanceTimersByTimeAsync(2000)
     expect(deliver).toHaveBeenCalledTimes(1)
     expect(deliver.mock.calls[0]![0]).toMatchObject({ title: 'completed', body: 'Report', target: { taskId: 'task', runId: 'run' } })
-    monitor.open(monitor.getSnapshot()[0]!); expect(open).toHaveBeenCalledWith(expect.objectContaining({ runId: 'run' }))
     await vi.advanceTimersByTimeAsync(4000); expect(deliver).toHaveBeenCalledTimes(1)
     current = payload('error'); current.tasks[0]!.runs[0]!.id = 'second'
     await vi.advanceTimersByTimeAsync(2000); expect(deliver).toHaveBeenCalledTimes(2)
@@ -103,6 +102,32 @@ describe('global monitor lifetime', () => {
     await vi.advanceTimersByTimeAsync(2000); await monitor.dispose()
     late.resolve(payload('completed')); await vi.advanceTimersByTimeAsync(0)
     expect(deliver).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('desktop system notifications', () => {
+  it('announces each new result natively, opens only announced runs on click, and honours the notification switch', async () => {
+    vi.useFakeTimers()
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null })
+    let current = payload()
+    let click: ((id: string) => void) | undefined
+    const unsubscribe = vi.fn()
+    const notifications = { show: vi.fn(async () => true), subscribe: vi.fn((listener: (id: string) => void) => { click = listener; return unsubscribe }) }
+    const deliver = vi.fn(), open = vi.fn()
+    const monitor = new AutomationRunMonitor(new AutomationCatalog(service(async () => current)), { open, notifications, deliver, report: vi.fn(),
+      text: notice => ({ title: notice.status === 'error' ? 'Automation failed' : 'Automation completed', body: notice.taskName }) })
+    await vi.advanceTimersByTimeAsync(0)
+    current = payload('completed'); await vi.advanceTimersByTimeAsync(2000)
+    expect(notifications.show).toHaveBeenCalledExactlyOnceWith({ id: 'automation:run', key: 'automation:run', title: 'Automation completed', body: 'Report' })
+    expect(deliver).not.toHaveBeenCalled()
+    click!('automation:unknown'); expect(open).not.toHaveBeenCalled()
+    click!('automation:run'); expect(open).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task', runId: 'run' }))
+    storage.set(NOTIFICATIONS_ENABLED_KEY, 'false')
+    current = payload('error'); current.tasks[0]!.runs[0]!.id = 'second'
+    await vi.advanceTimersByTimeAsync(2000); expect(notifications.show).toHaveBeenCalledOnce()
+    await monitor.dispose(); expect(unsubscribe).toHaveBeenCalledOnce()
+    click!('automation:run'); expect(open).toHaveBeenCalledOnce()
   })
 })
 

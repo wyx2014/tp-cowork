@@ -1,5 +1,5 @@
 /** Refresh explicitly from the user's reference checkout; normal builds use this pinned copy. */
-import { readFile, writeFile, mkdir, copyFile, mkdtemp, cp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, mkdtemp, cp, rm, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve, relative } from 'node:path';
@@ -41,7 +41,26 @@ for (const file of [
   'desktop/src/preload/browserVideoRecorder.ts',
   'desktop/src/main/browserDataManager.ts',
   'shared/src/browser-use/commands.ts', 'shared/src/browser-use/command-metadata.ts', 'shared/src/browser-use/snapshot.ts',
+  // The right pane's URL normalization and load-error classification.
+  'ui/src/embeddedBrowserHelpers.ts',
 ]) await copy(resolve(reference, 'packages', file));
+// The CLI's agent.browsers client and managed headless CDP runtime; bare @tpcowork/contracts
+// imports resolve to the copied port types at build time.
+const cli = 'apps/tpcowork-cli/packages';
+for (const file of [
+  'core/src/browser-client/index.ts', 'adapters/src/browser/index.ts',
+  'contracts/src/interfaces/browser-control.port.ts', 'contracts/src/tracing/tracer.ts',
+]) await copy(resolve(reference, cli, file));
+// Model guidance is copied verbatim; the plugin's adapted copies live in sdk-docs/ and skills/.
+for (const directory of ['browser-use-plugin/docs', 'browser-use-plugin/skills']) {
+  await cp(resolve(reference, cli, directory), resolve(staging, cli, directory), { recursive: true });
+  for (const path of (await readdir(resolve(reference, cli, directory), { recursive: true }))) {
+    const file = resolve(reference, cli, directory, path);
+    if (!(await stat(file)).isFile()) continue;
+    seen.add(file);
+    sourceSha256[relative(reference, file)] = createHash('sha256').update(await readFile(file)).digest('hex');
+  }
+}
 // Apply local fixes in a temporary tree; an incompatible upstream leaves the pinned tree intact.
 const patch = resolve(root, 'patches/browserGuestManager.patch');
 execFileSync('git', ['apply', '--check', patch], { cwd: staging });
