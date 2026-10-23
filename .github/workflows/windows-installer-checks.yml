@@ -35,3 +35,12 @@ jobs:
       - run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
       - run: npm run test:packaging
       - run: node scripts/check-windows-installer-recovery.mjs
+      - name: Retain native compiler evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-installer-check-${{ github.run_id }}
+          path: deepseek-harness/apps/desktop/.desktop-build/installer-tests/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
