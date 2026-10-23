@@ -25,6 +25,14 @@ export function productSvg(icon, name, wordmark = false) {
     : `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="${label}"><image href="${image}" width="256" height="256"/></svg>\n`
 }
 
+/** Artwork for the native NSIS pages; these bitmaps are independent of Electron's icons. */
+function installerSvg(icon, name, dark, sidebar = false) {
+  const label = name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
+  const width = sidebar ? 164 : 600, height = sidebar ? 314 : 196
+  const size = sidebar ? 96 : 112, y = sidebar ? 68 : 12
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${dark ? '#151517' : '#ffffff'}"/><image href="data:image/png;base64,${icon.toString('base64')}" x="${(width - size) / 2}" y="${y}" width="${size}" height="${size}"/><text x="${width / 2}" y="${sidebar ? 206 : 176}" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="${sidebar ? 22 : 32}" font-weight="600" fill="${dark ? '#f9fafb' : '#0f1115'}">${label}</text></svg>`
+}
+
 /** The browser tab favicon historically was a single flat-filled mark on a transparent
  * background (black in light mode, white in dark mode) rather than the app icon's own
  * filled square — derive that same silhouette from the current icon instead of embedding
@@ -114,6 +122,7 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const textFiles = [
     'apps/desktop/src/locale.ts', 'apps/desktop/src/main.ts',
     'apps/desktop/scripts/development-app.ts', 'apps/desktop/scripts/electron-builder-config.mjs',
+    'apps/desktop/installer/strings.nsh', 'apps/desktop/installer/extract-report.h',
     'scripts/client-build-environment.ts', 'apps/web/index.html', 'apps/web/vite.config.ts',
     'packages/client/locale/src/locales/en.ts', 'packages/client/locale/src/locales/zh.ts',
   ]
@@ -141,6 +150,14 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     ['apps/web/public/favicon.svg', await faviconMark(icon, sharp, name, '#000000')],
     ['apps/web/public/favicon-dark.svg', await faviconMark(icon, sharp, name, '#ffffff')],
   ]
+  for (const dark of [false, true]) {
+    for (const scale of [1, 2]) {
+      const filename = `brand${dark ? '-dark' : ''}${scale === 2 ? '-2x' : ''}.png`
+      const svg = installerSvg(icon, name, dark)
+      images.push([`apps/desktop/installer/assets/${filename}`, await sharp(Buffer.from(svg), { density: 72 * scale }).png().toBuffer()])
+    }
+  }
+  images.push(['apps/desktop/installer/assets/uninstaller-sidebar.png', await sharp(Buffer.from(installerSvg(icon, name, false, true))).png().toBuffer()])
   for (const [file, content] of images) {
     await mkdir(dirname(join(harness, file)), { recursive: true })
     await writeFile(join(harness, file), content)

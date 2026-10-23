@@ -22,9 +22,13 @@ jobs:
   install:
     runs-on: windows-2022
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tp-cowork
     steps:
       - uses: actions/checkout@v4
         with:
+          path: tp-cowork
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -35,7 +39,21 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.run_id }}
           name: ${{ inputs.artifact_name }}
-          path: installer
+          path: tp-cowork/installer
+      - name: Resolve the installer's harness revision
+        id: sources
+        shell: pwsh
+        run: |
+          $info = Get-Content -LiteralPath installer/build-info.json -Raw | ConvertFrom-Json
+          if ($info.harnessCommit -notmatch '^[0-9a-f]{40}$') { throw 'Installer source revision is missing.' }
+          "commit=$($info.harnessCommit)" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          repository: wyx2014/deepseek-harness
+          ref: ${{ steps.sources.outputs.commit }}
+          path: deepseek-harness
+          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
+          persist-credentials: false
       - name: Verify installation, upgrade and installed product
         shell: pwsh
         env:
@@ -46,14 +64,19 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -Diagnostics
+      - name: Verify interactive installation at the default location
+        shell: pwsh
+        env:
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
+        run: ./scripts/smoke-windows-installer-ui.ps1 -InstallerDirectory installer
       - name: Upload verified installer
         uses: actions/upload-artifact@v4
         with:
           name: TPCowork-windows-x64-verified-${{ inputs.run_id }}
           path: |
-            installer/*.exe
-            installer/*.sha256
-            installer/build-info.json
+            tp-cowork/installer/*.exe
+            tp-cowork/installer/*.sha256
+            tp-cowork/installer/build-info.json
           if-no-files-found: error
           retention-days: 30
       - name: Retain installed UI evidence
@@ -61,5 +84,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: installed-ui-${{ github.run_id }}
-          path: test-results/windows-install/
+          path: tp-cowork/test-results/windows-install/
           if-no-files-found: warn

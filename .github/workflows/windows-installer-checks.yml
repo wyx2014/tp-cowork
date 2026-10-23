@@ -1,0 +1,37 @@
+name: Check Windows installer recovery
+on:
+  workflow_dispatch:
+    inputs:
+      harness_ref:
+        description: 'Harness source revision to verify without a full product build'
+        required: true
+        default: feat/tpcowork-workbench-ui
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tp-cowork
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tp-cowork
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: wyx2014/deepseek-harness
+          ref: ${{ inputs.harness_ref }}
+          path: deepseek-harness
+          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
+      - run: npm run test:packaging
+      - run: node scripts/check-windows-installer-recovery.mjs

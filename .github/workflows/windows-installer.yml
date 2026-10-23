@@ -118,6 +118,8 @@ jobs:
         run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
       - name: Verify packaging helpers
         run: npm run test:packaging
+      - name: Verify native installer recovery
+        run: node scripts/check-windows-installer-recovery.mjs
       # The harness compile and pack stages depend only on the harness checkout (after branding),
       # the toolchain and public build settings. The harness keys its own snapshot on all of them
       # and rebuilds on any mismatch, so a plugin-only change restores the compiled harness instead
@@ -159,6 +161,10 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory dist/installers -Diagnostics
+      - name: Verify interactive installation at the default location
+        env:
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
+        run: ./scripts/smoke-windows-installer-ui.ps1 -InstallerDirectory dist/installers
       - name: Record packaged sources
         run: |
           Get-Content -LiteralPath dist/installers/build-info.json | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test } from 'node:test'
+import { createRequire } from 'node:module'
 import { prepareDesktopBranding } from '../desktop-branding.mjs'
 import { harnessRoot, productRoot } from '../package-command.mjs'
 
@@ -13,6 +14,7 @@ test('brands the welcome flow, native menus, developer application and browser b
   const files = [
     'apps/desktop/src/locale.ts', 'apps/desktop/src/main.ts', 'apps/desktop/package.json',
     'apps/desktop/scripts/development-app.ts', 'apps/desktop/scripts/electron-builder-config.mjs',
+    'apps/desktop/installer/strings.nsh', 'apps/desktop/installer/extract-report.h',
     'scripts/client-build-environment.ts', 'apps/web/index.html', 'apps/web/vite.config.ts',
     'apps/web/public/manifest.webmanifest',
     'packages/client/locale/src/locales/en.ts', 'packages/client/locale/src/locales/zh.ts',
@@ -66,6 +68,27 @@ test('brands the welcome flow, native menus, developer application and browser b
   assert.equal(icns.toString('ascii', 0, 4), 'icns')
   assert.equal(icns.readUInt32BE(4), icns.length)
   for (const size of ['ic07', 'ic08', 'ic09', 'ic10']) assert.ok(icns.includes(Buffer.from(size)))
+
+  const sharp = createRequire(join(harnessRoot, 'apps/desktop/package.json'))('sharp')
+  for (const [asset, width, height] of [['brand', 600, 196], ['brand-2x', 1200, 392], ['brand-dark', 600, 196], ['brand-dark-2x', 1200, 392], ['uninstaller-sidebar', 164, 314]]) {
+    const path = `apps/desktop/installer/assets/${asset}.png`
+    const bytes = await readFile(join(harness, path))
+    const metadata = await sharp(bytes).metadata()
+    assert.equal(metadata.width, width)
+    assert.equal(metadata.height, height)
+    const background = await sharp(bytes).extract({ left: 0, top: 0, width: 1, height: 1 }).removeAlpha().raw().toBuffer()
+    assert.deepEqual([...background], asset.includes('dark') ? [21, 21, 23] : [255, 255, 255])
+    const size = asset === 'uninstaller-sidebar' ? 96 : width / 600 * 112
+    const top = asset === 'uninstaller-sidebar' ? 68 : width / 600 * 12
+    const actualIcon = await sharp(bytes).extract({ left: (width - size) / 2, top, width: size, height: size }).removeAlpha().raw().toBuffer()
+    assert.ok(actualIcon.some((value, i) => i % 3 === 0 && Math.abs(value - actualIcon[i + 2]) > 30), 'installer must contain the colored product icon')
+    files.push(path)
+  }
+  for (const file of ['strings.nsh', 'extract-report.h']) {
+    const contents = await readFile(join(harness, 'apps/desktop/installer', file), 'utf8')
+    assert.doesNotMatch(contents, /DeepSeek Harness/u)
+    assert.match(contents, /TP Cowork/u)
+  }
 
   const first = await Promise.all(files.map(file => readFile(join(harness, file))))
   await prepareDesktopBranding({ harness })

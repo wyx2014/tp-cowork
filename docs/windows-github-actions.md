@@ -26,6 +26,10 @@
 
 上传前实际运行 EXE，阻断验收包括首次安装、同目录覆盖升级、离线 Python 和插件完整性；每次安装后启动真实桌面程序，要求 TP Cowork 外观已激活、核心客户端插件齐全、控制台零错误。测试同时登记旧 nanobot 版安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。测试应用在检查结束后卸载；真实安装检查仅用于一次性 GitHub Actions runner。
 
+交互安装验收不传 `/S` 或 `/D`，在默认用户安装目录依次操作原生安装、完成按钮，再启动桌面程序检查核心插件。安装器欢迎页和完成页截图保存在 `installed-ui-…` 的 `interactive/` 下；欢迎页必须包含 TP Cowork 彩色图标。安装器的浅色、深色、双倍分辨率及卸载页品牌图由同一个产品图标生成，独立于 Electron 应用图标。
+
+目录替换逻辑可单独运行 **Check Windows installer recovery**，无需构建完整应用。它验证首次安装、覆盖安装、短暂占用后的自动恢复、持续占用后的错误报告、用户重试、取消及回滚。修改此逻辑时先通过该检查，再构建完整安装包。目录错误报告位于 `%LOCALAPPDATA%\@deepseek-aidsh-desktop-updater\installer-logs\directory-failure-*.log`，包含 Windows 错误码和实际失败路径；“文件夹无法替换”不等同于应用仍在运行。
+
 浏览器桥接、专家工具箱入口及个股团队按钮放在单独的非阻断诊断步骤，使用产品 UI 的 `data-testid` 定位，不依赖语言或显示名称。诊断失败保留报告和截图，但不阻止已通过基础验收的安装包上传。两种检查的 `report.json`、截图及启动记录均保存在 `installed-ui-…` Artifact。
 
 **UI 验证失败时先复用已有包：** 下载最后失败运行的 `installed-ui-<run_id>`，一起查看 `report.json` 的具体 URL、错误和截图后再修改。将已有构建运行 ID 和 Artifact 名称填入 **Verify Windows installer**，即可使用最新验证脚本复查原 EXE，无需重新编译；仅在诊断干净机器行为时勾选 `clean_machine`。旧包若缺少新增的测试标识，功能诊断会失败，基础验收仍独立执行。应用代码修复需要生成新包；只改验证脚本时不运行完整构建。
