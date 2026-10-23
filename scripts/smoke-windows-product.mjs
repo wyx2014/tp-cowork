@@ -11,6 +11,9 @@ import { pathToFileURL } from 'node:url'
 const resources = process.argv[2]
 if (!resources) throw new Error('TP Cowork: packaged resources directory is required')
 const runtime = join(resources, 'app.asar/dsh')
+for (const entry of ['tpcowork-browser/desktop.js', 'tpcoworkhub/desktop.js']) {
+  assert.ok(readFileSync(join(resources, 'app.asar/lib', entry)).byteLength > 0, `Packaged desktop adapter is empty: ${entry}`)
+}
 const product = JSON.parse(readFileSync(join(runtime, 'desktop-product.json'), 'utf8'))
 const expected = JSON.parse(readFileSync(new URL('../desktop-product.json', import.meta.url), 'utf8'))
 assert.deepEqual(product.bundles, expected.bundles)
