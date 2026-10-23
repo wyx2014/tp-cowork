@@ -8,6 +8,7 @@ import { visibleMcp } from '../client/visibility.ts'
 import { SectionLayout } from './layout.tsx'
 import { ToolboxIcon } from './Icon.tsx'
 import { McpEditor } from './McpEditor.tsx'
+import { mcpIcon } from './capability-presentation.ts'
 const connectionKeys: Record<McpItem['connection'], UiKey> = { unknown: 'connectionUnknown', disconnected: 'disconnected', connecting: 'connecting', connected: 'connected', reconnecting: 'reconnecting', error: 'error' }
 
 export function Mcp({ load, available, t, query, actions }: SectionProps & { load: Load<Catalog<McpItem>>; available: boolean }) {
@@ -28,7 +29,7 @@ export function Mcp({ load, available, t, query, actions }: SectionProps & { loa
     {probing.busy && <Button onClick={probing.cancel}>{t('cancel')}</Button>}
     {!!visible.length && !rows.length && <p className="tp-toolbox-empty">{t('noMatches')}</p>}
     <div className="tp-toolbox-grid">{rows.map(item => <article className="tp-toolbox-card" key={item.id}>
-      <div className="tp-toolbox-card-body"><header><h3>{item.label}</h3><ReadinessBadge value={item.readiness} t={t} /></header>
+      <div className="tp-toolbox-card-body"><header><h3 className="tp-capability-heading"><img src={mcpIcon(item.id)} alt="" /><span>{item.label}</span></h3><ReadinessBadge value={item.readiness} t={t} /></header>
       <p className="tp-toolbox-card-description">{t(item.enabled ? 'enabled' : 'disabled')} · {t(connectionKeys[item.connection])} · {t('tools')}: {item.toolCount}</p><Reasons value={item.readiness} />
       {!!item.credentials.length && <ul className="tp-toolbox-card-credentials">{item.credentials.map(credential => <li key={credential.ref}>{credential.ref}: {t(credential.configured ? 'configured' : 'missing')}</li>)}</ul>}</div>
       <div className="tp-toolbox-actions"><Button id={`${editorId}-edit-${item.id}`} disabled={!mutable} onClick={event => setEditor({ item, revision: load.value!.revision, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('edit')}</Button>

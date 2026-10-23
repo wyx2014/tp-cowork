@@ -49,10 +49,11 @@ describe('native composer Add contributions', () => {
 
   it('toggles skills and connectors while leaving financial connectors optional', async () => {
     const b = bench()
-    await b.pick('task-skills', '/office-docx')
+    await b.pick('task-skills', 'Documents')
     expect(b.choice.draft.skillIds).toEqual(['bundled:office-docx'])
-    expect((await b.rows('task-skills')).find(row => row.label === '/office-docx')?.active).toBe(true)
-    await b.pick('task-skills', '/office-docx')
+    expect((await b.rows('task-skills')).find(row => row.label === 'Documents')).toMatchObject({ iconSrc: expect.any(String), keywords: expect.arrayContaining(['office-docx', 'Word']) })
+    expect((await b.rows('task-skills')).find(row => row.label === 'Documents')?.active).toBe(true)
+    await b.pick('task-skills', 'Documents')
     expect(b.choice.draft.skillIds).toEqual([])
     expect(b.choice.draft.mcpIds).toEqual([])
     await b.pick('connectors', '聚源')
@@ -68,7 +69,7 @@ describe('native composer Add contributions', () => {
     expect(b.choice.draft.team?.id).toBe('asset-research-team')
     expect(b.choice.draft.skillIds).toEqual(['bundled:office-docx'])
     expect(b.choice.draft.mcpIds).toEqual([])
-    const required = (await b.rows('task-skills')).find(row => row.label === '/office-docx')!
+    const required = (await b.rows('task-skills')).find(row => row.label === 'Documents')!
     expect(required).toMatchObject({ active: true, disabled: true, detail: 'Required by the selected team' })
     await expect(b.popup('task-skills').onSelect(required, session)).rejects.toThrow('Required by the selected team')
     await b.pick('expert-team', '资产投研团队')
@@ -80,11 +81,11 @@ describe('native composer Add contributions', () => {
     b.current.mcp.items[0]!.enabled = false
     expect((await b.rows('connectors')).find(row => row.label === '聚源')?.disabled).toBe(true)
     b.current.skills.complete = false
-    const skill = (await b.rows('task-skills')).find(row => row.label === '/office-docx')!
+    const skill = (await b.rows('task-skills')).find(row => row.label === 'Documents')!
     expect(skill.disabled).toBe(true)
     await expect(b.popup('task-skills').onSelect(skill, session)).rejects.toThrow('incomplete')
     b.current.skills.complete = true
-    const openSkill = (await b.rows('task-skills')).find(row => row.label === '/office-docx')!
+    const openSkill = (await b.rows('task-skills')).find(row => row.label === 'Documents')!
     b.choice.phase = 'fixed'
     expect((await b.rows('task-skills')).every(row => row.disabled)).toBe(true)
     await expect(b.popup('task-skills').onSelect(openSkill, session)).rejects.toThrow(t('fixed'))
@@ -96,7 +97,7 @@ describe('native composer Add contributions', () => {
 
   it('rejects choices from a changed catalog and confirms its revision only through a reviewed selection or reload', async () => {
     const b = bench()
-    const stale = (await b.rows('task-skills')).find(row => row.label === '/office-docx')!
+    const stale = (await b.rows('task-skills')).find(row => row.label === 'Documents')!
     b.current.revision++
     await expect(b.popup('task-skills').onSelect(stale, session)).rejects.toThrow('catalog changed')
     const reload = (await b.rows('task-skills')).find(row => row.id === 'refresh')!
@@ -111,7 +112,7 @@ describe('native composer Add contributions', () => {
     b.choice.draft.skillIds = ['removed-skill']
     await b.pick('task-skills', 'removed-skill')
     expect(b.choice.draft.skillIds).toEqual([])
-    const oldToggle = (await b.rows('task-skills')).find(row => row.label === '/office-docx')!
+    const oldToggle = (await b.rows('task-skills')).find(row => row.label === 'Documents')!
     await b.popup('task-skills').onSelect(oldToggle, session)
     await expect(b.popup('task-skills').onSelect(oldToggle, session)).rejects.toThrow('catalog changed')
   })
@@ -132,7 +133,7 @@ describe('composer capability chips', () => {
   it('leaves selected capabilities to the editor and displays catalog loading separately', async () => {
     const b = mount()
     expect(screen.queryByRole('group', { name: 'Selected capabilities' })).toBeNull()
-    await b.pick('task-skills', '/office-docx')
+    await b.pick('task-skills', 'Documents')
     b.view.rerender(React.createElement(ChoiceDock, b.props))
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.queryByRole('group')).toBeNull()

@@ -4,7 +4,8 @@ import { BrowserClient } from './client-controller.js';
 import { BrowserTool } from './tool-card.jsx';
 import { Guest } from './guest.jsx';
 import { importSummary } from './import-summary.js';
-import { ImportPrompt, importPromptPending } from './import-prompt.jsx';
+import { ImportPrompt } from './import-prompt.jsx';
+import { createImportPromptPreferences, importPromptPending } from './import-preferences.js';
 import { useOperationActive, useResizeWarning } from './viewport.jsx';
 import { BrowserSurface, BrowserToolbar, DEFAULT_RESPONSIVE_VIEWPORT, MoreMenu, PageState, SiteSettings, ViewportToolbar } from './pane.jsx';
 import { Icon } from './icons.jsx';
@@ -33,11 +34,11 @@ function Permission({ entry, request, t, fail }) {
 }
 
 function BrowserBody(props) {
-  const { useTabInfo, useBrowser, useStore, mount, unmount, request, fail, actions, t, sessionId } = props;
+  const { useTabInfo, useBrowser, useStore, useImportPrompt, decideImportPrompt, mount, unmount, request, fail, actions, t, sessionId } = props;
   const { tab } = useTabInfo();
   const state = useBrowser(value => value);
   const savedId = useStore(value => value.byTab[tab.id]);
-  const importChoice = useStore(value => value.importPrompt);
+  const importChoice = useImportPrompt(value => value);
   const nativeId = state.bindings[tab.id] ?? savedId ?? tab.navigation.params?.nativeId;
   const row = state.tabs.find(row => row.id === nativeId);
   const anchor = useRef();
@@ -108,7 +109,7 @@ function BrowserBody(props) {
     if (result.success && row?.url?.startsWith('http')) invoke(command('reload'));
     return result;
   };
-  const decideImport = choice => { setImportOpen(false); actions.importPrompt(choice); };
+  const decideImport = choice => { setImportOpen(false); decideImportPrompt(choice); };
   const blank = !row?.url || row.url.startsWith('about:blank');
   const pageState = !state.enabled ? <PageState kind="unavailable" t={t} />
     : row?.suspended ? <PageState kind="empty" onRetry={() => invoke(run('ensure'))} t={t} />
@@ -178,9 +179,15 @@ export function apply(ctx) {
   ctx.effect(() => { const style = document.createElement('style'); style.dataset.plugin = ID; style.textContent = styles; document.head.appendChild(style); return () => style.remove(); }, 'tpcowork-browser: styles');
   const store = defineStore({ init: () => ({ byTab: {} }), persist: 'tpcowork.browser-tabs.v1', actions: {
     bind(draft, tab, nativeId) { draft.byTab[tab] = nativeId; },
-    importPrompt(draft, choice) { draft.importPrompt = choice; },
   } });
-  const injected = { hooks: { browser: client.state }, request: (op, payload) => client.request(op, payload), fail: error => client.fail(error),
+  const importPrompt = createImportPromptPreferences();
+  const request = async (op, payload) => {
+    const result = await client.request(op, payload);
+    if (op === 'importChrome' && result.success === true) importPrompt.decide({ choice: 'imported' });
+    return result;
+  };
+  const injected = { hooks: { browser: client.state, importPrompt: importPrompt.state }, decideImportPrompt: importPrompt.decide,
+    request, fail: error => client.fail(error),
     reveal: (sessionId, nativeId) => client.reveal(sessionId, nativeId), anchor: id => client.anchor(id), mount: value => client.mount(value), unmount: id => client.unmount(id) };
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.sidebarRightTabs.register({ id: ID, kind: 'browser', priority: 'extension', multiple: true, keepMounted: true,

@@ -65,6 +65,23 @@ body[data-tpcowork-ui] [data-composer-selection]:has(> [data-slot="conversation.
   text-wrap: balance;
 }
 
+.tpcowork-navigation { display: flex; align-items: center; gap: 4px; flex: none; -webkit-app-region: no-drag; }
+.tpcowork-navigation-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
+  color: var(--dsw-alias-label-secondary); background: transparent; cursor: pointer;
+  -webkit-app-region: no-drag; transition: background-color 150ms, color 150ms;
+}
+.tpcowork-navigation-button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.tpcowork-navigation-button:disabled { opacity: .35; cursor: default; }
+.tpcowork-navigation-button:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 2px; }
+.tpcowork-navigation-error { position: fixed; top: 56px; left: 12px; max-width: 260px; padding: 8px; border-radius: 6px; background: var(--dsw-alias-bg-base); font-size: 12px; }
+html[data-windows-titlebar] body[data-tpcowork-ui] .tpcowork-navigation {
+  position: fixed; top: calc((var(--dsh-windows-titlebar-height) - 28px) / 2); left: 44px; z-index: 30;
+}
+html[data-windows-titlebar]:has(body[data-tpcowork-ui]) { --dsh-windows-menu-start: 112px; }
+html[data-windows-titlebar]:has(body[data-tpcowork-ui] [data-sidebar-collapsed='true']) { --dsh-windows-menu-start: 144px; }
+
 /* Profile footer mirrors TP Cowork: a round avatar, account name, and separate gear. */
 .tpcowork-settings-launcher { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
 .tpcowork-settings-anchor { flex: 1; min-width: 0; }

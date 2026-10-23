@@ -1,0 +1,1 @@
+PDF starter adapted from tp-cowork/resources/builtin-plugins/pdf-plugin, revision cc02756842ecc19a796593c0878273ebf6b3d31c, under Apache-2.0 (LICENSE.txt). TP Cowork changes: standalone CLI, exclusive output creation, Unicode extraction map, page margins and input validation.

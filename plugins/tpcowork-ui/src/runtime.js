@@ -1,5 +1,5 @@
 /** Create a Client plugin using the host's React instance and the bundle's visual resources. */
-export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, defaultSidebarWidth, brandIcon) {
+export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, defaultSidebarWidth, brandIcon, classes) {
   const id = '@tpcowork/dsh-ui';
   const h = React.createElement;
   const Brand = ({ t }) => h('span', { className: 'tpcowork-brand' },
@@ -10,12 +10,41 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);
   const NotificationSetting = createNotificationSetting(React, primitives);
+  const NavigationControls = createNavigationControls(React, ReactDOM.createPortal, primitives, classes);
   return {
     inject: ['theme', 'slots', 'locale', 'layout', 'configForms'],
     apply(ctx) {
       ctx.effect(() => adaptSidebar(ctx.slots, 264, defaultSidebarWidth), 'tpcowork: sidebar width');
       ctx.effect(() => ctx.theme.overrideTokens(id, tokens), 'tpcowork: theme overrides');
       ctx.effect(() => ctx.locale.register('tpcowork', locales), 'tpcowork: localized labels');
+      adaptDeveloperMode(ctx, React);
+      ctx.inject(['sessions', 'workspaces', 'uiWorkspace', 'shortcuts'], scope => {
+        const navigation = createNavigation(scope);
+        scope.effect(() => () => navigation.dispose(), 'tpcowork: navigation history');
+        const t = scope.locale.bind('tpcowork');
+        for (const [direction, name, code] of [[-1, 'Back', 'BracketLeft'], [1, 'Forward', 'BracketRight']]) {
+          scope.effect(() => scope.shortcuts.register({
+            id: `tpcowork.navigation.${name.toLowerCase()}`, label: () => t(`navigation${name}`),
+            aliases: [name.toLowerCase()],
+            defaults: {
+              ...Object.fromEntries(['desktop:macos', 'desktop:windows', 'desktop:linux']
+                .map(profile => [profile, { code, modifiers: ['primary'] }])),
+              ...Object.fromEntries(['web:macos', 'web:windows']
+                .map(profile => [profile, { code, modifiers: ['primary', 'alt'] }])),
+            },
+            regions: ['page', 'editable'], modals: ['settings'],
+            resolve: ({ modal }) => {
+              if (modal === 'settings' && direction === -1) return { status: 'handled', run: () => primitives.closeTopModal(document) };
+              if (modal !== null) return { status: 'blocked', reason: 'modal' };
+              return { status: 'handled', run: () => navigation.move(direction) };
+            },
+          }), `tpcowork: navigate ${name.toLowerCase()}`);
+        }
+        scope.slots.inject('shell.overlay', () => scope.slots.register({
+          name: 'shell.overlay', id: 'tpcowork-navigation', locale: 'tpcowork',
+          inject: () => ({ navigation, shortcuts: scope.shortcuts }),
+        }, NavigationControls));
+      });
       const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub);
       ctx.effect(() => () => account.dispose(), 'tpcowork: TpcoworkHub account lifetime');
       const preferences = createInterfacePreferences(ctx);

@@ -21,7 +21,7 @@ export function createSettingsLauncher(React, primitives) {
     const avatar = () => h('span', { className: 'tpcowork-profile-avatar', 'aria-hidden': true, 'data-loading': loading },
       signedIn ? Array.from(name.trim())[0]?.toLocaleUpperCase() : h(IconUserOutlineMedium, { size: 18 }));
     const message = preferenceError ? t('preferenceFailed')
-      : account.error ? t(account.error === 'timeout' ? 'authTimeout' : 'authFailed')
+      : account.error === 'timeout' ? t('authTimeout')
       : account.phase === 'committing' ? t('authCommitting')
       : account.status === 'expired' ? t('authExpired') : null;
     const selectedLabel = (label, selected) => h('span', { className: 'tpcowork-profile-option', 'data-selected': selected },

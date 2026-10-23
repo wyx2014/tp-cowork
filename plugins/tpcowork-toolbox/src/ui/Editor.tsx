@@ -55,7 +55,7 @@ function Subpage({ titleId, title, subtitle, section, t, pending, onClose, retur
 }
 
 /** The same page transition, breadcrumb and save toolbar as the automation editor. */
-export function ToolboxEditor({ title, subtitle, section, t, pending, disabled, onClose, onSubmit, submitLabel, children, feedback, returnFocusId, returnScrollTop, className = '', noValidate, toolbarActions }: SubpageProps & {
+export function ToolboxEditor({ title, subtitle, section, t, pending, disabled, onClose, onSubmit, submitLabel, children, feedback, returnFocusId, returnScrollTop, className = '', noValidate, toolbarActions, visual }: SubpageProps & {
   pending: boolean
   disabled?: boolean
   onSubmit(): void
@@ -65,6 +65,7 @@ export function ToolboxEditor({ title, subtitle, section, t, pending, disabled, 
   className?: string
   noValidate?: boolean
   toolbarActions?: React.ReactNode
+  visual?: React.ReactNode
 }) {
   const titleId = React.useId()
   return <form className={`tp-toolbox-editor ${className}`} noValidate={noValidate} aria-labelledby={titleId} aria-busy={pending} onSubmit={event => {
@@ -74,7 +75,7 @@ export function ToolboxEditor({ title, subtitle, section, t, pending, disabled, 
     const details = (event.target as HTMLElement).closest('details')
     if (details) details.open = true
   }}>
-    <Subpage titleId={titleId} title={title} subtitle={subtitle} section={section} t={t} pending={pending} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop} toolbar={<>
+    <Subpage titleId={titleId} title={title} subtitle={subtitle} section={section} t={t} pending={pending} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop} visual={visual} toolbar={<>
       <span className="tp-toolbox-editor-section">{t('editorSettings')}</span>
       <div className="tp-toolbox-editor-actions">{toolbarActions ?? <><button type="button" disabled={pending} onClick={onClose}>{t('cancel')}</button>
         <button type="submit" className="tp-toolbox-primary" disabled={pending || disabled}>{pending ? t('saving') : submitLabel ?? t('save')}</button></>}</div>

@@ -12,6 +12,7 @@ const alias = Object.entries(paths).map(([key, values]) => ({
 }))
 alias.push({ find: /^zod$/, replacement: requireHarness.resolve('zod') })
 alias.push({ find: /^react$/, replacement: resolve(harness, 'packages/client/ui-schedule/node_modules/react/index.js') })
+alias.push({ find: /^react-dom$/, replacement: resolve(harness, 'packages/client/ui-schedule/node_modules/react-dom/index.js') })
 alias.push({ find: /^react\/(.*)$/, replacement: resolve(harness, 'packages/client/ui-schedule/node_modules/react') + '/$1' })
 export default {
   resolve: { alias }, plugins: [standardDecoratorPlugin()],

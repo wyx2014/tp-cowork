@@ -2,8 +2,12 @@
 import { teamZh, teamEn } from './teams/locales.ts'
 import { mcpZh, mcpEn } from './mcp-locales.ts'
 import { callZh, callEn } from './call-locales.ts'
+import { skillZh, skillEn } from './skill-locales.ts'
+import { suggestionsZh, suggestionsEn } from './suggestions/locales.ts'
 
 export const zh = {
+  ...suggestionsZh,
+  ...skillZh,
   ...callZh,
   ...mcpZh,
   ...teamZh,
@@ -59,6 +63,8 @@ export const zh = {
 } as const
 export type UiKey = keyof typeof zh
 export const en: Record<UiKey, string> = {
+  ...suggestionsEn,
+  ...skillEn,
   ...callEn,
   ...mcpEn,
   ...teamEn,

@@ -2,8 +2,10 @@
 import { teamStyles } from './teams/styles.ts'
 import { storeStyles } from './tpcoworkhub/styles.ts'
 import { mcpStyles } from './mcp-styles.ts'
+import { suggestionStyles } from './suggestions/styles.ts'
 
 export const styles = `
+${suggestionStyles}
 .tp-toolbox-sidebar-icon { display:block; flex-shrink:0; }
 .tp-toolbox { min-width:0; min-height:0; width:100%; height:100%; overflow:auto; container-type:inline-size; container-name:toolbox; color:var(--dsw-alias-label-primary); background:var(--dsw-alias-bg-base); font-family:inherit; font-size:14px; line-height:1.6; }
 .tp-toolbox *,.tp-toolbox *::before,.tp-toolbox *::after,.tp-toolbox-dialog * { box-sizing:border-box; }
@@ -150,4 +152,8 @@ export const styles = `
 ${teamStyles}
 ${storeStyles}
 ${mcpStyles}
+
+.tp-skill-heading,.tp-capability-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tp-skill-heading img,.tp-capability-heading img { width: 32px; height: 32px; object-fit: contain; flex: none; }
+.tp-capability-detail-icon { width: 56px; height: 56px; object-fit: contain; flex: none; }
 `

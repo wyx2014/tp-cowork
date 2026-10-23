@@ -1,3 +1,5 @@
+import { skillPresentation, orderSkills } from './skill-presentation.ts'
+import { mcpIcon, teamIcon } from './capability-presentation.ts'
 /** Capability selection contributes to DSH's native Add menu and popup shell. */
 import { IconCordisPluginOutlineRegular, IconSkillOutlineRegular, IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CommandContribution, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
@@ -26,9 +28,9 @@ function optionsOf(category: Category, choice: Choice, t: T): ChoiceOption[] {
   const selectedTeam = catalog.teams.items.find(item => item.id === draft.team?.id)
   const rows: ChoiceOption[] = []
   const toggle = (ids: string[], id: string) => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id]
-  const add = (id: string, label: string, detail: string, active: boolean, reason: string | undefined, patch: SelectionPatch) => {
+  const add = (id: string, label: string, detail: string, active: boolean, reason: string | undefined, patch: SelectionPatch, display?: Pick<SelectOption, 'iconSrc' | 'keywords'>) => {
     rows.push({
-      id: JSON.stringify([catalog.revision, id, active]), label,
+      id: JSON.stringify([catalog.revision, id, active]), label, ...display,
       detail: blocked ?? reason ?? detail, active, disabled: blocked !== undefined || reason !== undefined, patch,
     })
   }
@@ -40,16 +42,17 @@ function optionsOf(category: Category, choice: Choice, t: T): ChoiceOption[] {
         active ? { team: null } : {
           team: { id: team.id, version: team.version, workflowId: team.workflowId },
           skillIds: [...new Set([...draft.skillIds, ...team.requiredSkillIds])],
-        })
+        }, { iconSrc: teamIcon(team.id) })
     }
   } else if (category === 'skills') {
-    for (const skill of catalog.skills.items.filter(item => item.invocation.userInvocable || draft.skillIds.includes(item.id))) {
+    for (const skill of orderSkills(catalog.skills.items).filter(item => item.invocation.userInvocable || draft.skillIds.includes(item.id))) {
       const active = draft.skillIds.includes(skill.id)
       const required = selectedTeam?.requiredSkillIds.includes(skill.id)
-      add(skill.id, `/${skill.name}`, skill.description, active,
+      const display = skillPresentation(skill.name, t)
+      add(skill.id, display.label, display.description ?? skill.description, active,
         required ? t('requiredByTeam') : active ? undefined : !skill.installed ? t('notInstalled')
           : !skill.enabled ? t('disabled') : skill.readiness.state !== 'ready' ? t(skill.readiness.state) : undefined,
-        { skillIds: toggle(draft.skillIds, skill.id) })
+        { skillIds: toggle(draft.skillIds, skill.id) }, display)
     }
   } else {
     for (const mcp of catalog.mcp.items.filter(visibleMcp)) {
@@ -57,7 +60,7 @@ function optionsOf(category: Category, choice: Choice, t: T): ChoiceOption[] {
       add(mcp.id, mcp.label, t(mcp.readiness.state), active,
         active ? undefined : !mcp.installed ? t('notInstalled') : !mcp.enabled ? t('disabled')
           : mcp.readiness.state !== 'ready' ? t(mcp.readiness.state) : undefined,
-        { mcpIds: toggle(draft.mcpIds, mcp.id) })
+        { mcpIds: toggle(draft.mcpIds, mcp.id) }, { iconSrc: mcpIcon(mcp.id) })
     }
   }
   const selectedIds = category === 'teams' ? draft.team ? [draft.team.id] : [] : category === 'skills' ? draft.skillIds : draft.mcpIds

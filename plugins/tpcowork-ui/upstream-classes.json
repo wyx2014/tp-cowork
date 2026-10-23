@@ -38,6 +38,10 @@
     "wide": "WY7D4G_wide",
     "wide-in": "WY7D4G_wide-in"
   },
+  "leading": {
+    "controls": "YnXc6G_controls",
+    "iconButton": "YnXc6G_iconButton"
+  },
   "frame": {
     "bottomRow": "pa6opG_bottomRow",
     "centerCol": "pa6opG_centerCol",

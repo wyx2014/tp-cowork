@@ -4,9 +4,15 @@
     "description": "Presentation layer: adapts branding, themes, the home page, sidebar and General settings through DSH theme, slot and layout services. Keeping appearance changes together makes styling and upstream upgrades easier to maintain."
   },
   "ui": {
+    "developerMode": "Developer mode",
+    "developerModeDescription": "Choose and manage Agent presets, and show execution traces and code diffs. New tasks use Standard mode when disabled.",
     "brand": "TP Cowork",
     "preview": "Preview",
     "automation": "Automation tasks",
+    "navigation": "Navigation history",
+    "navigationBack": "Back",
+    "navigationForward": "Forward",
+    "navigationFailed": "Could not open this page. Try again.",
     "greeting": "What's on your plate today? Leave it to me.",
     "accountMenu": "Account menu",
     "more": "More",
@@ -15,7 +21,6 @@
     "signOut": "Sign out",
     "cancelSignIn": "Cancel sign-in",
     "authCommitting": "Syncing your account…",
-    "authFailed": "TP Cowork Hub sign-in could not finish. Check the service address and network, then retry.",
     "authTimeout": "Sign-in timed out. Try again.",
     "authExpired": "Your session expired. Sign in again.",
     "tasksTitle": "Tasks",

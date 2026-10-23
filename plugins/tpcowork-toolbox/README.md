@@ -2,6 +2,8 @@
 
 `@tpcowork/dsh-toolbox` 是一个 Host + Client 插件。Host 提供管理能力接口，Client 通过 DSH Remote、slots 和失效事件呈现专家团队、技能、MCP 与 TP Cowork Hub 四类页面。管理操作与执行分别由对应 Host 模块和 experts 持有。
 
+首页通过原生 `conversation.input.dock` 扩展加入[“试试这些任务”](../../docs/home-suggestions.md)，在所属会话输入框下显示三条建议，支持换一批、确认关闭及通用设置重新开启。点击只替换可编辑草稿；“演示文档”绑定 `office-pptx`，沿用原生引用与工具箱能力选择，发送仍由用户确认。推荐图标及其许可随插件一起打包。
+
 在此目录执行：
 
 ```sh
@@ -13,7 +15,7 @@ npm run test:artifact
 
 构建使用 `../../deepseek-harness` 已安装的 TypeScript、esbuild、React 和 DSH 声明，不修改该工作区或自动化插件。Host 产物为 `lib/host.js`，浏览器 ModuleLoader 入口为 `lib/client.js`，类型入口为 `lib/types/`。依赖版本与当前 DSH `0.2.1-alpha.2` 对齐。
 
-技能来源与逐项用途见 [技能分类清单](../../docs/toolbox/skills-inventory.md)。当前发布 31 个迁移技能，已移除 `office-documents`、`xlsx`、`portfolio-analysis`、`corporate-ppt`、`docx` 和 `pdf`；升级只清理未经用户修改的产品副本，保留用户自建或编辑的同名技能。
+内置技能由 `resources/skills/` 随包交付。已移除 `office-documents`、`xlsx`、`portfolio-analysis`、`corporate-ppt`、`docx`、`pdf`、`writing-plans`、`write-article`、`weekly-report`、`long-goal`、`memory`、`my`、`weather` 和 `cron`；升级只清理未经用户修改的产品副本，保留用户自建或编辑的同名技能。
 
 `call` 在“工具箱 → 技能 → call → 设置电话”首次配置。每个用户填写自己的四位办公分机号，软件从旧版个人技能目录下的 `call/内部分机信息表.md` 精确匹配话机 IP；重复或缺失分机不会自动选设备。可读取同目录 `config.json` 中同一主叫的 `caller`、`phone_ip`、`pbx_ip`、`scheme`、`outgoing_prefix` 和登录凭据；仅确认保存后才导入凭据。没有旧配置时，首次填写话机登录账号和密码；匹配不到 IP 时，在“话机与分机表设置”填写话机 HTTP(S) 地址。电话服务器与外线前缀沿用参考实现默认值 `12.100.10.9`、`9`，可在同一页面修改；不会预设用户分机号。安装包不携带个人分机表或密码，新电脑需导入企业提供的本机配置或手动填写。
 
@@ -39,7 +41,7 @@ npm run test:artifact
 
 Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱：复用底座已校验的独立 Python 3.12 x64，按带 hash 的 wheel 锁补充 PyYAML，并准备 Playwright Chromium 归档。Windows 的默认解释器是随包的 `runtime/python/python.exe`；Electron 安装后使用完整解包目录中的实际路径，不要求用户安装 Python。macOS 开发环境继续使用原有 Python launcher。完整打包流程和 GitHub 操作见 [Windows 打包](../../docs/windows-github-actions.md)。
 
-`src/composition.ts` 将技能、统一安装器和 MCP 管理接在同一 Loader entry 下。首次启动安装 31 个完整技能目录和三个默认 MCP 引用；之后只增补新默认项或更新未修改的产品资源，保留禁用、移除、同名自定义项和覆盖。配置/版本决定保存在 DSH settings；内置技能副本安装在当前 profile 的 `skills/`，个人技能直接复用旧 GUI 的系统应用数据目录，没有另建执行或安装注册表。聚源和财汇缺凭证时显示 needs_configuration；Playwright 只使用已准备的本地固定 launcher，不在启动时执行 npx 或下载浏览器，也不注册全局 MCP。
+`src/composition.ts` 将技能、统一安装器和 MCP 管理接在同一 Loader entry 下。首次启动安装随包技能目录和三个默认 MCP 引用；之后只增补新默认项或更新未修改的产品资源，保留禁用、移除、同名自定义项和覆盖。配置/版本决定保存在 DSH settings；内置技能副本安装在当前 profile 的 `skills/`，个人技能直接复用旧 GUI 的系统应用数据目录，没有另建执行或安装注册表。聚源和财汇缺凭证时显示 needs_configuration；Playwright 只使用已准备的本地固定 launcher，不在启动时执行 npx 或下载浏览器，也不注册全局 MCP。
 
 技能和专家团队的「详情」在工具箱内打开面包屑页面，与技能编辑器共用页面布局。点击面包屑或「返回列表」回到原清单，保留搜索与技能来源筛选，并恢复列表位置和入口焦点。技能展示正文、资源文件和实际路径；团队展示封面、介绍、任务示例、可展开的报告结构案例、成员职责及协作阶段。任务示例、案例及「使用团队」均只准备独立聊天草稿，保留此前的草稿，由用户确认后发送。
 
@@ -79,3 +81,11 @@ Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱
 能力选择目录的汇总版本跟随配置和可用性。重新打开会话、Host 重启或其他目录项变化时，若已选技能的版本与内容指纹、MCP 配置及团队版本均保持一致且可用，自动采用当前目录版本，可保留同一组能力继续发送；历史执行快照保持不变。恢复期间发送会等待能力选择读取完成，避免将已选技能的消息当作普通聊天。已选技能内容或 MCP 配置变化要求重新确认，禁用、移除、连接失败和不完整目录仍阻止提交。MCP 正常连接、释放、工具数及观测时间变化不会使选择过期；管理写操作继续使用完整目录的版本检查。
 
 下游可以调用 Client 服务 `toolboxNavigation.open('teams' | 'skills' | 'mcp' | 'tpcoworkhub')`。T5/T6 的 UI 入口分别位于 `src/ui/tpcoworkhub/index.tsx`、`src/ui/teams/index.tsx`，接线说明见 `../../docs/toolbox/client-handoff.md`。
+
+## Capability presentation and PDF
+
+Built-in skills use localized names, concise descriptions, and local icons across the skill menu, Toolbox cards, and composer references. Search accepts display names, descriptions, and canonical names. Product tool icons are local SVGs; document and browser icons retain their Zcode Apache-2.0 notices. MCP connectors and expert teams use the same colored SVG tiles in cards, detail pages, selection menus, composer chips, and sent mentions. Artwork is keyed by stable catalog IDs (including distinct Juyuan, Caihui, Playwright, stock-research, and supply-chain icons); custom connectors and other teams receive category defaults. Names, selections, and invocation identities are preserved.
+
+The skill menu, Toolbox cards, suggestions, and composer references display 电子表格 (`office-xlsx`), Word 文档 (`office-docx`), 演示文档 (`office-pptx`), and PDF (`office-pdf`) with local Zcode icons and concise localized descriptions. The four document skills appear first. Search accepts friendly names and canonical names; selection, clipboard text and invocation keep canonical skill identities. Assets retain their Apache-2.0 notices.
+
+`office-pdf` bundles the reference project's dependency-free Chinese/English text PDF starter. It creates a new file, paginates, and includes Unicode text extraction metadata. Rich layout uses the existing Office skills and bundled LibreOffice conversion; OCR, form editing, merge and split require an available tool. The new canonical name avoids resurrecting retired `pdf` resources or replacing user-owned copies. It adds no startup downloads.

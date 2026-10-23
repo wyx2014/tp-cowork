@@ -2,6 +2,12 @@
   disabled: true
 - id: ui-settings-plugins
   disabled: true
+- id: ui-settings
+  config:
+    enabled: false
+- id: ui-settings-models
+  config:
+    providerCatalog: false
 - insert:
     - id: tpcowork-ui
       name: '@tpcowork/dsh-ui'

@@ -1,3 +1,4 @@
+import { skillPresentation, orderSkills } from './skill-presentation.ts'
 import * as React from 'react'
 import { Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Catalog, SkillItem } from '../contracts/index.ts'
@@ -26,8 +27,8 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
   const archiveInput = React.useRef<HTMLInputElement>(null)
   const editorId = React.useId()
   const items = load.value?.items ?? []
-  const sources = items.filter(item => source === 'all' || (item.origin === 'bundled') === (source === 'bundled'))
-  const rows = sources.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const sources = orderSkills(items).filter(item => source === 'all' || (item.origin === 'bundled') === (source === 'bundled'))
+  const rows = sources.filter(item => `${skillPresentation(item.name, t).label} ${skillPresentation(item.name, t).description ?? ''} ${skillPresentation(item.name, t).keywords.join(' ')} ${item.description}`.toLowerCase().includes(query.trim().toLowerCase()))
   const usable = available && load.value?.complete === true && !load.loading && !load.failed
   const mutable = usable && !operation.busy
   const usableRef = React.useRef(usable)
@@ -72,7 +73,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
     {load.value && !load.value.complete && <p role="alert">{t('incomplete')}</p>}{operation.feedback}{imported && <p role="status">{t('imported')}</p>}
     {!!items.length && !rows.length && <p className="tp-toolbox-empty">{t('noMatches')}</p>}
     <div className="tp-toolbox-grid">{rows.map(item => <article className="tp-toolbox-card" key={item.id}>
-      <div className="tp-toolbox-card-body"><header><h3>/{item.name}</h3><ReadinessBadge value={item.readiness} t={t} /></header><p className="tp-toolbox-card-description">{item.description}</p>
+      <div className="tp-toolbox-card-body"><header><h3 className="tp-skill-heading">{skillPresentation(item.name, t).iconSrc && <img src={skillPresentation(item.name, t).iconSrc} alt="" />}<span>{skillPresentation(item.name, t).label}</span></h3><ReadinessBadge value={item.readiness} t={t} /></header><p className="tp-toolbox-card-description">{skillPresentation(item.name, t).description ?? item.description}</p>
       <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')} · {t(item.enabled ? 'enabled' : 'disabled')} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'tpcoworkhub' ? 'tpcoworkhub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
       <Reasons value={item.readiness} /></div>
       <div className="tp-toolbox-actions"><Button id={`${editorId}-detail-${item.id}`} onClick={event => setDetail({ item, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button>
@@ -82,7 +83,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
         {item.origin === 'user' && item.managed !== false && <Button id={`${editorId}-update-${item.id}`} disabled={!mutable || !item.installed} onClick={() => importSkill(item)}>{t('update')}</Button>}
         {item.managed !== false && <Button disabled={!mutable || !item.installed} onClick={() => setRemoving({ item, revision: load.value!.revision })}>{t('remove')}</Button>}</div>
     </article>)}</div>
-    {removing && <ConfirmRemove name={removing.item.name} busy={operation.busy} disabled={!mutable} feedback={operation.feedback} t={t} onClose={() => setRemoving(null)} onConfirm={() => {
+    {removing && <ConfirmRemove name={skillPresentation(removing.item.name, t).label} busy={operation.busy} disabled={!mutable} feedback={operation.feedback} t={t} onClose={() => setRemoving(null)} onConfirm={() => {
       mutate(async () => { await actions.skillRemove({ id: removing.item.id, expectedRevision: removing.revision }); setRemoving(null); await actions.refreshSkills() }, 'removed')
     }} />}
   </SectionLayout>
@@ -99,7 +100,7 @@ function SkillDetail({ item, read, openDirectory, t, onClose, returnFocusId, ret
     return () => { active = false }
   }, [item.id, read, retry])
   const skill = detail?.item ?? item
-  return <ToolboxDetail title={`/${skill.name}`} subtitle={skill.description} section="skills" t={t} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop}
+  return <ToolboxDetail title={skillPresentation(skill.name, t).label} subtitle={skillPresentation(skill.name, t).description ?? skill.description} section="skills" t={t} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop}
     actions={skill.origin !== 'bundled' && skill.path && <Button icon={<ToolboxIcon name="folder" />} disabled={operation.busy} onClick={() => { void operation.run(() => openDirectory(skill.path!.slice(0, Math.max(skill.path!.lastIndexOf('/'), skill.path!.lastIndexOf('\\')) + 1)), null) }}>{t('openSkillDirectory')}</Button>}>
     {operation.feedback}
     <section className="tp-toolbox-detail-section"><ReadinessBadge value={skill.readiness} t={t} /><Reasons value={skill.readiness} />

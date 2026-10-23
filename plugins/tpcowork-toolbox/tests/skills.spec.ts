@@ -14,7 +14,7 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
 
   it('installs, disables in /name and loader, survives restart, re-enables and removes with tombstone', async () => {
     const { ctx, installer, start, dir } = await skillsFixture()
-    const installed = await installer.install({ requestId: 'memory', source: { kind: 'bundled', resourceId: 'memory' }, scope: { kind: 'user' }, conflict: 'reject' })
+    const installed = await installer.install({ requestId: 'brainstorming', source: { kind: 'bundled', resourceId: 'brainstorming' }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(installed.state).toBe('installed')
     const list = () => ctx.typertGateway.invoke({ namespace: 'toolboxSkills', method: 'inventory', args: { request: {} } })
     const catalog = await ctx.toolboxSkills.inventory({})
@@ -29,12 +29,12 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
     const disabled = await ctx.toolboxSkills.setEnabled({ id: installed.skillId!, enabled: false, expectedRevision: catalog.revision })
     expect(disabled.items[0]?.enabled).toBe(false)
     expect(await ctx.skills.list()).toEqual([])
-    expect(await ctx.skills.get('memory')).toBeUndefined()
+    expect(await ctx.skills.get('brainstorming')).toBeUndefined()
     const restarted = await start()
-    expect(await restarted.skills.get('memory')).toBeUndefined()
+    expect(await restarted.skills.get('brainstorming')).toBeUndefined()
     const restored = await restarted.toolboxSkills.inventory({})
     const enabled = await restarted.toolboxSkills.setEnabled({ id: installed.skillId!, enabled: true, expectedRevision: restored.revision })
-    expect((await restarted.skills.get('memory'))?.content).toContain('DSH')
+    expect((await restarted.skills.get('brainstorming'))?.content).toContain('方案')
     expect((await restarted.toolboxSkills.checkReadiness({ id: installed.skillId! })).readiness.state).toBe('ready')
     await restarted.toolboxSkills.remove({ id: installed.skillId!, expectedRevision: enabled.revision })
     expect(await restarted.skills.list()).toEqual([])
@@ -55,11 +55,11 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
     expect(await ctx.skills.list()).toEqual([])
   })
 
-  it('installs the 31 retained migrated skills without the six retired names', async () => {
+  it('installs the current bundled skills without retired names', async () => {
     const { ctx, installer, bundledRoot } = await skillsFixture()
     const names = await readdir(bundledRoot)
-    expect(names.length).toBe(31)
-    for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf']) expect(names).not.toContain(name)
+    expect(names.length).toBe(24)
+    for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(names).not.toContain(name)
     for (const name of names) {
       const result = await installer.install({ requestId: name, source: { kind: 'bundled', resourceId: name }, scope: { kind: 'user' }, conflict: 'reject' })
       expect(result.error, name).toBeUndefined()

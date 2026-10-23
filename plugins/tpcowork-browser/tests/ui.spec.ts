@@ -12,11 +12,12 @@ import * as CordisUI from '../../../../deepseek-harness/packages/extensions/ui-c
 import { ViewportInputs, useOperationActive, useResizeWarning } from '../src/viewport.jsx'
 import { BrowserSurface, viewportScale } from '../src/pane.jsx'
 import { importSummary } from '../src/import-summary.js'
-import { ImportPrompt, RUN, importPromptPending } from '../src/import-prompt.jsx'
+import { ImportPrompt } from '../src/import-prompt.jsx'
+import { IMPORT_PROMPT_DEFER_MS, importPromptPending } from '../src/import-preferences.js'
 import { en } from '../src/locales.js'
 
 const t = (key: string) => (en as Record<string, string>)[key] ?? key
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear() })
 
 it('commits a viewport size on Enter or blur, rejects out-of-range input and resets on Escape', () => {
   const onChange = vi.fn()
@@ -152,10 +153,10 @@ assembled('shows the page favicon or the operating indicator in the tab title, a
   expect(pending.getByText('Certificate setting saved. Restart the app to take effect.')).toBeTruthy()
 }, 60000)
 
-it('offers the Chrome import once per run until the person imports or declines it for good', async () => {
+it('defers the Chrome import for five days on Not now or Escape, and remembers a permanent decline', async () => {
+  const now = Date.now()
+  vi.spyOn(Date, 'now').mockReturnValue(now)
   expect(importPromptPending(undefined)).toBe(true)
-  expect(importPromptPending({ deferredRun: RUN })).toBe(false)
-  expect(importPromptPending({ deferredRun: 'an earlier run' })).toBe(true)
   expect(importPromptPending({ choice: 'dismissed' })).toBe(false)
   expect(importPromptPending({ choice: 'imported' })).toBe(false)
 
@@ -170,9 +171,9 @@ it('offers the Chrome import once per run until the person imports or declines i
   fireEvent.click(failing.getByRole('button', { name: 'Import cookies' }))
   expect((await failing.findByRole('alert')).textContent).toMatch(/Chrome profile is in use/)
   fireEvent.click(failing.getByRole('button', { name: 'Not now' }))
-  expect(onDecide).toHaveBeenLastCalledWith({ deferredRun: RUN })
+  expect(onDecide).toHaveBeenLastCalledWith({ deferredUntil: now + IMPORT_PROMPT_DEFER_MS })
   fireEvent.keyDown(failing.getByRole('button', { name: 'Try again' }), { key: 'Escape' })
-  expect(onDecide).toHaveBeenLastCalledWith({ deferredRun: RUN })
+  expect(onDecide).toHaveBeenLastCalledWith({ deferredUntil: now + IMPORT_PROMPT_DEFER_MS })
   fireEvent.click(failing.getByRole('button', { name: "Don't show again" }))
   expect(onDecide).toHaveBeenLastCalledWith({ choice: 'dismissed' })
   failing.unmount()
@@ -186,3 +187,47 @@ it('offers the Chrome import once per run until the person imports or declines i
   expect(onDecide).toHaveBeenLastCalledWith({ choice: 'imported' })
   expect(onImport).toHaveBeenCalledOnce()
 })
+
+assembled('shares the import decision across browser panes, conversations and plugin restarts', async ({ start }) => {
+  const request = vi.fn(async (op: string) => op === 'snapshot'
+    ? { enabled: true, tabs: [], downloads: [], permissions: {}, requests: [] }
+    : { success: true })
+  vi.stubGlobal('dshDesktop', { browserAutomation: { subscribe: () => () => {}, request } })
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} })
+  const c = await start()
+  const pane = () => c.ctx.slots.entries('sidebar.right.pane.tab').find(row => row.options.key === ID)!
+  const mountPane = (sessionId: string, tabId: string) => {
+    const entry = pane()
+    const injected = entry.inject!({} as never) as any
+    const scoped = (entry.store as ReturnType<typeof stores.defineStore>).create(sessionId)
+    const tab = { id: tabId, visible: true, navigation: {}, actions: { bindCommands: () => () => {} } }
+    return render(React.createElement(entry.component, {
+      ...injected, sessionId, t, useTabInfo: () => ({ tab }),
+      useStore: (select: any) => select(React.useSyncExternalStore(scoped.subscribe, scoped.getSnapshot)), actions: scoped.actions,
+      useBrowser: (select: any) => select({ enabled: true, tabs: [], bindings: {}, operations: {}, operationUntil: {} }),
+      useImportPrompt: (select: any) => select(React.useSyncExternalStore(injected.hooks.importPrompt.subscribe, injected.hooks.importPrompt.getSnapshot)),
+      mount: async () => () => {}, unmount: () => {},
+    }))
+  }
+  const first = mountPane('first-conversation', 'first-tab')
+  fireEvent.click(await first.findByRole('button', { name: "Don't show again" }))
+  expect(first.queryByRole('dialog', { hidden: true })).toBeNull()
+  first.unmount()
+  for (const [sessionId, tabId] of [['first-conversation', 'new-tab'], ['second-conversation', 'other-tab']]) {
+    const next = mountPane(sessionId, tabId)
+    expect(next.queryByRole('dialog', { hidden: true })).toBeNull()
+    next.unmount()
+  }
+  await c.reload(ID)
+  const restarted = mountPane('third-conversation', 'restarted-tab')
+  expect(restarted.queryByRole('dialog', { hidden: true })).toBeNull()
+  restarted.unmount()
+
+  // Manual import in Settings also suppresses future offers, even before closing its result card.
+  const injected = pane().inject!({} as never) as any
+  act(() => injected.decideImportPrompt({}))
+  await injected.request('importChrome')
+  await c.reload(ID)
+  const imported = mountPane('fourth-conversation', 'imported-tab')
+  expect(imported.queryByRole('dialog', { hidden: true })).toBeNull()
+}, 60000)

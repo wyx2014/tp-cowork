@@ -19,6 +19,18 @@ export function upstreamStyles(modules) {
   rule('sidebar', 'logoRow', 'height: var(--dsh-sidebar-brand-height); padding: var(--dsh-sidebar-brand-padding);');
   rule('sidebar', 'brandMark', 'display: var(--dsh-sidebar-brand-mark-display);');
   rule('sidebar', 'brandName', 'font-weight: var(--dsh-sidebar-brand-weight);');
+  rule('sidebar', 'topStrip', 'justify-content: flex-start; padding-left: 88px; gap: 4px;', mac);
+  rule('sidebar', 'topStrip', 'padding-left: 12px;', 'html[data-platform="darwin"][data-fullscreen] body[data-tpcowork-ui]');
+  rule('leading', 'controls', 'gap: 4px;');
+  rules.push(`${selector('leading', 'iconButton')}:last-of-type { order: 1; }`);
+  const web = 'html:not([data-platform="darwin"]):not([data-windows-titlebar]) body[data-tpcowork-ui]';
+  rule('sidebar', 'logoRow', 'height: auto; min-height: 72px; flex-wrap: wrap; justify-content: flex-start; gap: 4px;', expanded(web));
+  rule('sidebar', 'brand', 'order: 1; flex-basis: 100%; margin-top: 4px;', expanded(web));
+  rules.push(`${web} .${className('sidebar', 'collapsed')} .${className('sidebar', 'logoRow')} { height: auto; flex-direction: column; gap: 4px; }`);
+  rules.push(`${web} .${className('sidebar', 'collapsed')} .tpcowork-navigation { flex-direction: column; }`);
+  rule('sidebar', 'newSession', 'left: 108px;', 'html[data-windows-titlebar] body[data-tpcowork-ui] .' + className('sidebar', 'collapsed'));
+  rule('frame', 'frame', '--dsh-frame-leading-clearance: 224px;', mac + ':has([data-shell-leading])');
+  rule('frame', 'frame', '--dsh-frame-leading-clearance: 148px;', 'html[data-platform="darwin"][data-fullscreen] body[data-tpcowork-ui]:has([data-shell-leading])');
   rule('sidebar', 'newSession', `justify-content: var(--dsh-sidebar-action-align);
     height: var(--dsh-sidebar-action-height); padding: var(--dsh-sidebar-action-padding);
     margin: var(--dsh-sidebar-action-margin); border-style: var(--dsh-sidebar-action-border-style);
@@ -38,6 +50,11 @@ export function upstreamStyles(modules) {
   rule('hero', 'fishHitbox', 'flex: 1; min-width: 0; max-width: 100%;');
   rule('conversation', 'composerHero', `width: min(calc(var(--dsh-hero-width)
     + 2 * var(--dsh-composer-side-clearance)), 100%);`);
+  // 参考页按 29dvh 设置顶部留白，避免推荐列表的高度把输入框向上挤。
+  rules.push(`${scope} [data-content-phase="hero"] .${className('conversation', 'scrollBody')} {
+    justify-content: flex-start; padding-top: max(52px, 29dvh); box-sizing: border-box;
+  }`);
+  rule('conversation', 'composerHero', 'padding-bottom: 16px;');
   rule('input', 'root', 'padding: var(--dsh-composer-padding);');
   rule('input', 'card', `gap: var(--dsh-composer-gap); padding-top: var(--dsh-composer-top-padding);
     border-radius: var(--dsh-composer-radius);`);

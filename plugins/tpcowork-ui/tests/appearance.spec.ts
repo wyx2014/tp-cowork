@@ -52,12 +52,13 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
   const instance = { getSnapshot: () => snapshot, actions: { setSidebar: (width: number) => { snapshot.layoutInfo.sidebar = width } },
     subscribe: () => () => {} }
   plugin.apply({
+    inject: () => () => {},
     effect: (effect: () => () => void) => { disposers.push(effect()) },
     theme: { overrideTokens: () => () => {}, getTheme: () => ({ preference: 'system' }) },
     locale: { register: () => () => {}, bind: () => () => '', getLocale: () => ({ locales: [] }), subscribe: () => () => {} },
     configForms: { get: () => ({ getSnapshot: () => ({}), subscribe: () => () => {} }) }, on: () => () => {},
     slots: {
-      entries: () => [{ store: { create: () => instance } }],
+      entries: (name: string) => name === 'root' ? [{ store: { create: () => instance } }] : [],
       subscribe: () => () => {},
       inject: (_name: string, effect: () => () => void) => { disposers.push(effect()) },
       register: (options: { name: string }, component: React.FunctionComponent<{ t: (key: string) => string }>) => {

@@ -2,15 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Floating } from './pane.jsx';
 import { Icon } from './icons.jsx';
 import { importSummary } from './import-summary.js';
+import { deferImportPrompt } from './import-preferences.js';
 
-/** This app run's identity: "Not now" hides the prompt until the application starts again. */
-export const RUN = Math.random().toString(36).slice(2);
 const cover = rect => ({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
-
-/** Ask until the person imports, declines for good, or defers for this run. */
-export function importPromptPending(prompt) {
-  return prompt?.choice !== 'imported' && prompt?.choice !== 'dismissed' && prompt?.deferredRun !== RUN;
-}
 
 /**
  * The first-use offer to bring Chrome sign-ins into this browser. It runs the same import as
@@ -27,7 +21,7 @@ export function ImportPrompt({ anchor, onImport, onDecide, t }) {
     catch (error) { setResult({ success: false, message: `${t('error')}: ${error.message}` }); }
     finally { setBusy(false); }
   };
-  const later = () => { if (!busy) onDecide(result?.success ? { choice: 'imported' } : { deferredRun: RUN }); };
+  const later = () => { if (!busy) onDecide(result?.success ? { choice: 'imported' } : deferImportPrompt()); };
   return <Floating anchor={anchor} place={cover} className="tpcb-import-scrim" onKeyDown={event => { if (event.key === 'Escape') later(); }}>
     <section className="tpcb-import" role="dialog" aria-modal="true" aria-labelledby="tpcb-import-title" aria-describedby="tpcb-import-intro">
       <div className="tpcb-import-logo" aria-hidden="true"><span className="tpcb-chrome" /></div>

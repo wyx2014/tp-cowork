@@ -1,6 +1,6 @@
 /** Release upgrades through the single real profile entry, without a second installation database. */
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
-import { readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, rm, writeFile, mkdir, cp } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -134,7 +134,7 @@ it('retires removed bundled skills on upgrade and preserves modified or custom c
   const { start, dir, skill } = await fixture()
   const ctx = await start()
   const installer = requireInstaller(ctx)
-  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf']) {
+  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) {
     await skill(name, 'v1')
     const result = await installer.install({ requestId: name, source: { kind: 'bundled', resourceId: name }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(result.state).toBe('installed')
@@ -143,11 +143,27 @@ it('retires removed bundled skills on upgrade and preserves modified or custom c
   await rm(join(dir, 'skills/portfolio-analysis', markerName), { force: true })
   await ctx.fiber.dispose()
   const upgraded = await start()
-  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf']) expect(await upgraded.skills.get(name)).toBeUndefined()
+  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(await upgraded.skills.get(name)).toBeUndefined()
   expect((await upgraded.skills.get('xlsx'))?.content).toContain('User override')
   expect((await upgraded.skills.get('portfolio-analysis'))?.content).toContain('v1')
   expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('office-documents')
   await upgraded.fiber.dispose()
   const restarted = await start()
-  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf']) expect(await restarted.skills.get(name)).toBeUndefined()
+  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(await restarted.skills.get(name)).toBeUndefined()
+})
+
+
+it('installs the new PDF starter while preserving a user-owned legacy pdf skill', async () => {
+  const { start, home, dir } = await fixture()
+  await cp(new URL('../resources/skills/office-pdf/', import.meta.url), join(home, 'release/office-pdf'), { recursive: true })
+  await mkdir(join(dir, 'skills/pdf'), { recursive: true })
+  await writeFile(join(dir, 'skills/pdf/SKILL.md'), '---\nname: pdf\ndescription: My PDF workflow\n---\nKeep my workflow\n')
+  const ctx = await start()
+  expect((await ctx.skills.get('office-pdf'))?.content).toContain('scripts/create.mjs')
+  expect(await readFile(join(dir, 'skills/office-pdf/scripts/create.mjs'), 'utf8')).toContain('createDocument')
+  expect((await ctx.skills.get('pdf'))?.content).toContain('Keep my workflow')
+  await ctx.fiber.dispose()
+  const again = await start()
+  expect((await again.skills.get('office-pdf'))?.content).toContain('scripts/create.mjs')
+  expect((await again.skills.get('pdf'))?.content).toContain('Keep my workflow')
 })

@@ -7,6 +7,7 @@ import { operationFailure } from './shared.tsx'
 import { McpFormError } from './mcp-form.ts'
 import { generatedMcpId, newPair, previewMcpImport, serverForm, serverValues, type ImportRow, type McpPair, type ServerForm } from './mcp-editor-form.ts'
 import type { UiKey } from './locales.ts'
+import { mcpIcon } from './capability-presentation.ts'
 
 export function McpEditor({ item, revision, items, available, actions, t, onClose, returnFocusId, returnScrollTop }: {
   item: McpItem | null; revision: number; items: McpItem[]; available: boolean; actions: SectionProps['actions']; t: SectionProps['t']; onClose(): void; returnFocusId: string; returnScrollTop: number
@@ -94,6 +95,7 @@ export function McpEditor({ item, revision, items, available, actions, t, onClos
   const blocked = !available || loading || loadFailed || !!busy
   const title = t(item ? 'editMcpServer' : 'addMcpServer')
   return <ToolboxEditor title={title} subtitle={t('mcpEditorHint')} section="mcp" t={t} className="tp-mcp-editor" noValidate
+    visual={<img className="tp-capability-detail-icon" src={mcpIcon(saved?.id ?? item?.id ?? '')} alt="" />}
     pending={!!busy && busy !== 'probe'} disabled={blocked} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop}
     onClose={close} onSubmit={() => { if (mode === 'import') { if (canImport) void commitImport() } else void submit(false) }}
     toolbarActions={<>

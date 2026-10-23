@@ -4,9 +4,15 @@
     "description": "界面表现层：负责品牌、主题、首页、侧栏和通用设置的展示适配，通过 DSH 的主题、插槽和布局服务统一外观。界面定制集中维护，便于独立更换样式和跟随底座升级。"
   },
   "ui": {
+    "developerMode": "开发者模式",
+    "developerModeDescription": "开启后可选择和管理 Agent 预设，并显示执行轨迹与代码差异。关闭后，新任务使用标准模式。",
     "brand": "TP Cowork",
     "preview": "预览版",
     "automation": "自动化",
+    "navigation": "浏览历史",
+    "navigationBack": "后退",
+    "navigationForward": "前进",
+    "navigationFailed": "无法打开此页面，请重试。",
     "greeting": "今天有什么工作，交给我吧",
     "accountMenu": "账号菜单",
     "more": "更多",
@@ -15,7 +21,6 @@
     "signOut": "退出登录",
     "cancelSignIn": "取消登录",
     "authCommitting": "正在同步登录状态…",
-    "authFailed": "TP Cowork Hub 认证未完成，请检查服务地址和网络后重试",
     "authTimeout": "登录已超时，请重试",
     "authExpired": "登录已过期，请重新登录",
     "tasksTitle": "任务",

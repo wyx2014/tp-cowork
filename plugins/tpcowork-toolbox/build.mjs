@@ -20,6 +20,7 @@ const paths = {
   zod: [resolve(harness, 'node_modules/zod')],
   yaml: [resolve(harness, 'packages/skill/skill-filesystem/node_modules/yaml')],
   react: [resolve(harness, 'apps/web/node_modules/@types/react/index.d.ts')],
+  'react-dom': [resolve(harness, 'apps/web/node_modules/@types/react-dom/index.d.ts')],
 }
 async function collect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -73,12 +74,15 @@ await build({ ...common, entryPoints: {
   ...optionalEntries,
 }, outdir: output, splitting: true, banner: { js: "import { createRequire as __toolboxCreateRequire } from 'node:module'; const require = __toolboxCreateRequire(import.meta.url);" } })
 const client = await build({ ...common, entryPoints: [resolve(root, 'src/client.ts')],
+  loader: { '.png': 'dataurl' },
   platform: 'browser', target: 'es2022', format: 'cjs', write: false,
 })
 await writeFile(resolve(output, 'client.js'), `window.__ModuleLoader__.load({id:'@tpcowork/dsh-toolbox',factory(require){const module={exports:{}};const exports=module.exports;\n${client.outputFiles[0].text}\nreturn module.exports;}});\n`)
 await mkdir(resolve(output, 'licenses'), { recursive: true })
 await cp(resolve(harness, 'node_modules/zod/LICENSE'), resolve(output, 'licenses/zod.txt'))
 await cp(resolve(harness, 'LICENSE'), resolve(output, 'licenses/deepseek-harness.txt'))
+await cp(resolve(root, 'src/ui/suggestions/assets/LICENSE.txt'), resolve(output, 'licenses/task-suggestion-icons.txt'))
+await cp(resolve(root, 'src/ui/suggestions/assets/NOTICE.md'), resolve(output, 'licenses/task-suggestion-icons-notice.md'))
 await cp(resolve(root, 'runtime-scripts/playwright-launcher.mjs'), resolve(output, 'playwright-launcher.mjs'))
 await writeFile(resolve(output, 'optional-modules.json'), JSON.stringify({ schemaVersion: 1, artifacts: Object.keys(optionalEntries) }, null, 2) + '\n')
 // The desktop shell only ever dynamically imports this one file through a thin, generic loader

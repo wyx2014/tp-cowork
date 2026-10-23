@@ -1,3 +1,5 @@
+import { skillPresentation, skillReferenceStyles } from './skill-presentation.ts'
+import { capabilityReferenceStyles } from './capability-presentation.ts'
 /** Registration owns services and effects; components receive callbacks and framework hooks. */
 import * as React from 'react'
 import type { Context } from '@deepseek-ai/cordis'
@@ -28,6 +30,9 @@ import { bindInlineCapabilities, capabilityClipboardText, capabilityReferenceSou
 import type { UiActions, UiInjected } from './types.ts'
 import { en, zh, type UiKey } from './locales.ts'
 import { styles } from './styles.ts'
+import { registerSuggestions } from './suggestions/register.tsx'
+import { prepareSuggestion } from './suggestions/prepare.ts'
+import { suggestionSkillLabel } from './suggestions/catalog.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' { interface LocaleNamespaceMap { 'tpcowork.toolbox': UiKey } }
 const namespace = 'tpcowork.toolbox'
@@ -40,7 +45,7 @@ export const uiDependencies = [
 export function registerToolboxUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(namespace, { en, zh }))
   ctx.effect(() => {
-    const style = document.createElement('style'); style.dataset.plugin = '@tpcowork/dsh-toolbox'; style.textContent = styles
+    const style = document.createElement('style'); style.dataset.plugin = '@tpcowork/dsh-toolbox'; style.textContent = styles + skillReferenceStyles + capabilityReferenceStyles
     document.head.append(style); return () => style.remove()
   })
   const remote: ClientRemote = ctx.remote
@@ -57,7 +62,7 @@ export function registerToolboxUi(ctx: Context): void {
     const input = ctx.conversation.input.for(binding.ctx)
     // popupFor's public wiring face is opaque; its observable state is shared with the native overlay.
     const popup = ctx.commandUi.popupFor(binding.ctx) as { state: ObservableSnapshot<{ readonly open: boolean }> }
-    const unbind = bindInlineCapabilities(model, sessionId, input, popup.state)
+    const unbind = bindInlineCapabilities(model, sessionId, input, popup.state, name => suggestionSkillLabel(name, t))
     const dispose = () => { unbind(); inlineBindings.delete(binding) }
     inlineBindings.set(binding, dispose)
     binding.ctx.effect(() => dispose)
@@ -66,7 +71,7 @@ export function registerToolboxUi(ctx: Context): void {
     trigger: '@', name: capabilityReferenceSource,
     candidates: async () => [], onPick: () => 'handled',
     warm: session => { if (ctx.sessions.subagentAddress(session.sessionId) === undefined) void model.loadChoice(session.sessionId) },
-    textReferences: session => capabilityTextReferences(model.state.getSnapshot().choices[session.sessionId]),
+    textReferences: session => capabilityTextReferences(model.state.getSnapshot().choices[session.sessionId], name => skillPresentation(name, t)),
     subscribeLexicon: (_session, listener) => model.state.subscribe(listener),
     codec: { clipboardText: capabilityClipboardText, serialize: async ref => capabilityClipboardText(ref) },
     openReference: (session, reference) => removeInlineCapability(model, session.sessionId, reference.ref),
@@ -98,6 +103,11 @@ export function registerToolboxUi(ctx: Context): void {
     loadChoice: (sessionId, confirm) => { bindInline(sessionId); return model.loadChoice(sessionId, confirm) }, choose: (sessionId, patch) => model.choose(sessionId, patch),
   }
   const injected = (): UiInjected => ({ ...actions, hooks: { toolbox: model.state } })
+  registerSuggestions(ctx, { t, prepare: async (sessionId, item, signal) => {
+    const binding = ctx.sessions.binding(sessionId as SessionId)
+    if (!binding) return 'cancelled'
+    return prepareSuggestion({ sessionId, item, signal, model, t, input: ctx.conversation.input.for(binding.ctx), loadChoice: () => actions.loadChoice(sessionId) })
+  } })
   for (const contribution of choiceCommands({
     ...actions, t,
     choice: sessionId => model.state.getSnapshot().choices[sessionId],

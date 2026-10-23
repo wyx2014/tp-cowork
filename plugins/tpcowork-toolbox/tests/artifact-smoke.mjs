@@ -38,7 +38,7 @@ try {
   const requireReact = createRequire(resolve(harness, 'packages/client/ui-schedule/package.json'))
   const baseline = new Set(['@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-primitives'])
   const client = registration.factory(name => {
-    if (name === 'react') return requireReact(name)
+    if (name === 'react' || name === 'react-dom') return requireReact(name)
     assert.ok(baseline.has(name), `unexpected Client runtime dependency: ${name}`)
     // This facade smoke does not mount UI; ui-components covers the real shared primitives.
     return {}

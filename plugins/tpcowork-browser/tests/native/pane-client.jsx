@@ -28,9 +28,10 @@ function App() {
   if (!nativeId) return null;
   const tab = { id: 'ui', visible: true, signal: new AbortController().signal, navigation: { params: { nativeId } }, actions: { bindCommands: () => () => {} } };
   // The first-use import offer appears only in captures that ask for it.
-  const stored = { byTab: {}, importPrompt: PANE_IMPORT ? undefined : { choice: 'dismissed' } };
+  const stored = { byTab: {} };
   const props = { useTabInfo: () => ({ tab }), useBrowser, useStore: select => select(stored), request, fail, t, sessionId: 'visual',
-    actions: { bind: () => {}, importPrompt: () => {} }, reveal: () => {}, mount: async value => { anchors.set(nativeId, value.element); return () => {}; }, unmount: () => {} };
+    useImportPrompt: select => select(PANE_IMPORT ? {} : { choice: 'dismissed' }), decideImportPrompt: () => {},
+    actions: { bind: () => {} }, reveal: () => {}, mount: async value => { anchors.set(nativeId, value.element); return () => {}; }, unmount: () => {} };
   return <BrowserBody {...props} />;
 }
 function Title() {

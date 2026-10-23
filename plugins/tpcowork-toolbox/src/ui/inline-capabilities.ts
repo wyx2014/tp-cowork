@@ -5,15 +5,16 @@ import type { ReferenceInsert, SessionInput } from '@deepseek-ai/dsh-client-ui-c
 import type { UserTextReference } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Choice, ToolboxModel } from '../client/model.ts'
 import type { SelectionDraft, TeamItem } from '../contracts/index.ts'
+import { mcpIcon, teamIcon } from './capability-presentation.ts'
 
 /** Stable codec identity of the toolbox's inline composer selection. */
 export const capabilityReferenceSource = 'toolbox-capabilities'
 type Kind = 'team' | 'skill' | 'mcp'
 type Capability = { kind: Kind; id: string; label: string }
 
-function reference(value: Capability): ReferenceInsert {
+function reference(value: Capability, skillLabel: (name: string) => string = name => name): ReferenceInsert {
   const ref = JSON.stringify([value.kind, value.id, value.label])
-  return { source: capabilityReferenceSource, ref, label: value.label, appearance: value.kind, clipboardText: capabilityClipboardText(ref) }
+  return { source: capabilityReferenceSource, ref, label: value.kind === 'skill' ? skillLabel(value.label) : value.label, appearance: value.kind, clipboardText: capabilityClipboardText(ref) }
 }
 
 /**
@@ -64,17 +65,19 @@ export function capabilityClipboardText(ref: string): string {
  * Identify sent mentions independently of the current draft selection.
  * Disabled catalog entries remain recognizable in historical messages.
  * @param choice - the Session's loaded catalog.
+ * @param presentation - optional localized labels and images; lookup names stay canonical.
  * @returns exact semantic mentions, or undefined before the catalog loads.
  */
-export function capabilityTextReferences(choice: Choice | undefined): readonly UserTextReference[] | undefined {
+export function capabilityTextReferences(choice: Choice | undefined, presentation?: (name: string) => { label: string; iconSrc?: string }): readonly UserTextReference[] | undefined {
   const catalog = choice?.catalog
   if (!catalog) return undefined
   return [
     ...catalog.skills.items.map(item => ({ text: `$${item.name}`, kind: 'skill' as const, name: item.name,
       ...(item.path === undefined ? {} : { path: item.path }),
+      ...(presentation?.(item.name)),
     })),
-    ...catalog.mcp.items.map(item => ({ text: `@${item.label}`, kind: 'mcp' as const, name: item.label })),
-    ...catalog.teams.items.map(item => ({ text: `@${item.name}`, kind: 'team' as const, name: item.name })),
+    ...catalog.mcp.items.map(item => ({ text: `@${item.label}`, kind: 'mcp' as const, name: item.label, iconSrc: mcpIcon(item.id) })),
+    ...catalog.teams.items.map(item => ({ text: `@${item.name}`, kind: 'team' as const, name: item.name, iconSrc: teamIcon(item.id) })),
   ]
 }
 
@@ -83,14 +86,14 @@ export function capabilityTextReferences(choice: Choice | undefined): readonly U
  * @param choice - current catalog and selection.
  * @returns references carrying stable capability identities and display labels.
  */
-export function capabilityReferences(choice: Choice): ReferenceInsert[] {
+export function capabilityReferences(choice: Choice, skillLabel?: (name: string) => string): ReferenceInsert[] {
   const { draft, catalog } = choice
   const values: Capability[] = [
     ...(draft.team ? [{ kind: 'team' as const, id: draft.team.id, label: catalog?.teams.items.find(item => item.id === draft.team?.id)?.name ?? draft.team.id }] : []),
     ...draft.skillIds.map(id => ({ kind: 'skill' as const, id, label: catalog?.skills.items.find(item => item.id === id)?.name ?? id })),
     ...draft.mcpIds.map(id => ({ kind: 'mcp' as const, id, label: catalog?.mcp.items.find(item => item.id === id)?.label ?? id })),
   ]
-  return values.map(reference)
+  return values.map(value => reference(value, skillLabel))
 }
 
 function canEdit(choice: Choice): boolean {
@@ -137,7 +140,7 @@ function patchFromReferences(choice: Choice, refs: readonly string[]): Partial<P
  * @param popup - native popup state used to preserve its revision-guarded token.
  * @returns disposer for subscriptions owned by the Session and plugin scopes.
  */
-export function bindInlineCapabilities(model: ToolboxModel, sessionId: string, input: SessionInput, popup: ObservableSnapshot<{ readonly open: boolean }>): () => void {
+export function bindInlineCapabilities(model: ToolboxModel, sessionId: string, input: SessionInput, popup: ObservableSnapshot<{ readonly open: boolean }>, skillLabel?: (name: string) => string): () => void {
   let applying = false
   let disposed = false
   let pending = false
@@ -151,7 +154,7 @@ export function bindInlineCapabilities(model: ToolboxModel, sessionId: string, i
     if (disposed || popup.getSnapshot().open || !choice?.catalog) return
     const phase = input.state.getSnapshot().phase
     if (phase !== 'plain' && phase !== 'claimed') return
-    const references = capabilityReferences(choice)
+    const references = capabilityReferences(choice, skillLabel)
     applying = true
     try {
       const adopted = adoptSkillReferences(choice, input)
@@ -165,7 +168,7 @@ export function bindInlineCapabilities(model: ToolboxModel, sessionId: string, i
         model.choose(sessionId, patchFromReferences(choice, actual()))
         choice = model.state.getSnapshot().choices[sessionId]!
       }
-      const selected = capabilityReferences(choice)
+      const selected = capabilityReferences(choice, skillLabel)
       if (input.syncReferences(capabilityReferenceSource, selected)) {
         modelKey = JSON.stringify(selected)
         editorKey = JSON.stringify(actual())

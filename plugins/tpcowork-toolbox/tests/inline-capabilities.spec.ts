@@ -125,7 +125,7 @@ describe('inline capability selection', () => {
     }).find(command => command.name === 'task-skills')!.ui
     if (skills.kind !== 'popupSelect') throw new Error('Expected skill popup')
     const session = { sessionId: 's1' as SessionId }
-    const option = (await skills.options(session, new AbortController().signal)).find(row => row.label === '/office-docx')!
+    const option = (await skills.options(session, new AbortController().signal)).find(row => row.label === 'Documents')!
     await skills.onSelect(option, session)
     await vi.waitFor(() => expect(add.refs()).toHaveLength(1))
 

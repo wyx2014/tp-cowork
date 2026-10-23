@@ -5,7 +5,8 @@ import type { T } from '../types.ts'
 import { ReadinessBadge, Reasons } from '../shared.tsx'
 import { ToolboxDetail } from '../Editor.tsx'
 import { ToolboxIcon } from '../Icon.tsx'
-import { MemberAvatar, TeamEmblem } from './Art.tsx'
+import { MemberAvatar } from './Art.tsx'
+import { teamIcon } from '../capability-presentation.ts'
 import { phaseLabel, teamProfile } from './profile.ts'
 
 export function TeamDetail({ team, canUse, t, onUse, onClose, returnFocusId, returnScrollTop }: {
@@ -24,7 +25,7 @@ export function TeamDetail({ team, canUse, t, onUse, onClose, returnFocusId, ret
   const phases = [...new Set(team.members.flatMap(member => member.phase ? [member.phase] : []))]
   if (profile.theme !== 'general') phases.push('synthesis', 'review')
   return <ToolboxDetail title={team.name} section="teams" t={t} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop}
-    className={`tp-team-detail tp-team-${profile.theme}`} visual={<TeamEmblem theme={profile.theme} />} actionsInHeading
+    className={`tp-team-detail tp-team-${profile.theme}`} visual={<img className="tp-team-emblem" src={teamIcon(team.id)} alt="" />} actionsInHeading
     actions={<Button className="tp-toolbox-primary" disabled={!canUse} onClick={() => onUse(profile.defaultPrompt)}>{t('useTeam')}</Button>}>
     <section className="tp-team-intro">
       <p>{profile.summary}</p>

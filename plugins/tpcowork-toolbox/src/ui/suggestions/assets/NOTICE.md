@@ -1,0 +1,1 @@
+Task suggestion icons and copy are adapted from the user-provided tp-cowork repository, revision cc02756842ecc19a796593c0878273ebf6b3d31c, packages/ui/src/assets/plugin-icons, packages/ui/src/onboarding/assets and packages/ui/src/v4/featureSuggestedPrompts.ts. See LICENSE.txt (Apache-2.0). Icons are bundled locally; no CDN requests are made.

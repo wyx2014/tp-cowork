@@ -48,6 +48,7 @@
     "typecheck": "node build.mjs --typecheck",
     "test": "node ../../../deepseek-harness/node_modules/vitest/vitest.mjs run --config vitest.config.ts",
     "test:artifact": "node tests/artifact-smoke.mjs",
+    "test:pdf": "node --test tests/pdf-skill.test.mjs",
     "prepack": "node build.mjs",
     "prepare:runtime": "node ../../scripts/prepare-toolbox-runtime.mjs",
     "test:bootstrap": "node ../../../deepseek-harness/node_modules/vitest/vitest.mjs run --config vitest.config.ts tests/bootstrap.spec.ts"
@@ -62,6 +63,7 @@
     "@deepseek-ai/dsh-client-ui-layout": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-alpha.2",
     "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "@deepseek-ai/schemastery": "3.18.5-alpha.1",
     "@deepseek-ai/dsh-app-boot": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-settings": "0.2.1-alpha.2",
