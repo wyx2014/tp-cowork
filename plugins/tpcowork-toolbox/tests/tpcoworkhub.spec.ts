@@ -13,7 +13,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const { service, state, ctx } = await hubFixture()
     await service.acceptBrowserSession({ token: secret })
     state.override = (request, response) => {
-      if (request.url !== '/api/convex/query') return false
+      if (request.url !== '/tpcoworkapi/convex/query') return false
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({ hasMore: false, nextCursor: null, page: [
         { skill: { _id: 'published', slug: 'published-skill', displayName: null, description: null, summary: null, version: null, latestVersionId: 'v1', tags: null, visibility: 'public', approvalStatus: 'approved' }, latestVersion: { _id: 'v1', version: '1.0.0' } },
@@ -32,7 +32,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const { service, login, state } = await hubFixture()
     await login()
     state.override = (request, response) => {
-      if (request.url !== '/api/convex/query') return false
+      if (request.url !== '/tpcoworkapi/convex/query') return false
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({ page: [{ skill: { _id: 'invalid', version: 42 } }] }))
       return true
@@ -43,7 +43,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const { service, login, state, ctx } = await hubFixture({ pageSize: 1 })
     await login()
     state.override = (request, response) => {
-      if (request.url !== '/api/convex/query') return false
+      if (request.url !== '/tpcoworkapi/convex/query') return false
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({ isDone: true, page: [
         { skill: { id: 'approved', slug: 'research', displayName: 'Industry insights', tags: ' AI, research, AI, ', visibility: 'public', approvalStatus: 'approved' } },
@@ -67,7 +67,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await login()
     const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'store-1', preview: true } } }) as Awaited<ReturnType<typeof service.detail>>
     expect(result.content).toBe(Buffer.from(state.files[0]!.bytes).toString('utf8'))
-    expect(requests.filter(row => row.path.startsWith('/api/skill-versions/files?'))).toHaveLength(1)
+    expect(requests.filter(row => row.path.startsWith('/tpcoworkapi/skill-versions/files?'))).toHaveLength(1)
     expect((await ctx.toolboxSkills.inventory({})).items).toEqual([])
     state.corrupt = true
     await expect(service.detail({ id: 'store-1', preview: true })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-package' })
@@ -76,7 +76,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const { service, login, state } = await hubFixture()
     await login()
     state.override = (request, response) => {
-      if (request.url !== '/api/skills/pending') return false
+      if (request.url !== '/tpcoworkapi/skills/pending') return false
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({ code: 200, data: { skill: { id: 'pending', slug: 'submitted', approvalStatus: 'pending', visibility: 'public' }, latestVersion: null, files: [] } }))
       return true
@@ -141,7 +141,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(profile).not.toContain(secret); expect(profile).not.toContain(password)
     expect(await readFile(join(home, '.test-credentials.yaml'), 'utf8')).toContain('toolbox-tpcoworkhub/session')
     expect(JSON.stringify([page, detail, result])).not.toContain(secret)
-    expect(requests.filter(row => row.path !== '/api/users/login').every(row => row.authorization === `Bearer ${secret}`)).toBe(true)
+    expect(requests.filter(row => row.path !== '/tpcoworkapi/users/login').every(row => row.authorization === `Bearer ${secret}`)).toBe(true)
   })
   it('marks expired credentials for explicit re-login and clears them on logout', async () => {
     const { service, state, login, ctx } = await hubFixture()
@@ -210,7 +210,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const failed = await service.install({ requestId: 'timeout', source: { kind: 'tpcoworkhub', skillId: 'store-1', versionId: detail.skill.versionId, fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(failed.error?.code).toBe('skills/tpcoworkhub-timeout')
     state.hold.resolve(); state.hold = undefined
-    state.override = (req, res) => { if (req.url !== '/api/convex/query') return false; res.statusCode = 302; res.setHeader('Location', 'http://127.0.0.1:1/' + secret); res.end(); return true }
+    state.override = (req, res) => { if (req.url !== '/tpcoworkapi/convex/query') return false; res.statusCode = 302; res.setHeader('Location', 'http://127.0.0.1:1/' + secret); res.end(); return true }
     await expect(service.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/network' })
     state.override = (_req, res) => { res.statusCode = 503; res.end(secret); return true }
     try { await service.list({}); throw new Error('expected failure') } catch (error) { expect(String(error)).not.toContain(secret); expect(error).toMatchObject({ code: 'tpcoworkhub/network' }) }
@@ -222,14 +222,14 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await writeFile(join(path, '.env'), 'API_KEY=private')
     await writeFile(join(path, 'USER.md'), 'private profile')
     await mkdir(join(path, '.git')); await writeFile(join(path, '.git/config'), 'private')
-    expect(requests.filter(row => row.path === '/api/skills/publish')).toHaveLength(0)
+    expect(requests.filter(row => row.path === '/tpcoworkapi/skills/publish')).toHaveLength(0)
     const request = { requestId: 'publish-once', sourceSkillId: installed.skillId!, slug: 'hub-sample', displayName: 'Shared sample', version: '1.0.0' }
     const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'publish', args: { request } })
     expect(result).toMatchObject({ skillId: 'published-1', fileCount: 3 })
     expect(state.uploaded.map(file => file.path).sort()).toEqual(['SKILL.md', 'assets/template.bin', 'scripts/helper.py'])
     expect(state.uploaded.find(file => file.path === 'assets/template.bin')?.bytes).toEqual(new Uint8Array([0, 255, 10, 128, 200]))
     expect(await service.publish(request)).toEqual(result)
-    expect(requests.filter(row => row.path === '/api/skills/publish')).toHaveLength(1)
+    expect(requests.filter(row => row.path === '/tpcoworkapi/skills/publish')).toHaveLength(1)
     await expect(service.publish({ ...request, version: '2.0.0' })).rejects.toMatchObject({ code: 'tpcoworkhub/request-conflict' })
   })
   it('blocks embedded secrets, resource links to excluded personal files, symlinks and unlisted sources before any upload', async () => {
@@ -247,7 +247,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await writeFile(join(path, 'USER.md'), 'personal profile')
     await expect(service.publish({ ...request, requestId: 'private-dependency' })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-package' })
     await expect(service.publish({ ...request, requestId: 'unknown', sourceSkillId: 'unknown' })).rejects.toMatchObject({ code: 'tpcoworkhub/source-changed' })
-    expect(requests.filter(row => row.path === '/api/skills/publish')).toHaveLength(0)
+    expect(requests.filter(row => row.path === '/tpcoworkapi/skills/publish')).toHaveLength(0)
   })
   it('reports a rejected or uncertain upload without automatic publication retries', async () => {
     const { login, service, installRequest, requests, state } = await hubFixture()
@@ -261,12 +261,12 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const ambiguous = { ...request, requestId: 'ambiguous' }
     await expect(service.publish(ambiguous)).rejects.toMatchObject({ code: 'tpcoworkhub/publish-uncertain' })
     await expect(service.publish(ambiguous)).rejects.toMatchObject({ code: 'tpcoworkhub/publish-uncertain' })
-    expect(requests.filter(row => row.path === '/api/skills/publish')).toHaveLength(3)
+    expect(requests.filter(row => row.path === '/tpcoworkapi/skills/publish')).toHaveLength(3)
   })
   it('does not log out on publish permission errors, and reports invalid sessions even with read-only credentials', async () => {
     const { login, service, state, installRequest, ctx } = await hubFixture()
     await login(); const installed = await service.install(installRequest('first'))
-    state.override = (req, res) => { if (req.url !== '/api/skills/publish') return false; res.statusCode = 403; res.end(secret); return true }
+    state.override = (req, res) => { if (req.url !== '/tpcoworkapi/skills/publish') return false; res.statusCode = 403; res.end(secret); return true }
     await expect(service.publish({ requestId: 'forbidden', sourceSkillId: installed.skillId!, slug: 'hub-sample', displayName: 'Sample', version: '1.0.0' })).rejects.toMatchObject({ code: 'tpcoworkhub/publish-rejected' })
     expect(await service.account()).toMatchObject({ configured: true })
     ctx.credentials.modifyRecord = async () => { throw new Error('read-only') }

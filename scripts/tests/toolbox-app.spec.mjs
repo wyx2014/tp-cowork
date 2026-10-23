@@ -118,7 +118,7 @@ it('browses compact store rows, previews and installs skills, confirms updates a
     const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined
     const json = value => { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(value)) }
     if (request.headers.authorization !== 'Bearer isolated-store-token') { response.statusCode = 401; json({ code: 401 }); return }
-    if (request.url === '/api/convex/query') {
+    if (request.url === '/tpcoworkapi/convex/query') {
       if (body.path === 'users:me') { json({ id: 'store-user', username: 'store-fixture' }); return }
       json({ isDone: true, page: [
         { skill: { ...shared, latestVersionId: `v${version}` } },
@@ -127,9 +127,9 @@ it('browses compact store rows, previews and installs skills, confirms updates a
         { skill: { id: 'private', slug: 'private-draft', visibility: 'private', approvalStatus: 'approved' } },
       ] }); return
     }
-    if (request.url === '/api/skills/research') { json({ code: 200, data: { skill: shared, latestVersion: { id: `v${version}`, version: `${version}.0.0` }, files: [metadata()] } }); return }
-    if (request.url === '/api/skills/pending') { json({ code: 200, data: { skill: { id: 'pending', slug: 'weekly-report', description: '生成每周研究报告', approvalStatus: 'pending', visibility: 'public' }, latestVersion: null, files: [] } }); return }
-    if (request.url.startsWith('/api/skill-versions/files?')) { json({ code: 200, data: { ...metadata(), content: content() } }); return }
+    if (request.url === '/tpcoworkapi/skills/research') { json({ code: 200, data: { skill: shared, latestVersion: { id: `v${version}`, version: `${version}.0.0` }, files: [metadata()] } }); return }
+    if (request.url === '/tpcoworkapi/skills/pending') { json({ code: 200, data: { skill: { id: 'pending', slug: 'weekly-report', description: '生成每周研究报告', approvalStatus: 'pending', visibility: 'public' }, latestVersion: null, files: [] } }); return }
+    if (request.url.startsWith('/tpcoworkapi/skill-versions/files?')) { json({ code: 200, data: { ...metadata(), content: content() } }); return }
     response.statusCode = 404; json({ code: 404 })
   })
   server.listen(0, '127.0.0.1'); await once(server, 'listening')

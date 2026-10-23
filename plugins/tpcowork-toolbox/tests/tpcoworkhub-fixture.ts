@@ -42,27 +42,27 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
       const body = req.headers['content-type']?.includes('application/json') && bytes.length ? JSON.parse(bytes.toString('utf8')) : undefined
       requests.push({ path, body, ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}) })
       if (state.override?.(req, res)) return
-      if (path === '/api/users/login') { state.loginHash = body.passwordHash; envelope(res, { token: secret, user: { id: 'user-1', username: body.username } }); return }
+      if (path === '/tpcoworkapi/users/login') { state.loginHash = body.passwordHash; envelope(res, { token: secret, user: { id: 'user-1', username: body.username } }); return }
       if (req.headers.authorization !== `Bearer ${secret}` || state.expired) { res.statusCode = 401; json(res, { code: 401, message: secret }); return }
-      if (path === '/api/convex/query') {
+      if (path === '/tpcoworkapi/convex/query') {
         if (body.path === 'users:me') { json(res, { _id: 'user-1', username: 'fixture-user', name: 'Fixture User' }); return }
         const second = !!body.args.paginationOpts
         if (second) state.cursorRequests++
         json(res, { page: [{ skill: { _id: second ? 'other' : 'store-1', slug: second ? 'another' : 'hub-sample', summary: second ? 'Another description' : 'A shared skill', latestVersionId: state.versionId } }], isDone: second, continueCursor: second ? null : 'server-next' }); return
       }
-      if (path === '/api/skills/store-1') {
+      if (path === '/tpcoworkapi/skills/store-1') {
         const files = state.files.filter(file => !state.missingResource || file.path !== 'scripts/helper.py')
           .map(file => ({ path: file.path, size: file.bytes.byteLength, sha256: file.sha256, contentType: 'application/octet-stream' }))
         if (state.badMetadata) files.push({ ...files[0]!, path: '../escape' })
         envelope(res, { skill: { id: 'store-1', slug: 'hub-sample', description: 'A shared skill' }, latestVersion: { id: state.versionId, version: '1.0.0' }, files }); return
       }
-      if (path.startsWith('/api/skill-versions/files?')) {
+      if (path.startsWith('/tpcoworkapi/skill-versions/files?')) {
         state.entered.resolve()
         if (state.hold) await state.hold.promise
         const file = state.files.find(file => file.path === new URL(path, 'http://fixture').searchParams.get('path'))!
         envelope(res, { path: file.path, size: file.bytes.byteLength, sha256: file.sha256, contentType: 'application/octet-stream', encoding: file.path.endsWith('.bin') ? 'base64' : 'utf8', content: state.corrupt ? 'corrupted' : Buffer.from(file.bytes).toString(file.path.endsWith('.bin') ? 'base64' : 'utf8') }); return
       }
-      if (path === '/api/skills/publish') {
+      if (path === '/tpcoworkapi/skills/publish') {
         const form = await new Request('http://fixture', { method: 'POST', headers: { 'content-type': req.headers['content-type']! }, body: bytes }).formData()
         state.uploaded = await Promise.all(form.getAll('files').map(async value => { const file = value as File; return { path: file.name, bytes: new Uint8Array(await file.arrayBuffer()) } }))
         if (state.publishMode === 'disconnect') { req.socket.destroy(); return }

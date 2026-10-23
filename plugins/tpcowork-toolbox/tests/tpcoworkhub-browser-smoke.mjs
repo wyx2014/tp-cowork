@@ -1,4 +1,4 @@
-/** Compiled Desktop and Host authenticate through the built PromptHub website in a separate Chrome process. */
+/** Compiled Desktop and Host authenticate through the built tpcoworkhub website in a separate Chrome process. */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:http'
@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { artifactPeers } from './artifact-peers.mjs'
 
 const harness = fileURLToPath(new URL('../../../../deepseek-harness/', import.meta.url))
-const webDist = resolve(process.env.DSH_PROMPTHUB_WEB_DIST || fileURLToPath(new URL('../../../../prompthub/web/dist/', import.meta.url)))
+const webDist = resolve(process.env.DSH_TPCOWORKHUB_WEB_DIST || fileURLToPath(new URL('../../../../skillhub/web/dist/', import.meta.url)))
 const index = await readFile(join(webDist, 'index.html'))
 const browserRequire = createRequire(new URL('../../tpcowork-browser/package.json', import.meta.url))
 const { _electron: electron, chromium } = browserRequire('playwright-core')
@@ -18,9 +18,9 @@ const executablePath = createRequire(join(harness, 'apps/desktop/package.json'))
 const hook = await artifactPeers()
 const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, skills, hub] = await Promise.all([
   import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'),
-  import('@deepseek-ai/dsh-credentials-local'), import(new URL('../lib/skills.js', import.meta.url)), import(new URL('../lib/prompthub.js', import.meta.url)),
+  import('@deepseek-ai/dsh-credentials-local'), import(new URL('../lib/skills.js', import.meta.url)), import(new URL('../lib/tpcoworkhub.js', import.meta.url)),
 ])
-const home = await mkdtemp(join(tmpdir(), 'prompthub-system-browser-'))
+const home = await mkdtemp(join(tmpdir(), 'tpcoworkhub-system-browser-'))
 const credentialFile = join(home, 'credentials.yaml')
 const secret = 'native-fixture-website-token'
 const user = { _id: 'native-user', username: 'fixture-user', name: 'Browser account', role: 'user' }
@@ -33,23 +33,23 @@ const server = createServer(async (request, response) => {
     const chunks = []
     for await (const chunk of request) chunks.push(Buffer.from(chunk))
     const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : undefined
-    if (request.url.startsWith('/api/toolboxPromptHub/')) {
+    if (request.url.startsWith('/api/toolboxTpcoworkHub/')) {
       assert.match(request.headers.cookie ?? '', /desktop-test=authenticated/)
       const method = request.url.split('/').at(-1)
       try {
-        const value = await ctx.typertGateway.invoke({ namespace: 'toolboxPromptHub', method, args: body.payload.args })
+        const value = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method, args: body.payload.args })
         json({ type: 'server-response', rpcId: body.rpcId, result: { ok: true, value } })
       } catch (_error) { json({ type: 'server-response', rpcId: body.rpcId, result: { ok: false, error: { code: 'fixture/rejected' } } }) }
       return
     }
-    if (request.url === '/api/users/login') {
+    if (request.url === '/tpcoworkapi/users/login') {
       loginCount++
       if (body.username !== 'fixture-user' || body.passwordHash !== 'fixture-password') {
         response.statusCode = 401; json({ code: 401, message: 'Invalid credentials' }); return
       }
       json({ code: 200, data: { token: secret, user } }); return
     }
-    if (request.url === '/api/convex/query') {
+    if (request.url === '/tpcoworkapi/convex/query') {
       if (request.headers.authorization !== `Bearer ${secret}` || rejectSession) {
         response.statusCode = 401; json({ code: 401 }); return
       }
@@ -80,14 +80,14 @@ try {
   await ctx.plugin(hub, { endpoint })
   const mainFile = join(home, 'main.mjs')
   await writeFile(mainFile, `import {app,BrowserWindow,net,session} from 'electron';
-    import {DesktopPromptHub,createPromptHubHostClient} from ${JSON.stringify(pathToFileURL(join(harness, 'apps/desktop/lib/types/prompt-hub.js')).href)};
+    import {DesktopTpcoworkHub,createTpcoworkHubClient} from ${JSON.stringify(new URL('../lib/desktop/tpcoworkhub.js', import.meta.url).href)};
     app.setPath('userData',${JSON.stringify(join(home, 'native-home'))});
     void app.whenReady().then(async()=>{
     await session.defaultSession.cookies.set({url:${JSON.stringify(endpoint)},name:'desktop-test',value:'authenticated'});
     const owner=new BrowserWindow({show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
     await owner.loadURL('data:text/html,<h1>Desktop account fixture</h1>');
     globalThis.accountChanges=[];globalThis.openedUrls=[];
-    globalThis.promptHub=new DesktopPromptHub(()=>owner,createPromptHubHostClient(()=>${JSON.stringify(endpoint)},(url,init)=>net.fetch(url,init)),
+    globalThis.promptHub=new DesktopTpcoworkHub(()=>owner,createTpcoworkHubClient(()=>${JSON.stringify(endpoint)},(url,init)=>net.fetch(url,init)),
       state=>globalThis.accountChanges.push(state),async url=>{globalThis.openedUrls.push(url)});
     });
   `)
@@ -101,7 +101,7 @@ try {
     })
   }
   browser = await chromium.launchPersistentContext(join(home, 'chrome-profile'), {
-    channel: process.env.DSH_PROMPTHUB_BROWSER_CHANNEL || 'chrome', headless: true,
+    channel: process.env.DSH_TPCOWORKHUB_BROWSER_CHANNEL || 'chrome', headless: true,
   })
   const website = await browser.newPage()
   const openAuthorization = async () => {
@@ -123,23 +123,23 @@ try {
   }
   await launch()
   await openAuthorization()
-  await website.getByRole('heading', { name: '登录如意Hub', exact: true }).waitFor()
+  await website.getByRole('button', { name: '登录 tpcoworkhub', exact: true }).waitFor()
   await website.getByRole('textbox', { name: '用户名' }).fill('fixture-user')
   await website.getByLabel('密码', { exact: true }).fill('fixture-password')
-  await website.getByRole('button', { name: '登录', exact: true }).click()
+  await website.getByRole('button', { name: '登录 tpcoworkhub', exact: true }).click()
   await website.getByRole('button', { name: '确认登录', exact: true }).waitFor()
   assert.equal(await ctx.credentials.readRecord(hub.sessionKey), undefined)
   assert.equal((await confirm()).status, 'signed_in')
   assert.equal(loginCount, 1)
-  assert.equal((await ctx.toolboxPromptHub.account()).user.username, user.username)
-  assert.match(await readFile(credentialFile, 'utf8'), /toolbox-prompthub\/session/)
+  assert.equal((await ctx.toolboxTpcoworkHub.account()).user.username, user.username)
+  assert.match(await readFile(credentialFile, 'utf8'), /toolbox-tpcoworkhub\/session/)
   assert.equal(JSON.stringify(await app.evaluate(() => globalThis.accountChanges)).includes(secret), false)
   await app.close(); app = undefined
   await launch()
   assert.equal((await app.evaluate(() => globalThis.promptHub.state())).user.name, user.name)
   assert.equal((await app.evaluate(() => globalThis.promptHub.signOut())).status, 'signed_out')
   assert.equal(await ctx.credentials.readRecord(hub.sessionKey), undefined)
-  assert.equal(await website.evaluate(() => localStorage.getItem('prompthub.token')), secret)
+  assert.equal(await website.evaluate(() => localStorage.getItem('tpcoworkhub.token')), secret)
   await openAuthorization()
   await website.getByRole('button', { name: '确认登录', exact: true }).waitFor()
   assert.equal(await website.getByLabel('密码', { exact: true }).count(), 0)

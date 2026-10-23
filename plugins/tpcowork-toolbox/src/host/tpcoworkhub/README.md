@@ -1,6 +1,6 @@
 # TP Cowork Hub Host / Client 交接（TPCO-17）
 
-本模块复用 `nanobot-gui/src/core/prompthubApi.ts` 的服务协议：`POST /api/users/login`、`POST /api/convex/query`（`skills:listPublicPageV4`）、`GET /api/skills/:id`、`GET /api/skill-versions/files?versionId&path` 和 `POST /api/skills/publish`。没有复制 gateway、执行器或持久安装清单。
+本模块使用 tpcoworkhub 服务协议，接口统一以 `/tpcoworkapi` 开头：`POST /tpcoworkapi/users/login`、`POST /tpcoworkapi/convex/query`（`skills:listPublicPageV4`）、`GET /tpcoworkapi/skills/:id`、`GET /tpcoworkapi/skill-versions/files?versionId&path` 和 `POST /tpcoworkapi/skills/publish`。没有复制 gateway、执行器或持久安装清单。
 
 ## T7 接线
 
@@ -13,7 +13,7 @@
 
 ## 认证与协议边界
 
-桌面首页登录使用系统默认浏览器打开 PromptHub `/desktop/authorize`；`browserAuth()` 提供该地址与等待超时。网站复用已有登录态，未登录时跳转现有 `/login` 并保留授权请求。用户明确确认后，网站将 `localStorage['prompthub.token']` 通过 JSON POST 交给桌面的临时 `127.0.0.1` 回调。桌面校验网站 Origin、Host、路径与每次新建的随机 state，再调用 `acceptBrowserSession()`。token 不进入授权链接、地址栏或应用渲染进程。
+桌面首页登录使用系统默认浏览器打开 tpcoworkhub `/desktop/authorize`；`browserAuth()` 提供该地址与等待超时。网站复用已有登录态，未登录时跳转现有 `/login` 并保留授权请求。用户明确确认后，网站将 `localStorage['tpcoworkhub.token']` 通过 JSON POST 交给桌面的临时 `127.0.0.1` 回调。桌面校验网站 Origin、Host、路径与每次新建的随机 state，再调用 `acceptBrowserSession()`。token 不进入授权链接、地址栏或应用渲染进程。
 
 Host 使用该 token 请求 `users:me`，验证用户资料后才写入 `credentialKey('toolbox-tpcoworkhub', 'session')` 的 grant record，绑定 endpoint 并保存安全用户资料。无效的新 token 不覆盖已有登录。网站只有在 Host 确认保存后才显示成功。成功、失败、取消和超时均关闭本机回调监听；提交已开始时等待其完成，退出登录排在提交之后。
 
@@ -47,6 +47,6 @@ node plugins/tpcowork-toolbox/tests/tpcoworkhub-browser-smoke.mjs
 
 本地 HTTP fixture + 原生凭证文件 + 真实 Loader/profile/installer/Gateway 验证登录→目录→详情→完整资源安装→原生 cold-session `/name` catalog/skill loader；包括重启恢复、失效重登、只读凭证、权限拒绝、重名更新/用户修改保护、下载取消/超时/重试、错误正文脱敏、秘密/个人文件/符号链接拦截、multipart 资源保留和上传幂等/不明结果。UI 测试验证重登、确认上传、实际取消信号、等待清理和错误反馈；compiled smoke 验证独立产物和卸载。
 
-网站认证 smoke 使用独立 Chrome、真实 Electron、已编译桌面认证模块、PromptHub 实际 Vue 构建与本地 API fixture，验证首次密码登录、已有登录态确认、桌面重启恢复、共享退出、无效 token 和网站取消。桌面只创建应用主窗口，状态事件不携带 token。运行前需先构建桌面 Host TypeScript 与 PromptHub Web；`DSH_PROMPTHUB_WEB_DIST` 可指定网站产物目录（指向真实 PromptHub 网站构建，非本模块命名），默认使用相邻 `prompthub/web/dist`；测试使用临时 Chrome profile，`DSH_PROMPTHUB_BROWSER_CHANNEL` 默认 `chrome`。
+网站认证 smoke 使用独立 Chrome、真实 Electron、已编译桌面认证模块、tpcoworkhub 实际 Vue 构建与本地 API fixture，验证首次密码登录、已有登录态确认、桌面重启恢复、共享退出、无效 token 和网站取消。桌面只创建应用主窗口，状态事件不携带 token。运行前需先构建桌面 Host TypeScript 与 tpcoworkhub Web；`DSH_TPCOWORKHUB_WEB_DIST` 可指定网站产物目录（指向真实 tpcoworkhub 网站构建，非本模块命名），默认使用相邻 `skillhub/web/dist`；测试使用临时 Chrome profile，`DSH_TPCOWORKHUB_BROWSER_CHANNEL` 默认 `chrome`。
 
 真实部署账号、公共商店上传、完整 GUI/Web 端到端尚未验证；所有发布测试都只访问隔离本地服务。T7 接线和 T8 整体联调仍须验证最终安装包中的完整链路。

@@ -40,10 +40,10 @@ const meta = { path: 'SKILL.md', size: bytes.length, sha256: hash, contentType: 
 const server = createServer(async (req, res) => {
   for await (const _chunk of req) { /* Drain request without logging credentials. */ }
   const envelope = data => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ code: 200, data })) }
-  if (req.url === '/api/users/login') { envelope({ token: 'compiled-fixture-token', user: { id: 'fixture', username: 'fixture' } }); return }
+  if (req.url === '/tpcoworkapi/users/login') { envelope({ token: 'compiled-fixture-token', user: { id: 'fixture', username: 'fixture' } }); return }
   if (req.headers.authorization !== 'Bearer compiled-fixture-token') { res.statusCode = 401; res.end(); return }
-  if (req.url === '/api/skills/fixture') { envelope({ skill: { id: 'fixture', slug: 'compiled-hub' }, latestVersion: { id: 'v1', version: '1.0.0' }, files: [meta] }); return }
-  if (req.url.startsWith('/api/skill-versions/files?')) { envelope({ ...meta, content: bytes.toString('utf8') }); return }
+  if (req.url === '/tpcoworkapi/skills/fixture') { envelope({ skill: { id: 'fixture', slug: 'compiled-hub' }, latestVersion: { id: 'v1', version: '1.0.0' }, files: [meta] }); return }
+  if (req.url.startsWith('/tpcoworkapi/skill-versions/files?')) { envelope({ ...meta, content: bytes.toString('utf8') }); return }
   res.statusCode = 404; res.end()
 })
 try {

@@ -115,7 +115,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         const { token } = parse(browserSessionSchema, request)
         const endpoint = this.endpoint()
         if (!(await this.ctx.credentials.describeRecord(sessionKey)).writable) throw new TpcoworkHubError('credentials-unavailable')
-        const raw = await this.request('/api/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
+        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
         const user = decode(websiteUserSchema, raw)
         active.throwIfAborted()
         try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token, user } })) }
@@ -139,7 +139,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
           if (!resolved) throw new Error()
           password = resolved.value
         } catch { throw new TpcoworkHubError('credentials-unavailable') }
-        const raw = await this.request('/api/users/login', { method: 'POST', body: JSON.stringify({ username: input.username.trim(), passwordHash: this.config.passwordEncoding === 'sha256' ? sha256(password) : password }) }, active)
+        const raw = await this.request('/tpcoworkapi/users/login', { method: 'POST', body: JSON.stringify({ username: input.username.trim(), passwordHash: this.config.passwordEncoding === 'sha256' ? sha256(password) : password }) }, active)
         const result = decode(loginResultSchema, raw)
         active.throwIfAborted()
         try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token: result.token, user: result.user } })) }
@@ -183,7 +183,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         const seen = new Set<string>()
         let cursor: string | null = null
         do {
-          const result = page(await this.request('/api/convex/query', { method: 'POST', body: JSON.stringify({ path: 'skills:listPublicPageV4', args: cursor ? { paginationOpts: { numItems: 100, cursor } } : {} }) }, active, token, false))
+          const result = page(await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'skills:listPublicPageV4', args: cursor ? { paginationOpts: { numItems: 100, cursor } } : {} }) }, active, token, false))
           for (const item of result.items) records.set(item.id, item)
           if (records.size > this.config.maxCatalogItems || (result.next && seen.has(result.next)) || seen.size >= 100) throw new TpcoworkHubError('catalog-limit')
           cursor = result.next
@@ -211,11 +211,11 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     })
   }
   private async readDetail(id: string, signal: AbortSignal, token: string, allowUnversioned = false) {
-    return detail(await this.request(`/api/skills/${encodeURIComponent(id)}`, {}, signal, token), id, this.installer.options.maxBytes, this.installer.options.maxFiles, allowUnversioned)
+    return detail(await this.request(`/tpcoworkapi/skills/${encodeURIComponent(id)}`, {}, signal, token), id, this.installer.options.maxBytes, this.installer.options.maxFiles, allowUnversioned)
   }
   private async readFile(meta: TpcoworkHubFile, versionId: string, signal: AbortSignal, token: string): Promise<SkillFile> {
     const query = new URLSearchParams({ versionId, path: meta.path })
-    const raw = decode(fileContentSchema, await this.request(`/api/skill-versions/files?${query}`, {}, signal, token))
+    const raw = decode(fileContentSchema, await this.request(`/tpcoworkapi/skill-versions/files?${query}`, {}, signal, token))
     const bytes = Buffer.from(raw.content, raw.encoding === 'base64' ? 'base64' : 'utf8')
     if (raw.path !== meta.path || raw.size !== meta.size || raw.sha256 !== meta.sha256 || bytes.byteLength !== meta.size || sha256(bytes) !== meta.sha256) throw new TpcoworkHubError('invalid-package')
     return { path: meta.path, bytes, sha256: meta.sha256 }
@@ -267,7 +267,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       active.throwIfAborted()
       let result: PublishResult
       try {
-        const raw = await this.request('/api/skills/publish', { method: 'POST', headers: { 'Idempotency-Key': input.requestId }, body: form }, active, token)
+        const raw = await this.request('/tpcoworkapi/skills/publish', { method: 'POST', headers: { 'Idempotency-Key': input.requestId }, body: form }, active, token)
         // status is deliberately not interpreted as approved/public: returned IDs only confirm receipt.
         const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
         if (['failed', 'error', 'rejected'].includes(String(value.status))) throw new TpcoworkHubError('publish-rejected')
@@ -286,7 +286,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private async request(path: string, init: RequestInit, signal: AbortSignal, token?: string, enveloped = true): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.config.requestTimeoutMs)
     const active = AbortSignal.any([signal, timeout])
-    const publishing = path === '/api/skills/publish'
+    const publishing = path === '/tpcoworkapi/skills/publish'
     try {
       const response = await fetch(this.endpoint() + path, { ...init, redirect: 'error', signal: active,
         headers: { ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
