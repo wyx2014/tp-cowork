@@ -14,13 +14,15 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply as applySkillUi } from '../../../../deepseek-harness/packages/client/ui-skill/src/client/index.ts'
 import { ToolboxModel } from '../src/client/model.ts'
 import { choiceCommands } from '../src/ui/choice-commands.ts'
-import { bindInlineCapabilities, capabilityClipboardText, capabilityReferenceSource, capabilityTextReferences, prependTeamReference, removeInlineCapability } from '../src/ui/inline-capabilities.ts'
+import { bindInlineCapabilities, capabilityClipboardText, capabilityReferenceSource, capabilityTextReferences, prepareSkillCreationDraft, prependTeamReference, removeInlineCapability } from '../src/ui/inline-capabilities.ts'
+import { en, zh, type UiKey } from '../src/ui/locales.ts'
+import { skillPresentation } from '../src/ui/skill-presentation.ts'
 import { catalog, t } from './ui-fixture.ts'
 
 const disposers: Array<() => void> = []
 afterEach(() => { cleanup(); for (const dispose of disposers.splice(0)) dispose() })
 
-function bench() {
+function bench(skillLabel?: (name: string) => string) {
   const ctx = new Context()
   const model = new ToolboxModel({} as ConstructorParameters<typeof ToolboxModel>[0])
   const current = catalog()
@@ -40,7 +42,7 @@ function bench() {
   ctx.on('slash/input-insert-text', request => shell.insertText(request.text, request.span) ? true : undefined)
   ctx.on('slash/input-insert-reference', request => shell.insertReference(request.reference, request.span) ? true : undefined)
   const popup = createSnapshotStore({ open: false })
-  const unbind = bindInlineCapabilities(model, 's1', shell, popup)
+  const unbind = bindInlineCapabilities(model, 's1', shell, popup, skillLabel)
   disposers.push(() => { unbind(); shell.dispose(); model.dispose(); void ctx.fiber.dispose() })
   const choice = () => model.state.getSnapshot().choices.s1!
   const refs = () => shell.snapshot.occurrences.filter(reference => reference.source === capabilityReferenceSource)
@@ -75,6 +77,26 @@ function pickSlashSkill(b: ReturnType<typeof bench>, start: number, end: number)
 }
 
 describe('inline capability selection', () => {
+  it.each([zh, en])('shows the localized skill creator label while retaining its invocation until the user sends', async copy => {
+    const translate = (key: UiKey, params?: Record<string, unknown>) => copy[key].replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
+    const b = bench(name => skillPresentation(name, translate).label)
+    b.model.state.update(state => {
+      state.choices.s1!.catalog!.skills.items.push({ ...b.current.skills.items[0]!, id: 'creator', name: 'skill-creator' })
+    })
+    prepareSkillCreationDraft(b.shell, translate('createPrompt', { skill: '{skill}' }), translate('skillSkillCreatorName'))
+    expect(b.shell.snapshot.occurrences[0]).toMatchObject({
+      source: 'skill', ref: '/skill-creator', label: translate('skillSkillCreatorName'), clipboardText: '/skill-creator',
+    })
+    await vi.waitFor(() => expect(b.refs()).toHaveLength(1))
+    expect(b.refs()[0]).toMatchObject({ label: translate('skillSkillCreatorName'), clipboardText: '$skill-creator' })
+    expect(b.choice().draft.skillIds).toEqual(['creator'])
+    expect(b.sink).not.toHaveBeenCalled()
+    b.shell.submit()
+    await vi.waitFor(() => expect(b.sink).toHaveBeenCalledWith(
+      translate('createPrompt', { skill: '$skill-creator' }), [], 'queue', expect.any(AbortSignal),
+    ))
+  })
+
   it.each(['add', 'slash'])('opens a sent %s-picked skill document after the draft selection changes', async (entry) => {
     const b = bench()
     if (entry === 'slash') {

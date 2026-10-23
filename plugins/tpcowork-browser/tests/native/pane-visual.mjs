@@ -10,7 +10,10 @@ import { build } from 'esbuild';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = process.argv[2] ?? resolve(root, 'test-results/pane.png');
 await build({ entryPoints: [resolve(root, 'tests/native/pane-client.jsx')], outfile: resolve(root, 'test-results/native-pane.js'), bundle: true, platform: 'browser',
-  format: 'iife', jsx: 'automatic', define: { PANE_IMPORT: JSON.stringify(process.env.PANE_IMPORT === '1') }, loader: { '.css': 'text' }, alias: { '@deepseek-ai/dsh-client-store': resolve(root, '../../../deepseek-harness/packages/client/store/src/index.ts') }, nodePaths: [resolve(root, '../../../deepseek-harness/packages/client/ui-renderer/node_modules')] });
+  format: 'iife', jsx: 'automatic', define: { PANE_IMPORT: JSON.stringify(process.env.PANE_IMPORT === '1') }, loader: { '.module.css': 'local-css', '.css': 'text' }, alias: {
+    '@deepseek-ai/dsh-client-store': resolve(root, '../../../deepseek-harness/packages/client/store/src/index.ts'),
+    '@deepseek-ai/dsh-client-ui-primitives': resolve(root, '../../../deepseek-harness/packages/client/ui-primitives/lib/index.js'),
+  }, nodePaths: [resolve(root, '../../../deepseek-harness/packages/client/ui-renderer/node_modules')] });
 const server = createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Visual fixture</title><body style="margin:0;font-family:sans-serif"><header style="height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #ddd;font-weight:700;font-size:28px">FIXTURE NEWS</header><main style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:16px;padding:16px"><div style="height:220px;background:#7aa2d6"></div><div style="height:320px;background:#d67a7a"></div><div style="height:220px;background:#86c08a"></div></main></body>'); });
 await new Promise(ready => server.listen(0, '127.0.0.1', ready));
 const home = await mkdtemp(resolve(tmpdir(), 'dsh-pane-visual-'));

@@ -1,5 +1,6 @@
 /** Task management and history entry point; task cards do not expand into run trees. */
 import * as React from 'react'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AutomationUiServices } from './ui-types.ts'
 import type { AutomationTaskId, ScheduleTaskDraft, ScheduledTask } from './types.ts'
 import { uiFailureKey, type UiText } from './ui-locales.ts'
@@ -130,12 +131,12 @@ export function AutomationPage({ services, t, locale }: AutomationPageProps) {
       </button>)}</div></section>
     </section> : <AutomationRunCenter catalog={catalog} state={state} services={services} t={t} locale={locale} />}
     {deleteDialog}
-    {confirmMigration && <div role="dialog" aria-modal="true" aria-label={t('migrateNative')} className="tp-auto-dialog"><div>
-      <h2>{t('migrateNative')}</h2><p>{t('migrationConfirm')}</p><div className="tp-auto-actions">
-        <button disabled={state.pending} onClick={() => setConfirmMigration(false)}>{t('cancel')}</button>
-        <button disabled={state.pending || !services.migrateNative} onClick={() => {
+    {confirmMigration && <Modal open className="tp-confirm-dialog" title={t('migrateNative')} description={t('migrationConfirm')} closeLabel={t('cancel')} showCloseButton={false} onClose={() => { if (!state.pending) setConfirmMigration(false) }}
+      footer={<><Button variant="outline" data-modal-autofocus disabled={state.pending} onClick={() => setConfirmMigration(false)}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={state.pending || !services.migrateNative} onClick={() => {
           void catalog.mutate(() => services.migrateNative!()).then(ok => { if (ok) setConfirmMigration(false) })
-        }}>{t('migrateNative')}</button>
-      </div></div></div>}
+        }}>{t('migrateNative')}</Button></>}>
+      {state.error ? <p role="alert">{t(uiFailureKey(state.failure ?? 'unknown'))}</p> : undefined}
+    </Modal>}
   </div></main>
 }

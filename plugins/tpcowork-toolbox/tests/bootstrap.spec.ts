@@ -134,7 +134,7 @@ it('retires removed bundled skills on upgrade and preserves modified or custom c
   const { start, dir, skill } = await fixture()
   const ctx = await start()
   const installer = requireInstaller(ctx)
-  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) {
+  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']) {
     await skill(name, 'v1')
     const result = await installer.install({ requestId: name, source: { kind: 'bundled', resourceId: name }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(result.state).toBe('installed')
@@ -143,13 +143,13 @@ it('retires removed bundled skills on upgrade and preserves modified or custom c
   await rm(join(dir, 'skills/portfolio-analysis', markerName), { force: true })
   await ctx.fiber.dispose()
   const upgraded = await start()
-  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(await upgraded.skills.get(name)).toBeUndefined()
+  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']) expect(await upgraded.skills.get(name)).toBeUndefined()
   expect((await upgraded.skills.get('xlsx'))?.content).toContain('User override')
   expect((await upgraded.skills.get('portfolio-analysis'))?.content).toContain('v1')
   expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('office-documents')
   await upgraded.fiber.dispose()
   const restarted = await start()
-  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(await restarted.skills.get(name)).toBeUndefined()
+  for (const name of ['office-documents', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']) expect(await restarted.skills.get(name)).toBeUndefined()
 })
 
 

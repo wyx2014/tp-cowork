@@ -5,9 +5,9 @@ import { TpcoworkHubError } from './errors.ts'
 import { fileSchema } from './remote.ts'
 
 const rawSkill = z.object({
-  id: z.string().optional(), _id: z.string().optional(), slug: z.string().optional(), name: z.string().optional(), displayName: z.string().optional(),
-  description: z.string().optional(), summary: z.string().optional(), version: z.string().optional(), latestVersionId: z.string().optional(),
-  tags: z.union([z.string(), z.array(z.string())]).optional(), visibility: z.string().optional(), approvalStatus: z.string().optional(),
+  id: z.string().optional(), _id: z.string().optional(), slug: z.string().nullish(), name: z.string().nullish(), displayName: z.string().nullish(),
+  description: z.string().nullish(), summary: z.string().nullish(), version: z.string().nullish(), latestVersionId: z.string().nullish(),
+  tags: z.union([z.string(), z.array(z.string())]).nullish(), visibility: z.string().nullish(), approvalStatus: z.string().nullish(),
 })
 export function decode<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value)
@@ -20,15 +20,16 @@ function skill(value: unknown): TpcoworkHubSkill {
   if (!id || id.length > 200) throw new TpcoworkHubError('protocol')
   return { id, name: raw.slug || raw.name || raw.displayName || id, description: raw.description || raw.summary || '', versionId: raw.latestVersionId || '', version: raw.version || '',
     ...(raw.displayName ? { displayName: raw.displayName } : {}),
-    ...(raw.tags !== undefined ? { tags: [...new Set((Array.isArray(raw.tags) ? raw.tags : raw.tags.split(',')).map(tag => tag.trim()).filter(Boolean))] } : {}),
-    ...(raw.visibility !== undefined ? { visibility: raw.visibility } : {}), ...(raw.approvalStatus !== undefined ? { approvalStatus: raw.approvalStatus } : {}),
+    ...(raw.tags != null ? { tags: [...new Set((Array.isArray(raw.tags) ? raw.tags : raw.tags.split(',')).map(tag => tag.trim()).filter(Boolean))] } : {}),
+    ...(raw.visibility != null ? { visibility: raw.visibility } : {}), ...(raw.approvalStatus != null ? { approvalStatus: raw.approvalStatus } : {}),
   }
 }
 export function page(value: unknown) {
-  const raw = decode(z.object({ page: z.array(z.object({ skill: rawSkill })).optional(), items: z.array(z.object({ skill: rawSkill })).optional(), continueCursor: z.string().nullable().optional(), isDone: z.boolean().optional() }), value)
+  const row = z.object({ skill: rawSkill, latestVersion: z.object({ version: z.string().nullish() }).nullish() })
+  const raw = decode(z.object({ page: z.array(row).optional(), items: z.array(row).optional(), continueCursor: z.string().nullable().optional(), isDone: z.boolean().optional() }), value)
   if (!raw.page && !raw.items) throw new TpcoworkHubError('protocol')
   if (raw.isDone === false && !raw.continueCursor) throw new TpcoworkHubError('protocol')
-  return { items: (raw.page ?? raw.items!).map(row => skill(row.skill)), next: raw.isDone === true ? null : raw.continueCursor || null }
+  return { items: (raw.page ?? raw.items!).map(row => skill({ ...row.skill, version: row.latestVersion?.version ?? row.skill.version })), next: raw.isDone === true ? null : raw.continueCursor || null }
 }
 export function detail(value: unknown, id: string, maxBytes: number, maxFiles: number, allowUnversioned = false) {
   const raw = decode(z.object({ skill: rawSkill, latestVersion: z.object({ id: z.string().min(1).max(200), version: z.string() }).nullish(), files: z.array(fileSchema) }), value)

@@ -15,7 +15,7 @@ npm run test:artifact
 
 构建使用 `../../deepseek-harness` 已安装的 TypeScript、esbuild、React 和 DSH 声明，不修改该工作区或自动化插件。Host 产物为 `lib/host.js`，浏览器 ModuleLoader 入口为 `lib/client.js`，类型入口为 `lib/types/`。依赖版本与当前 DSH `0.2.1-alpha.2` 对齐。
 
-内置技能由 `resources/skills/` 随包交付。已移除 `office-documents`、`xlsx`、`portfolio-analysis`、`corporate-ppt`、`docx`、`pdf`、`writing-plans`、`write-article`、`weekly-report`、`long-goal`、`memory`、`my`、`weather` 和 `cron`；升级只清理未经用户修改的产品副本，保留用户自建或编辑的同名技能。
+内置技能由 `resources/skills/` 随包交付。已移除 `office-documents`、`xlsx`、`portfolio-analysis`、`corporate-ppt`、`docx`、`pdf`、`writing-plans`、`write-article`、`weekly-report`、`long-goal`、`memory`、`my`、`weather`、`cron` 和 `create-skill`；升级只清理未经用户修改的产品副本，保留用户自建或编辑的同名技能。技能编写统一使用 `skill-creator`（技能创建与优化），不再提供重复的内置入口。
 
 `call` 在“工具箱 → 技能 → call → 设置电话”首次配置。每个用户填写自己的四位办公分机号，软件从旧版个人技能目录下的 `call/内部分机信息表.md` 精确匹配话机 IP；重复或缺失分机不会自动选设备。可读取同目录 `config.json` 中同一主叫的 `caller`、`phone_ip`、`pbx_ip`、`scheme`、`outgoing_prefix` 和登录凭据；仅确认保存后才导入凭据。没有旧配置时，首次填写话机登录账号和密码；匹配不到 IP 时，在“话机与分机表设置”填写话机 HTTP(S) 地址。电话服务器与外线前缀沿用参考实现默认值 `12.100.10.9`、`9`，可在同一页面修改；不会预设用户分机号。安装包不携带个人分机表或密码，新电脑需导入企业提供的本机配置或手动填写。
 
@@ -26,6 +26,8 @@ npm run test:artifact
 安装者和用户见 [使用指南](../../docs/toolbox/user-guide.md)、[功能对照](../../docs/toolbox/feature-matrix.md) 和 [集成验收](../../docs/toolbox/acceptance.md)。目录摘要与版本按会话保存；读取不同 Session 的技能不会把另一份目录误判为变化。
 
 技能页支持全部/内置/我的技能筛选、手动创建和 AI 创建草稿。「导入技能」菜单可选择 ZIP 技能包或技能文件夹，支持直接导入 SkillHub 下载的 ZIP；本地更新选择技能文件夹。校验后复制 SKILL.md、脚本、模板和其他资源到个人技能目录；取消选择不执行导入。手动创建和 Host 的目录、ZIP、Markdown 导入接口复用同一资源校验和安装器；ZIP 支持文件位于根目录或单个顶层技能目录，校验路径、大小、资源完整性和 CRC，不执行解压后的脚本。预览有效期为 15 分钟，成功安装释放预览；最多保留最近 32 份，过期后重新检查即可。用户技能的“更新”处理同来源本地资源，商店技能在商店详情更新，内置资源按发行升级。技能移除在文件事务完成后主动使 DSH 技能目录缓存失效，后续刷新不依赖文件监听通知到达的先后顺序。
+
+「AI 创建技能」在输入框中插入显示为「技能创建与优化」的技能引用和可编辑提示，调用标识仍为 `skill-creator`。用户确认发送后才执行。
 
 管理功能补齐见 [2026-10-16 核验记录](../../docs/toolbox/review-2026-10-16.md)；当前原生「+」整合、回归结果与界面证据见 [输入框核验记录](../../docs/toolbox/composer-review-2026-10-16.md)。
 

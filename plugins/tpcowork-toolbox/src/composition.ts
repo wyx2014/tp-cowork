@@ -42,7 +42,7 @@ export const Config = z.object({
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
 const excluded = new Set(['anysearch', ...['stock', 'fund', 'edb', 'news', 'bond', 'global-stock', 'index'].map(domain => `hexin-ifind-ds-${domain}-mcp`)])
 const preservedSkillErrors = new Set(['skills/not-owned', 'skills/user-modified', 'skills/name-conflict'])
-const retiredSkills = ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']
+const retiredSkills = ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']
 
 function definitionHash(definition: McpDefinition): string {
   return sha256(JSON.stringify([definition.id, definition.label, definition.origin,

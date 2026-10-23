@@ -9,6 +9,36 @@ import { fingerprint, sha256 } from '../src/host/installer/files.ts'
 import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
+  it('loads website catalog metadata with null optional fields and uses the published version', async () => {
+    const { service, state, ctx } = await hubFixture()
+    await service.acceptBrowserSession({ token: secret })
+    state.override = (request, response) => {
+      if (request.url !== '/api/convex/query') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ hasMore: false, nextCursor: null, page: [
+        { skill: { _id: 'published', slug: 'published-skill', displayName: null, description: null, summary: null, version: null, latestVersionId: 'v1', tags: null, visibility: 'public', approvalStatus: 'approved' }, latestVersion: { _id: 'v1', version: '1.0.0' } },
+        { skill: { _id: 'pending', slug: 'pending-skill', version: null, latestVersionId: null, visibility: 'public', approvalStatus: 'pending' } },
+      ] }))
+      return true
+    }
+    const page = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: {} } })
+    expect(page).toEqual({ items: [
+      { id: 'published', name: 'published-skill', description: '', versionId: 'v1', version: '1.0.0', visibility: 'public', approvalStatus: 'approved' },
+      { id: 'pending', name: 'pending-skill', description: '', versionId: '', version: '', visibility: 'public', approvalStatus: 'pending' },
+    ] })
+    expect(await service.account()).toMatchObject({ state: 'signed_in' })
+  })
+  it('rejects catalog metadata of the wrong type instead of treating it as an empty value', async () => {
+    const { service, login, state } = await hubFixture()
+    await login()
+    state.override = (request, response) => {
+      if (request.url !== '/api/convex/query') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ page: [{ skill: { _id: 'invalid', version: 42 } }] }))
+      return true
+    }
+    await expect(service.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/protocol' })
+  })
   it('retains store metadata, searches tags and display names, and filters unpublished entries before pagination', async () => {
     const { service, login, state, ctx } = await hubFixture({ pageSize: 1 })
     await login()

@@ -78,10 +78,11 @@ export function TpcoworkHub({ available, epoch, skills, t, query, actions }: Sec
   }
   const download = (item: TpcoworkHubSkill, snapshot?: Snapshot) => { if (isInstalled(item)) setUpdate(item); else install(item, false, snapshot) }
   const failure = visibleFailure(failed)
-  const updateDialog = update && <Modal open className="tp-toolbox-dialog" contentClassName="tp-toolbox-dialog-content" title={t('update')} closeLabel={t('close')} onClose={() => { if (!operation.busy) setUpdate(null) }}>
-    <p>{t('storeUpdateConfirm', { name: update.name })}</p><p>{t('hubConflict')}</p>{operation.feedback}
-    <div className="tp-toolbox-actions"><Button disabled={operation.busy} onClick={() => setUpdate(null)}>{t('cancel')}</Button><Button className="tp-toolbox-primary" disabled={!canInstall} onClick={() => install(update, true)}>{t('update')}</Button>
-      {operation.busy && <Button onClick={operation.cancel}>{t('storeCancelDownload')}</Button>}</div>
+  const updateDialog = update && <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('update')} description={`${t('storeUpdateConfirm', { name: update.name })}\n${t('hubConflict')}`} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!operation.busy) setUpdate(null) }}
+    footer={<><Button variant="outline" data-modal-autofocus disabled={operation.busy} onClick={() => setUpdate(null)}>{t('cancel')}</Button>
+      {operation.busy && <Button variant="outline" onClick={operation.cancel}>{t('storeCancelDownload')}</Button>}
+      <Button variant="primary" disabled={!canInstall} onClick={() => install(update, true)}>{t('update')}</Button></>}>
+    {operation.feedback}
   </Modal>
   if (detail) return <><HubDetail key={detail.item.id} item={detail.item} installed={isInstalled(detail.item)} actions={actions} t={t} canInstall={canInstall} busy={operation.busy} feedback={!update && operation.feedback} returnFocusId={detail.focusId} returnScrollTop={detail.scrollTop}
     onDownload={snapshot => download({ ...detail.item, ...snapshot.skill }, snapshot)} onCancel={operation.cancel} onClose={() => { if (!operation.busy) setDetail(null) }} />{updateDialog}</>

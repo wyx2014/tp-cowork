@@ -32,8 +32,9 @@ export function LoadNotice<TValue extends { complete: boolean }>({ load, availab
     {!available && <p role="status">{t('unavailable')}</p>}{available && load.value?.complete && !load.loading && !load.failed && empty && <p className="tp-toolbox-empty">{t('empty')}</p>}</>
 }
 export function ConfirmRemove({ name, onClose, onConfirm, busy, disabled, feedback, t }: { name: string; onClose(): void; onConfirm(): void; busy: boolean; disabled?: boolean; feedback?: React.ReactNode; t: T }) {
-  return <Modal open className="tp-toolbox-dialog" contentClassName="tp-toolbox-dialog-content" title={t('confirmRemove', { name })} closeLabel={t('close')} onClose={() => { if (!busy) onClose() }}>
-    <p>{t('removeHint')}</p>{feedback}<div className="tp-toolbox-actions"><Button disabled={busy || disabled} onClick={onConfirm}>{t('remove')}</Button><Button disabled={busy} onClick={onClose}>{t('cancel')}</Button></div>
+  return <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('confirmRemove', { name })} description={t('removeHint')} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!busy) onClose() }}
+    footer={<><Button variant="outline" data-modal-autofocus disabled={busy} onClick={onClose}>{t('cancel')}</Button><Button variant="primary" className="tp-dialog-danger" disabled={busy || disabled} onClick={onConfirm}>{t('remove')}</Button></>}>
+    {feedback}
   </Modal>
 }
 export type SectionProps = { t: T; query: string; actions: UiActions }

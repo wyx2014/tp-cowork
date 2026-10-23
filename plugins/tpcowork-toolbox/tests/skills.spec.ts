@@ -58,8 +58,8 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
   it('installs the current bundled skills without retired names', async () => {
     const { ctx, installer, bundledRoot } = await skillsFixture()
     const names = await readdir(bundledRoot)
-    expect(names.length).toBe(24)
-    for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron']) expect(names).not.toContain(name)
+    expect(names.length).toBe(23)
+    for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']) expect(names).not.toContain(name)
     for (const name of names) {
       const result = await installer.install({ requestId: name, source: { kind: 'bundled', resourceId: name }, scope: { kind: 'user' }, conflict: 'reject' })
       expect(result.error, name).toBeUndefined()
@@ -67,7 +67,8 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
       expect((await ctx.skills.get(name))?.resourceBase?.kind, name).toBe('directory')
     }
     expect((await ctx.skills.list()).map(item => item.name).sort()).toEqual(names.sort())
-    expect(await ctx.skills.get('create-skill')).toMatchObject({ invocation: { modelInvocable: false, userInvocable: true } })
+    expect(await ctx.skills.get('create-skill')).toBeUndefined()
+    expect(await ctx.skills.get('skill-creator')).toMatchObject({ name: 'skill-creator', resourceBase: { kind: 'directory' } })
     expect(ctx.get('toolboxSkills')).toBeInstanceOf(ToolboxSkills)
   })
 })

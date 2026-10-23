@@ -40,9 +40,10 @@ export function Suggestions({ sessionId, disabled, preferences, prepare, t }: Su
       <span className="tp-suggestion-icon"><img src={item.icon} alt="" width="24" height="24" draggable={false} /></span><span>{t(item.label)}</span>
     </button></li>)}</ul>
     {error && <p className="tp-suggestion-feedback" role="status">{error}</p>}
-    <Modal open={closing} title={t('suggestionsClose')} closeLabel={t('close')} className="tp-toolbox-dialog" contentClassName="tp-toolbox-dialog-content" onClose={() => setClosing(false)}>
-      <p>{t('suggestionsCloseHint')}</p>{saveFailed && <p role="alert">{t('suggestionsSaveFailed')}</p>}<div className="tp-toolbox-actions"><Button onClick={() => setClosing(false)}>{t('cancel')}</Button>
-        <Button onClick={() => { try { preferences.setEnabled(false); setClosing(false); setError('') } catch { setSaveFailed(true) } }}>{t('suggestionsConfirm')}</Button></div>
+    <Modal open={closing} title={t('suggestionsClose')} description={t('suggestionsCloseHint')} closeLabel={t('close')} showCloseButton={false} className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" onClose={() => setClosing(false)}
+      footer={<><Button variant="outline" data-modal-autofocus onClick={() => setClosing(false)}>{t('cancel')}</Button>
+        <Button variant="primary" onClick={() => { try { preferences.setEnabled(false); setClosing(false); setError('') } catch { setSaveFailed(true) } }}>{t('suggestionsConfirm')}</Button></>}>
+      {saveFailed ? <p role="alert">{t('suggestionsSaveFailed')}</p> : undefined}
     </Modal>
   </section>
 }

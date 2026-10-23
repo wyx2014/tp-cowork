@@ -54,7 +54,7 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
   if (phone) return <CallSetup actions={actions} t={t} returnFocusId={`${editorId}-phone-${phone.id}`} returnScrollTop={phone.scrollTop} onClose={() => setPhone(null)} />
   if (detail) return <SkillDetail key={detail.item.id} item={detail.item} read={actions.skillDetail} openDirectory={actions.openSkillDirectory} t={t} returnFocusId={`${editorId}-detail-${detail.item.id}`} returnScrollTop={detail.scrollTop} onClose={() => setDetail(null)} />
   return <SectionLayout actions={<>
-    <Button icon={<ToolboxIcon name="wand" />} onClick={() => actions.prepareSkill(t('createPrompt'))}>{t('createSkill')}</Button>
+    <Button icon={<ToolboxIcon name="wand" />} onClick={() => actions.prepareSkill(t('createPrompt', { skill: '{skill}' }))}>{t('createSkill')}</Button>
     <Button id={`${editorId}-create`} className="tp-toolbox-primary" icon={<ToolboxIcon name="plus" />} disabled={!mutable} onClick={() => setCreating(true)}>{t('manualCreate')}</Button>
   </>}>
     <div className="tp-toolbox-section-toolbar"><nav className="tp-toolbox-sources" aria-label={t('skillSources')}>{(['all', 'bundled', 'mine'] as const).map(value => <Button key={value} aria-pressed={source === value} onClick={() => setSource(value)}>{t(value === 'all' ? 'allSkills' : value === 'bundled' ? 'bundledSkills' : 'mySkills')} ({items.filter(item => value === 'all' || (item.origin === 'bundled') === (value === 'bundled')).length})</Button>)}</nav>

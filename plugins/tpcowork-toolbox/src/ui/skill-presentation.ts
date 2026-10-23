@@ -23,7 +23,6 @@ const skills: Record<string, { label: UiKey; description?: UiKey; icon: string; 
   'clawhub': { label: 'skillDiscoverName', description: 'skillDiscoverDescription', icon: capabilityIcon('search', 'blue'), aliases: [] },
   'code-review': { label: 'skillReviewName', description: 'skillReviewDescription', icon: capabilityIcon('review', 'slate'), aliases: [] },
   'create-agent': { label: 'skillAgentName', description: 'skillAgentDescription', icon: capabilityIcon('agent', 'blue'), aliases: [] },
-  'create-skill': { label: 'skillSkillWritingName', description: 'skillSkillWritingDescription', icon: capabilityIcon('document', 'violet'), aliases: [] },
   'deep-research': { label: 'skillResearchName', description: 'skillResearchDescription', icon: capabilityIcon('research', 'blue'), aliases: [] },
   'doc-coauthoring': { label: 'skillCoauthoringName', description: 'skillCoauthoringDescription', icon: capabilityIcon('document', 'teal'), aliases: [] },
   'frontend-design': { label: 'skillFrontendName', description: 'skillFrontendDescription', icon: capabilityIcon('layout', 'pink'), aliases: [] },

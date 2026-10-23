@@ -7,6 +7,7 @@ import * as ReactDom from 'react-dom'
 import * as jsx from 'react/jsx-runtime'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import * as stores from '@deepseek-ai/dsh-client-store'
+import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { ClientRoster, createClientTest, webApp } from '../../../../deepseek-harness/packages/test-support/client-runtime/src/assembly/index.ts'
 import * as CordisUI from '../../../../deepseek-harness/packages/extensions/ui-cordis/src/client/index.ts'
 import { ViewportInputs, useOperationActive, useResizeWarning } from '../src/viewport.jsx'
@@ -112,7 +113,7 @@ it('summarizes Chrome imports with the reference wording', () => {
 
 const ID = '@tpcowork/dsh-browser'
 let plugin: unknown
-const modules: Record<string, unknown> = { react: React, 'react-dom': ReactDom, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores }
+const modules: Record<string, unknown> = { react: React, 'react-dom': ReactDom, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores, '@deepseek-ai/dsh-client-ui-primitives': primitives }
 ;(window as never as { __ModuleLoader__: unknown }).__ModuleLoader__ = { load: (registration: { factory: (require: (name: string) => unknown) => unknown }) => { plugin = registration.factory(name => {
   if (!(name in modules)) throw new Error(`Unexpected client external ${name}`)
   return modules[name]

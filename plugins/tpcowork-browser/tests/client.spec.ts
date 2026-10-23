@@ -7,13 +7,14 @@ import * as ReactDom from 'react-dom'
 import * as jsx from 'react/jsx-runtime'
 import { render, fireEvent, cleanup } from '@testing-library/react'
 import * as stores from '@deepseek-ai/dsh-client-store'
+import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { ClientRoster, createClientTest, webApp } from '../../../../deepseek-harness/packages/test-support/client-runtime/src/assembly/index.ts'
 import * as CordisUI from '../../../../deepseek-harness/packages/extensions/ui-cordis/src/client/index.ts'
 import { BrowserClient } from '../src/client-controller.js'
 
 const ID = '@tpcowork/dsh-browser'
 let plugin
-const modules = { react: React, 'react-dom': ReactDom, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores }
+const modules = { react: React, 'react-dom': ReactDom, 'react/jsx-runtime': jsx, '@deepseek-ai/dsh-client-store': stores, '@deepseek-ai/dsh-client-ui-primitives': primitives }
 window.__ModuleLoader__ = { load: registration => { plugin = registration.factory(name => {
   if (!(name in modules)) throw new Error(`Unexpected client external ${name}`)
   return modules[name]

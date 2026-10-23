@@ -17,10 +17,10 @@ ${suggestionStyles}
 .tp-toolbox-heading h1 { margin:0; font-size:20px; font-weight:500; line-height:28px; }
 .tp-toolbox-heading p { margin:4px 0 0; color:var(--dsw-alias-label-secondary); font-size:13px; line-height:20px; }
 .tp-toolbox-heading-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.tp-toolbox button,.tp-toolbox-dialog button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:36px; padding:0 14px; border:0; border-radius:var(--dsw-radius-md); background:transparent; color:inherit; font:inherit; font-size:14px; line-height:22px; cursor:pointer; }
-.tp-toolbox button:hover:not(:disabled),.tp-toolbox-dialog button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }
-.tp-toolbox button:active:not(:disabled),.tp-toolbox-dialog button:active:not(:disabled) { background:var(--dsw-alias-interactive-bg-active); }
-.tp-toolbox button:disabled,.tp-toolbox-dialog button:disabled { opacity:.4; cursor:not-allowed; }
+.tp-toolbox button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:36px; padding:0 14px; border:0; border-radius:var(--dsw-radius-md); background:transparent; color:inherit; font:inherit; font-size:14px; line-height:22px; cursor:pointer; }
+.tp-toolbox button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }
+.tp-toolbox button:active:not(:disabled) { background:var(--dsw-alias-interactive-bg-active); }
+.tp-toolbox button:disabled { opacity:.4; cursor:not-allowed; }
 .tp-toolbox button svg,.tp-toolbox-dialog button svg { flex-shrink:0; }
 .tp-toolbox .tp-toolbox-primary,.tp-toolbox-dialog .tp-toolbox-primary { background:var(--dsw-alias-button-primary-fill); color:var(--dsw-alias-label-primary-foreground); }
 .tp-toolbox .tp-toolbox-primary:hover:not(:disabled),.tp-toolbox-dialog .tp-toolbox-primary:hover:not(:disabled) { background:var(--dsw-alias-button-primary-hover); }
@@ -70,7 +70,6 @@ ${suggestionStyles}
 .tp-toolbox-credential { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .tp-toolbox-content { white-space:pre-wrap; overflow-wrap:anywhere; max-height:45vh; overflow:auto; font-size:12px; line-height:20px; }
 .tp-toolbox-dialog { max-height:100%; font-family:inherit; font-size:14px; line-height:1.6; }
-.tp-toolbox-dialog button[aria-label] { min-width:28px; min-height:28px; height:28px; padding:0; }
 .tp-toolbox-dialog-content { min-height:0; overflow:auto; }
 .tp-toolbox-selection-status,.tp-toolbox-selection-error { font-size:12px; line-height:1.5; color:var(--dsw-alias-label-secondary); margin:0; }
 .tp-toolbox-selection-error { color:var(--dsw-alias-state-error-primary); }

@@ -6,6 +6,18 @@ import { TpcoworkHub } from '../src/ui/tpcoworkhub/index.tsx'
 import { actions, catalog, t } from './ui-fixture.ts'
 afterEach(cleanup)
 
+it('explains a catalog response format error and lets the signed-in user refresh', async () => {
+  const api = actions()
+  api.hubList = vi.fn().mockRejectedValueOnce({ code: 'tpcoworkhub/protocol', message: 'private remote body' }).mockResolvedValue({ items: [] })
+  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+  expect((await screen.findByRole('alert')).textContent).toBe('The skill store returned an unsupported data format. Refresh and retry.')
+  expect(document.body.textContent).not.toContain('private remote body')
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  await screen.findByText(t('storeEmpty'))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(api.hubLogout).not.toHaveBeenCalled()
+})
+
 it.each(['unconfigured', 'signed_out', 'expired'] as const)('hides account status and upload controls for %s accounts', async state => {
   const api = actions()
   api.hubAccount = vi.fn(async () => ({ configured: false, writable: state !== 'unconfigured', state }))

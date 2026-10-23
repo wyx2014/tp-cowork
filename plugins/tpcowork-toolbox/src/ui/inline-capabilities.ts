@@ -17,6 +17,18 @@ function reference(value: Capability, skillLabel: (name: string) => string = nam
   return { source: capabilityReferenceSource, ref, label: value.kind === 'skill' ? skillLabel(value.label) : value.label, appearance: value.kind, clipboardText: capabilityClipboardText(ref) }
 }
 
+/** Prepare an editable creation request with a localized native skill reference; never submit. */
+export function prepareSkillCreationDraft(input: SessionInput, template: string, label: string): void {
+  const token = '/skill-creator'
+  const start = template.indexOf('{skill}')
+  input.setDraft(template.replace('{skill}', token))
+  if (start < 0 || !input.insertReference({
+    source: 'skill', ref: token, label, appearance: 'skill', clipboardText: token,
+  }, { start, end: start + token.length, draftRev: input.state.getSnapshot().draftRev })) {
+    throw new Error('toolbox/draft-unavailable')
+  }
+}
+
 /**
  * Put the selected team on its own first line while retaining editable prose and references.
  * @param ctx - target Session scope with native input event handlers.

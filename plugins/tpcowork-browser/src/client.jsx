@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defineStore } from '@deepseek-ai/dsh-client-store';
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { BrowserClient } from './client-controller.js';
 import { BrowserTool } from './tool-card.jsx';
 import { Guest } from './guest.jsx';
@@ -30,7 +31,7 @@ function Permission({ entry, request, t, fail }) {
   const [remember, setRemember] = useState(true);
   const answer = allow => { void request('permissionRespond', { id: entry.id, allow, remember }).catch(fail); };
   return <section className="tpcb-permission" role="dialog" aria-label={t('permissionRequest')}><strong>{entry.origin}</strong><p>{t('permissionRequest')}: {entry.permission === 'media' ? t('permissionMedia') : entry.permission}</p>
-    <label><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />{t('remember')}</label><div><button onClick={() => answer(false)}>{t('deny')}</button><button onClick={() => answer(true)}>{t('allow')}</button></div></section>;
+    <label><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />{t('remember')}</label><div><Button variant="outline" onClick={() => answer(false)}>{t('deny')}</Button><Button variant="primary" onClick={() => answer(true)}>{t('allow')}</Button></div></section>;
 }
 
 function BrowserBody(props) {
@@ -159,7 +160,8 @@ function Settings({ useBrowser, request, t }) {
     {!state.enabled && <p role="alert">{t('unavailable')}</p>}
     <div className="tpcb-settings-card"><strong>{t('import')}</strong><p>{t('importHelp')}</p><button disabled={busy || !state.enabled} onClick={() => { void run('importChrome'); }}>{t('import')}</button></div>
     <div className="tpcb-settings-card"><button disabled={busy || !state.enabled} onClick={() => { void run('clearData', { mode: 'cache' }); }}>{t('clearCache')}</button><button disabled={busy || !state.enabled} onClick={() => setConfirm(true)}>{t('clearAll')}</button>
-      {confirm && <div role="alertdialog" aria-label={t('clearAll')}><p>{t('clearConfirm')}</p><button onClick={() => setConfirm(false)}>{t('cancel')}</button><button disabled={busy} onClick={() => { setConfirm(false); void run('clearData', { mode: 'all', confirmed: true }); }}>{t('confirm')}</button></div>}</div>
+      <Modal open={confirm} className="tp-confirm-dialog" title={t('clearAll')} description={t('clearConfirm')} closeLabel={t('cancel')} showCloseButton={false} onClose={() => setConfirm(false)}
+        footer={<><Button variant="outline" data-modal-autofocus onClick={() => setConfirm(false)}>{t('cancel')}</Button><Button variant="primary" className="tp-dialog-danger" disabled={busy} onClick={() => { setConfirm(false); void run('clearData', { mode: 'all', confirmed: true }); }}>{t('confirm')}</Button></>} /></div>
     <h3>{t('security')}</h3>
     <div className="tpcb-settings-card"><label className="tpcb-permission-rule"><span><strong>{t('insecureCertificates')}</strong><br /><span className="tpcb-hint">{t('insecureCertificatesHelp')}</span></span>
       <input type="checkbox" role="switch" aria-label={t('insecureCertificates')} checked={state.security?.allowInsecureCertificates === true} disabled={busy || !state.enabled}

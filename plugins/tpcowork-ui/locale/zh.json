@@ -4,6 +4,7 @@
     "description": "界面表现层：负责品牌、主题、首页、侧栏和通用设置的展示适配，通过 DSH 的主题、插槽和布局服务统一外观。界面定制集中维护，便于独立更换样式和跟随底座升级。"
   },
   "ui": {
+    "currentVersion": "当前版本：0.1-alpha.1",
     "developerMode": "开发者模式",
     "developerModeDescription": "开启后可选择和管理 Agent 预设，并显示执行轨迹与代码差异。关闭后，新任务使用标准模式。",
     "brand": "TP Cowork",

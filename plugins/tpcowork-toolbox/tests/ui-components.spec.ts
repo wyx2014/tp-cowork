@@ -311,7 +311,7 @@ describe('toolbox user paths', () => {
     expect(await screen.findByText('# Office skill Full resources.', { exact: false })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Back to list' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create skill with AI' }))
-    expect(api.prepareSkill).toHaveBeenCalledWith(t('createPrompt'))
+    expect(api.prepareSkill).toHaveBeenCalledWith(t('createPrompt', { skill: '{skill}' }))
     expect(api.skillInstall).not.toHaveBeenCalled()
     view.rerender(React.createElement(Skills, { load: { value: current.skills, failed: false, loading: false }, available: true, query: 'no-match', t, actions: api }))
     expect(screen.getByText('No matching entries')).toBeTruthy()

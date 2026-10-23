@@ -1,6 +1,6 @@
 /** A fresh profile boots the shipped Host, templates and launcher, including after an offline tgz install. */
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -68,8 +68,9 @@ try {
   assert.deepEqual(teams.items.map(item => item.id), ['asset-research-team', 'supply-chain-bottleneck-team'])
   assert.ok(teams.items.every(item => item.readiness.state === 'blocked'))
   const items = (await ctx.toolboxSkills.inventory({})).items
-  assert.equal(items.length, 31)
-  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf']) assert.ok(!items.some(item => item.name === name))
+  const bundledNames = (await readdir(resolve(root, 'resources/skills'), { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
+  assert.deepEqual(items.map(item => item.name).sort(), bundledNames)
+  for (const name of ['office-documents', 'xlsx', 'portfolio-analysis', 'corporate-ppt', 'docx', 'pdf', 'writing-plans', 'write-article', 'weekly-report', 'long-goal', 'memory', 'my', 'weather', 'cron', 'create-skill']) assert.ok(!items.some(item => item.name === name))
   assert.ok(items.some(item => item.name === 'skill-creator' && item.origin === 'bundled'))
   for (const path of ['skill-creator/SKILL.md', 'skill-creator/scripts/quick_validate.py', 'skill-creator/references/gui-authoring.md']) {
     assert.deepEqual(await readFile(join(dir, 'skills', path)), await readFile(resolve(root, 'resources/skills', path)))
@@ -84,8 +85,8 @@ try {
   await ctx.fiber.dispose()
   const restored = await start()
   assert.equal(await readFile(profile.patchPath, 'utf8'), patch)
-  assert.equal((await restored.toolboxSkills.inventory({})).items.length, 31)
-  console.log('Compiled toolbox + experts: TpcoworkHub, two teams, 31 complete skills, 3 credential references, no global MCP, unchanged restart passed.')
+  assert.deepEqual((await restored.toolboxSkills.inventory({})).items.map(item => item.name).sort(), bundledNames)
+  console.log(`Compiled toolbox + experts: TpcoworkHub, two teams, ${bundledNames.length} complete skills, 3 credential references, no global MCP, unchanged restart passed.`)
 } finally {
   for (const ctx of contexts) await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true }); hook.deregister()

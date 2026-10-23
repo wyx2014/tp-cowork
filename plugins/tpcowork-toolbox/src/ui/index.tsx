@@ -26,7 +26,7 @@ import { admissionFailure } from '../client/failure.ts'
 import { ToolboxPage } from './Page.tsx'
 import { ChoiceDock } from './Choices.tsx'
 import { choiceCommands } from './choice-commands.ts'
-import { bindInlineCapabilities, capabilityClipboardText, capabilityReferenceSource, capabilityTextReferences, prependTeamReference, removeInlineCapability } from './inline-capabilities.ts'
+import { bindInlineCapabilities, capabilityClipboardText, capabilityReferenceSource, capabilityTextReferences, prepareSkillCreationDraft, prependTeamReference, removeInlineCapability } from './inline-capabilities.ts'
 import type { UiActions, UiInjected } from './types.ts'
 import { en, zh, type UiKey } from './locales.ts'
 import { styles } from './styles.ts'
@@ -94,7 +94,13 @@ export function registerToolboxUi(ctx: Context): void {
     mcpProbeDraft: (request, signal) => unwrap(remote.toolboxMcp.probeDraft(request, signal)),
     hubAccount: () => unwrap(remote.toolboxTpcoworkHub.account()), hubLogin: (request, signal) => unwrap(remote.toolboxTpcoworkHub.login(request, signal)), hubLogout: () => unwrap(remote.toolboxTpcoworkHub.logout()),
     hubList: (request, signal) => unwrap(remote.toolboxTpcoworkHub.list(request, signal)), hubDetail: (request, signal) => unwrap(remote.toolboxTpcoworkHub.detail(request, signal)), hubInstall: (request, signal) => unwrap(remote.toolboxTpcoworkHub.install(request, signal)), hubPublish: (request, signal) => unwrap(remote.toolboxTpcoworkHub.publish(request, signal)),
-    prepareSkill: prompt => ctx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: false }),
+    prepareSkill: template => ctx.uiWorkspace.startSession(undefined, {
+      prompt: template.replace('{skill}', skillPresentation('skill-creator', t).label), clearPreviousDraft: false,
+      onPrepared: sessionId => {
+        const binding = ctx.sessions.binding(sessionId)!
+        prepareSkillCreationDraft(ctx.conversation.input.for(binding.ctx), template, skillPresentation('skill-creator', t).label)
+      },
+    }),
     prepareTeam: (team, prompt) => ctx.uiWorkspace.startSession(undefined, { prompt, clearPreviousDraft: false, reuseBlank: false, onPrepared: sessionId => {
       const binding = ctx.sessions.binding(sessionId)!
       prependTeamReference(binding.ctx, ctx.conversation.input.for(binding.ctx), team)

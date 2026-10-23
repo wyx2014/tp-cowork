@@ -7,6 +7,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
     h('span', { className: 'tpcowork-preview-badge' }, t('preview')));
   const Mark = () => h('img', { className: 'tpcowork-brand-mark', src: brandIcon, alt: '', width: 24, height: 24, 'aria-hidden': true });
   const Greeting = ({ t }) => h('h1', { className: 'tpcowork-greeting' }, t('greeting'));
+  const CurrentVersion = ({ t }) => h('div', { className: 'tpcowork-current-version' }, t('currentVersion'));
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);
   const NotificationSetting = createNotificationSetting(React, primitives);
@@ -63,6 +64,9 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       ctx.slots.inject('settings.general.item', () => ctx.slots.register({
         name: 'settings.general.item', id: 'tpcowork-notifications', order: 12, locale: 'tpcowork',
       }, NotificationSetting));
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item', id: 'current-version', order: 100, priority: -10, locale: 'tpcowork',
+      }, CurrentVersion));
       // Native notifications belong to the desktop shell; a plain browser has no bridge.
       const notifications = window.dshDesktop?.notifications;
       if (notifications) {
