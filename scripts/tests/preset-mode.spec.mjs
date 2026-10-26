@@ -1,5 +1,8 @@
 import { registerHooks } from 'node:module'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { chromium } from 'playwright-core'
@@ -7,8 +10,60 @@ import { expect, it, onTestFinished } from 'vitest'
 import { launchWebScaffold } from '../../../deepseek-harness/apps/web/tests/scaffold.ts'
 import { connectFreshWorkspaceZh } from '../../../deepseek-harness/apps/web/tests/support.ts'
 import { artifactPeers } from '../../plugins/tpcowork-toolbox/tests/artifact-peers.mjs'
+import { npmCli } from '../package-command.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
+
+it('keeps the packaged desktop default off with a model key and preserves an explicit opt-in after reload', async () => {
+  const requireUrls = registerHooks({ resolve(specifier, context, next) {
+    return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)
+  } })
+  onTestFinished(() => requireUrls.deregister())
+  const peers = await artifactPeers()
+  onTestFinished(() => peers.deregister())
+  const packaged = await mkdtemp(join(tmpdir(), 'tpcowork-packaged-defaults-'))
+  onTestFinished(() => rm(packaged, { recursive: true, force: true }))
+  const run = promisify(execFile)
+  const { stdout } = await run(process.execPath, [npmCli(), 'pack', '--ignore-scripts', '--json', '--pack-destination', packaged], {
+    cwd: join(root, 'plugins/tpcowork-ui'),
+  })
+  await run('tar', ['-xzf', join(packaged, JSON.parse(stdout)[0].filename), '-C', packaged])
+  const scaffold = await launchWebScaffold({
+    extraOverlayPath: [join(root, '../deepseek-harness/apps/web/tests/pin-browse-picker.overlay.yml')],
+    profile: { hmr: false, packages: [{ dir: join(packaged, 'package'), enabled: true }] },
+  })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  page.setDefaultTimeout(20000)
+  await page.addInitScript(() => {
+    window.dshDesktop = {}
+    window.dshOnboarding = { hasApiKey: async () => true }
+  })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  const settings = () => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings').value
+  const onboarding = () => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings-account').value
+  await page.goto(scaffold.authenticatedUrl)
+  await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+  await expect.poll(() => onboarding().step).toBe('done')
+  expect(settings().enabled).toBe(false)
+  const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+  const openSettings = () => page.getByRole('button', { name: '设置', exact: true }).click()
+  const toggle = dialog.getByRole('switch', { name: '开发者模式', exact: true })
+  await openSettings()
+  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+  expect(await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
+  await toggle.click()
+  await expect.poll(() => settings().enabled).toBe(true)
+  await page.reload()
+  await page.locator('[data-conversation-content]').first().waitFor()
+  await openSettings()
+  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+  expect(await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(1)
+  expect(errors).toEqual([])
+})
 
 it('offers preset controls only in Developer mode and preserves existing task compositions', async () => {
   const requireUrls = registerHooks({ resolve(specifier, context, next) {

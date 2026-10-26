@@ -3,7 +3,7 @@
   "productName": "TP Cowork",
   "artifactPrefix": "tpcowork",
   "appId": "com.tparuyi.tpcowork.dsh",
-  "icon": "plugins/tpcowork-ui/icon.png",
+  "icon": "branding/icon.png",
   "prepare": "scripts/prepare-desktop-product.mjs",
   "packages": ".desktop-build/product/packages",
   "bundles": [

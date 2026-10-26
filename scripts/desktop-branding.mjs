@@ -25,35 +25,70 @@ export function productSvg(icon, name, wordmark = false) {
     : `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="${label}"><image href="${image}" width="256" height="256"/></svg>\n`
 }
 
-/** Artwork for the native NSIS pages; these bitmaps are independent of Electron's icons. */
-function installerSvg(icon, name, dark, sidebar = false) {
-  const label = name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
-  const width = sidebar ? 164 : 600, height = sidebar ? 314 : 196
-  const size = sidebar ? 96 : 112, y = sidebar ? 68 : 12
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${dark ? '#151517' : '#ffffff'}"/><image href="data:image/png;base64,${icon.toString('base64')}" x="${(width - size) / 2}" y="${y}" width="${size}" height="${size}"/><text x="${width / 2}" y="${sidebar ? 206 : 176}" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="${sidebar ? 22 : 32}" font-weight="600" fill="${dark ? '#f9fafb' : '#0f1115'}">${label}</text></svg>`
+/** The application's Zai Light and Zai Dark surfaces, shared by every installer surface. */
+export const installerPalette = {
+  light: { background: '#f8f8f8', text: '#0d0d0d', subtle: 'rgba(13,13,13,0.6)', border: 'rgba(13,13,13,0.1)' },
+  dark: { background: '#161616', text: '#f8f8f8', subtle: 'rgba(255,255,255,0.6)', border: 'rgba(255,255,255,0.1)' },
+}
+const installerFont = "'Segoe UI Semibold','Segoe UI','Microsoft YaHei UI','PingFang SC',Arial,sans-serif"
+
+function escapeXml(text) {
+  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
 }
 
-/** The browser tab favicon historically was a single flat-filled mark on a transparent
- * background (black in light mode, white in dark mode) rather than the app icon's own
- * filled square — derive that same silhouette from the current icon instead of embedding
- * the square wholesale, so the favicon keeps that lighter, theme-matched effect. */
-async function faviconMark(icon, sharp, name, hex) {
-  const { data, info } = await sharp(icon).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  const { width, height, channels } = info
-  const bgIndex = (Math.floor(height * 0.03) * width + Math.floor(width / 2)) * channels
-  const bg = [data[bgIndex], data[bgIndex + 1], data[bgIndex + 2]]
-  const [r, g, b] = [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
-  const mark = Buffer.alloc(width * height * 4)
-  for (let pixel = 0; pixel < width * height; pixel++) {
-    const source = pixel * channels, target = pixel * 4
-    const alpha = channels === 4 ? data[source + 3] : 255
-    const distance = Math.hypot(data[source] - bg[0], data[source + 1] - bg[1], data[source + 2] - bg[2])
-    mark[target] = r; mark[target + 1] = g; mark[target + 2] = b
-    mark[target + 3] = alpha === 0 ? 0 : Math.max(0, Math.min(255, Math.round((distance - 40) * 8)))
+/**
+ * Artwork for the native NSIS pages; these bitmaps are independent of Electron's icons.
+ * The window art sits on the installer's own surface; the uninstaller sidebar is a panel beside the white wizard page.
+ */
+function installerSvg(icon, name, dark, sidebar = false) {
+  const label = escapeXml(name)
+  const colors = installerPalette[dark ? 'dark' : 'light']
+  const image = `data:image/png;base64,${icon.toString('base64')}`
+  if (sidebar) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="164" height="314" viewBox="0 0 164 314"><rect width="164" height="314" fill="${colors.background}"/><rect x="163" width="1" height="314" fill="${colors.border}"/><image href="${image}" x="42" y="76" width="80" height="80"/><text x="82" y="190" text-anchor="middle" font-family="${installerFont}" font-size="20" font-weight="600" fill="${colors.text}">${label}</text></svg>`
   }
-  const png = await sharp(mark, { raw: { width, height, channels: 4 } }).png().toBuffer()
-  const label = name.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}"><image href="data:image/png;base64,${png.toString('base64')}" width="${width}" height="${height}"/></svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="196" viewBox="0 0 600 196"><rect width="600" height="196" fill="${colors.background}"/><image href="${image}" x="244" y="12" width="112" height="112"/><text x="300" y="176" text-anchor="middle" font-family="${installerFont}" font-size="30" font-weight="600" fill="${colors.text}">${label}</text></svg>`
+}
+
+/** macOS disk-image window art: 540x380 points; the builder places the app and Applications icons over the arrow ends. */
+export const dmgLayout = { width: 540, height: 380, iconSize: 96, app: { x: 140, y: 214 }, applications: { x: 400, y: 214 } }
+function dmgSvg(icon, name) {
+  const label = escapeXml(name)
+  const { light } = installerPalette
+  const { width, height, app, applications } = dmgLayout
+  // Disk images are built on macOS, so the art uses its system faces.
+  const font = "'PingFang SC','Helvetica Neue',Arial,sans-serif"
+  const from = app.x + 70, to = applications.x - 70, y = app.y
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="${light.background}"/><image href="data:image/png;base64,${icon.toString('base64')}" x="${width / 2 - 88}" y="40" width="32" height="32"/><text x="${width / 2 - 48}" y="65" font-family="${font}" font-size="24" font-weight="600" fill="${light.text}">${label}</text><text x="${width / 2}" y="106" text-anchor="middle" font-family="${font}" font-size="13" fill="${light.subtle}">将 ${label} 拖到“应用程序”文件夹以完成安装</text><text x="${width / 2}" y="126" text-anchor="middle" font-family="${font}" font-size="12" fill="${light.subtle}">Drag ${label} to Applications to install</text><path d="M${from} ${y}H${to}M${to - 10} ${y - 10}L${to} ${y}L${to - 10} ${y + 10}" fill="none" stroke="${light.text}" stroke-opacity="0.3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+}
+
+/** NSIS colors as RRGGBB, GDI+ ARGB and GDI COLORREF (0xBBGGRR). */
+function nsisColor(hex) {
+  const value = hex.replace('#', '').toUpperCase()
+  return { hex: value, argb: `0xFF${value}`, colorref: `0x${value.slice(4, 6)}${value.slice(2, 4)}${value.slice(0, 2)}` }
+}
+
+/** The installer window palette (installer/theme.nsh defaults are the framework's). */
+export function installerTheme() {
+  const light = { bg: nsisColor('#f8f8f8'), text: nsisColor('#0d0d0d') }
+  const dark = { bg: nsisColor('#161616'), text: nsisColor('#f8f8f8') }
+  const lines = [
+    '; Generated by TP Cowork scripts/desktop-branding.mjs: the Zai Light and Zai Dark application surfaces.',
+    '!define INSTALLER_BUTTON_DIAMETER 16',
+    `!define INSTALLER_LIGHT_BG_HEX ${light.bg.hex}`, `!define INSTALLER_LIGHT_TEXT_HEX ${light.text.hex}`,
+    `!define INSTALLER_LIGHT_BG_ARGB ${light.bg.argb}`, `!define INSTALLER_LIGHT_BG_COLORREF ${light.bg.colorref}`,
+    `!define INSTALLER_TEXT_COLORREF ${light.text.colorref}`,
+    '!define INSTALLER_PRIMARY 0xFF000000', '!define INSTALLER_PRIMARY_HOVER 0xFF333333', '!define INSTALLER_PRIMARY_PRESSED 0xFF000000',
+    '!define INSTALLER_CONTROL_HOVER 0xFFECECEC', '!define INSTALLER_TRACK_COLOR 0xFFE0E0E0',
+    '!define INSTALLER_LIGHT_BUTTON_TEXT 0xFFFFFF', '!define INSTALLER_LIGHT_BORDER 0xFFD5D5D5',
+    `!define INSTALLER_DARK_BG_HEX ${dark.bg.hex}`, `!define INSTALLER_DARK_TEXT_HEX ${dark.text.hex}`,
+    `!define INSTALLER_DARK_BG_ARGB ${dark.bg.argb}`, `!define INSTALLER_DARK_BG_COLORREF ${dark.bg.colorref}`,
+    `!define INSTALLER_DARK_TEXT_COLORREF ${dark.text.colorref}`,
+    '!define INSTALLER_DARK_PRIMARY 0xFFFFFFFF', '!define INSTALLER_DARK_PRIMARY_HOVER 0xFFE5E5E5', '!define INSTALLER_DARK_PRIMARY_PRESSED 0xFFCCCCCC',
+    '!define INSTALLER_DARK_CONTROL_HOVER 0xFF222222', '!define INSTALLER_DARK_TRACK_COLOR 0xFF2D2D2D',
+    '!define INSTALLER_DARK_BUTTON_TEXT 0x000000', '!define INSTALLER_DARK_BORDER 0xFF393939',
+  ]
+  return `${lines.join('\r\n')}\r\n`
 }
 
 async function transform(path, change) {
@@ -119,6 +154,9 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const icon = await readFile(resolve(product, config.icon))
   const desktop = join(harness, 'apps/desktop')
   const sharp = imageProcessor ?? createRequire(join(harnessRoot, 'apps/desktop/package.json'))('sharp')
+  // The source is high resolution for the Dock and Linux; embedded and window icons use smaller renditions.
+  const icon512 = await sharp(icon).resize(512, 512).png().toBuffer()
+  const icon256 = await sharp(icon).resize(256, 256).png().toBuffer()
   const textFiles = [
     'apps/desktop/src/locale.ts', 'apps/desktop/src/main.ts',
     'apps/desktop/scripts/development-app.ts', 'apps/desktop/scripts/electron-builder-config.mjs',
@@ -141,23 +179,29 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   webManifest.name = webManifest.short_name = name
   await writeFile(webManifestPath, JSON.stringify(webManifest, null, 2) + '\n')
   const images = [
-    ['apps/desktop/resources/icon.png', icon],
-    ['apps/desktop/resources/icon-windows.png', icon],
+    ['apps/desktop/resources/icon.png', icon512],
+    ['apps/desktop/resources/icon-windows.png', icon512],
     ['apps/desktop/resources/icon-macos.png', await sharp(icon).resize(1024, 1024).png().toBuffer()],
     ['apps/desktop/resources/icon.icns', await macIcon(icon, sharp)],
     ['apps/desktop/resources/tray-windows.ico', await windowsIcon(icon, sharp)],
-    ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon, name, true)],
-    ['apps/web/public/favicon.svg', await faviconMark(icon, sharp, name, '#000000')],
-    ['apps/web/public/favicon-dark.svg', await faviconMark(icon, sharp, name, '#ffffff')],
+    ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, name, true)],
+    ['apps/web/public/favicon.svg', productSvg(icon256, name)],
+    ['apps/web/public/favicon-dark.svg', productSvg(icon256, name)],
+    ['apps/desktop/installer/product-theme.nsh', installerTheme()],
   ]
   for (const dark of [false, true]) {
     for (const scale of [1, 2]) {
       const filename = `brand${dark ? '-dark' : ''}${scale === 2 ? '-2x' : ''}.png`
-      const svg = installerSvg(icon, name, dark)
+      const svg = installerSvg(icon512, name, dark)
       images.push([`apps/desktop/installer/assets/${filename}`, await sharp(Buffer.from(svg), { density: 72 * scale }).png().toBuffer()])
     }
   }
-  images.push(['apps/desktop/installer/assets/uninstaller-sidebar.png', await sharp(Buffer.from(installerSvg(icon, name, false, true))).png().toBuffer()])
+  images.push(['apps/desktop/installer/assets/uninstaller-sidebar.png', await sharp(Buffer.from(installerSvg(icon512, name, false, true))).png().toBuffer()])
+  // electron-builder pairs name@2x.png with name.png into one Retina disk-image background.
+  for (const scale of [1, 2]) {
+    images.push([`apps/desktop/resources/dmg-background${scale === 2 ? '@2x' : ''}.png`,
+      await sharp(Buffer.from(dmgSvg(icon512, name)), { density: 72 * scale }).png().toBuffer()])
+  }
   for (const [file, content] of images) {
     await mkdir(dirname(join(harness, file)), { recursive: true })
     await writeFile(join(harness, file), content)
@@ -183,8 +227,9 @@ export async function stageBrandedDesktop(destination = join(productRoot, '.desk
   }
   const icon = await readFile(resolve(productRoot, config.icon))
   const sharp = createRequire(join(desktop, 'package.json'))('sharp')
-  await writeFile(join(destination, 'renderer/assets/welcome-brand.svg'), productSvg(icon, config.productName, true))
-  for (const file of ['icon.png', 'icon-windows.png']) await writeFile(join(destination, 'resources', file), icon)
+  await writeFile(join(destination, 'renderer/assets/welcome-brand.svg'), productSvg(await sharp(icon).resize(256, 256).png().toBuffer(), config.productName, true))
+  const icon512 = await sharp(icon).resize(512, 512).png().toBuffer()
+  for (const file of ['icon.png', 'icon-windows.png']) await writeFile(join(destination, 'resources', file), icon512)
   await writeFile(join(destination, 'resources/icon-macos.png'), await sharp(icon).resize(1024, 1024).png().toBuffer())
   await writeFile(join(destination, 'resources/tray-windows.ico'), await windowsIcon(icon, sharp))
   await writeFile(join(destination, 'resources/icon.icns'), await macIcon(icon, sharp))

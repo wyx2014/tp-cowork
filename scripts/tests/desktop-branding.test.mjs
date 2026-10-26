@@ -52,10 +52,16 @@ test('brands the welcome flow, native menus, developer application and browser b
   assert.equal(JSON.parse(await readFile(join(harness, 'apps/desktop/package.json'), 'utf8')).productName, 'TP Cowork')
   assert.equal(await readFile(join(harnessRoot, 'apps/desktop/src/locale.ts'), 'utf8'), originalLocale)
 
-  const icon = await readFile(join(productRoot, 'plugins/tpcowork-ui/icon.png'))
-  assert.deepEqual(await readFile(join(harness, 'apps/desktop/resources/icon-windows.png')), icon)
+  const sharp = createRequire(join(harnessRoot, 'apps/desktop/package.json'))('sharp')
+  const product = JSON.parse(await readFile(join(productRoot, 'desktop-product.json'), 'utf8'))
+  const source = await sharp(await readFile(join(productRoot, product.icon))).metadata()
+  assert.equal(source.width, 1024, 'the product icon source is high resolution')
+  for (const [file, size] of [['icon-windows.png', 512], ['icon.png', 512], ['icon-macos.png', 1024]]) {
+    assert.equal((await sharp(await readFile(join(harness, 'apps/desktop/resources', file))).metadata()).width, size)
+  }
   const wordmark = await readFile(join(harness, 'apps/desktop/renderer/assets/welcome-brand.svg'), 'utf8')
-  assert.ok(wordmark.includes(icon.toString('base64')))
+  const embedded = Buffer.from(/base64,([^"]+)"/u.exec(wordmark)[1], 'base64')
+  assert.equal((await sharp(embedded).metadata()).width, 256, 'the wordmark embeds a small rendition')
   assert.match(wordmark, />TP Cowork<\/text>/u)
   const ico = await readFile(join(harness, 'apps/desktop/resources/tray-windows.ico'))
   assert.equal(ico.readUInt16LE(2), 1)
@@ -69,7 +75,6 @@ test('brands the welcome flow, native menus, developer application and browser b
   assert.equal(icns.readUInt32BE(4), icns.length)
   for (const size of ['ic07', 'ic08', 'ic09', 'ic10']) assert.ok(icns.includes(Buffer.from(size)))
 
-  const sharp = createRequire(join(harnessRoot, 'apps/desktop/package.json'))('sharp')
   for (const [asset, width, height] of [['brand', 600, 196], ['brand-2x', 1200, 392], ['brand-dark', 600, 196], ['brand-dark-2x', 1200, 392], ['uninstaller-sidebar', 164, 314]]) {
     const path = `apps/desktop/installer/assets/${asset}.png`
     const bytes = await readFile(join(harness, path))
@@ -77,13 +82,25 @@ test('brands the welcome flow, native menus, developer application and browser b
     assert.equal(metadata.width, width)
     assert.equal(metadata.height, height)
     const background = await sharp(bytes).extract({ left: 0, top: 0, width: 1, height: 1 }).removeAlpha().raw().toBuffer()
-    assert.deepEqual([...background], asset.includes('dark') ? [21, 21, 23] : [255, 255, 255])
-    const size = asset === 'uninstaller-sidebar' ? 96 : width / 600 * 112
-    const top = asset === 'uninstaller-sidebar' ? 68 : width / 600 * 12
+    // The application's Zai Light and Zai Dark surfaces.
+    assert.deepEqual([...background], asset.includes('dark') ? [22, 22, 22] : [248, 248, 248])
+    const size = asset === 'uninstaller-sidebar' ? 80 : width / 600 * 112
+    const top = asset === 'uninstaller-sidebar' ? 76 : width / 600 * 12
     const actualIcon = await sharp(bytes).extract({ left: (width - size) / 2, top, width: size, height: size }).removeAlpha().raw().toBuffer()
     assert.ok(actualIcon.some((value, i) => i % 3 === 0 && Math.abs(value - actualIcon[i + 2]) > 30), 'installer must contain the colored product icon')
     files.push(path)
   }
+  for (const [asset, width, height] of [['dmg-background', 540, 380], ['dmg-background@2x', 1080, 760]]) {
+    const path = `apps/desktop/resources/${asset}.png`
+    const metadata = await sharp(await readFile(join(harness, path))).metadata()
+    assert.deepEqual([metadata.width, metadata.height], [width, height])
+    files.push(path)
+  }
+  const theme = await readFile(join(harness, 'apps/desktop/installer/product-theme.nsh'), 'utf8')
+  assert.match(theme, /^!define INSTALLER_LIGHT_BG_HEX F8F8F8\r$/mu)
+  assert.match(theme, /^!define INSTALLER_DARK_BG_COLORREF 0x161616\r$/mu)
+  assert.match(theme, /^!define INSTALLER_PRIMARY 0xFF000000\r$/mu)
+  files.push('apps/desktop/installer/product-theme.nsh')
   for (const file of ['strings.nsh', 'extract-report.h']) {
     const contents = await readFile(join(harness, 'apps/desktop/installer', file), 'utf8')
     assert.doesNotMatch(contents, /DeepSeek Harness/u)

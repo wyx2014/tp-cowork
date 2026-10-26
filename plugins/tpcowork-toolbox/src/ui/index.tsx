@@ -1,4 +1,5 @@
 import { skillPresentation, skillReferenceStyles } from './skill-presentation.ts'
+import { presentSkillCandidates } from './skill-menu.ts'
 import { capabilityReferenceStyles } from './capability-presentation.ts'
 /** Registration owns services and effects; components receive callbacks and framework hooks. */
 import * as React from 'react'
@@ -76,6 +77,8 @@ export function registerToolboxUi(ctx: Context): void {
     codec: { clipboardText: capabilityClipboardText, serialize: async ref => capabilityClipboardText(ref) },
     openReference: (session, reference) => removeInlineCapability(model, session.sessionId, reference.ref),
   }))
+  ctx.effect(() => ctx.inputTriggers.registerPresenter('/', 'skill',
+    (session, candidates) => presentSkillCandidates(model.state.getSnapshot().choices[session.sessionId], candidates, t)))
   const actions: UiActions = {
     refresh: () => model.refresh(), retryInitialization: () => model.retryInitialization(), refreshSkills: () => model.refresh('skills'), setTab: tab => model.setTab(tab),
     skillDetail: request => unwrap(remote.toolboxSkills.detail(request)), skillEnable: request => model.setSkillEnabled(request),

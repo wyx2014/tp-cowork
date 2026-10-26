@@ -5,6 +5,13 @@
 - id: ui-settings
   config:
     enabled: false
+- id: ui-settings-account
+  config:
+    step: done
+    completion: skipped
+    process: standard
+    usage: compact
+    developerTools: false
 - id: ui-settings-models
   config:
     providerCatalog: false
