@@ -98,6 +98,39 @@ it('replaces prose with one native presentation reference, keeps its canonical s
   expect(f.model.state.getSnapshot().choices.s1?.draft.skillIds).toEqual([])
   expect(f.sink).not.toHaveBeenCalled()
 })
+it('reports a missing task service without overwriting the draft and prepares the suggestion after module recovery', async () => {
+  const f = fixture()
+  const current = f.model.state.getSnapshot().choices.s1!.catalog!
+  const preferences = createSuggestionPreferences(); dispose.push(preferences.dispose)
+  let ready = false
+  const ok = <T,>(value: T) => ({ ok: true as const, value })
+  const selection = vi.fn(async () => ok(current))
+  Object.assign(f.model.remote, {
+    toolbox: { describe: async () => ok({ contractVersion: 1, initialization: { state: ready ? 'ready' : 'failed', issues: [] },
+      modules: { skills: true, installer: true, mcp: ready, teams: ready, tpcoworkhub: ready }, defaultMcpIds: [] }) },
+    toolboxSkills: { inventory: async () => ok(current.skills) },
+    toolboxMcp: { inventory: async () => ok(current.mcp) },
+    toolboxTeams: { inventory: async () => ok(current.teams) },
+    toolboxTasks: { selection, context: async () => ok(null) },
+  })
+  f.model.state.update(state => { state.choices = {}; state.description = null })
+  f.input.setDraft('Keep my current draft')
+  render(React.createElement(Suggestions, { sessionId: f.sessionId, disabled: false, preferences, t,
+    prepare: (sessionId, item, signal) => prepareSuggestion({ ...f, sessionId, item, signal, loadChoice: () => f.model.loadChoice(sessionId) }),
+  }))
+  fireEvent.click(screen.getByText(t('suggestionPresentation')))
+  expect((await screen.findByRole('status')).textContent).toBe(t('suggestionsFailed'))
+  expect(f.input.snapshot.draft).toBe('Keep my current draft')
+  expect(selection).not.toHaveBeenCalled()
+  ready = true
+  await f.model.refresh()
+  fireEvent.click(screen.getByText(t('suggestionPresentation')))
+  await waitFor(() => expect(f.input.snapshot.occurrences).toHaveLength(1))
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(f.input.snapshot.occurrences[0]?.clipboardText).toBe('$office-pptx')
+  expect(f.sink).not.toHaveBeenCalled()
+})
+
 it.each(['edited', 'cancelled'])('does not overwrite a %s draft when skill lookup finishes late', async reason => {
   const f = fixture(), abort = new AbortController()
   let finish!: () => void
