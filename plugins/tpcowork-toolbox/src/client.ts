@@ -14,6 +14,10 @@ export function createClient(remote: TypertClientRemote['toolbox']): ToolboxApi 
     const result = await remote.describe()
     if (!result.ok) throw result.error
     return descriptionSchema.parse(result.value)
+  }, async retryInitialization() {
+    const result = await remote.retryInitialization()
+    if (!result.ok) throw result.error
+    return descriptionSchema.parse(result.value)
   } }
 }
 export async function apply(ctx: Context): Promise<void> {

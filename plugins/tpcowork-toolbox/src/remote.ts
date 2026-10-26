@@ -5,6 +5,10 @@ import type { ChangeFrame, ToolboxDescription } from './contracts/index.ts'
 
 export const descriptionSchema = z.object({
   contractVersion: z.literal(1),
+  initialization: z.object({
+    state: z.enum(['pending', 'running', 'ready', 'failed']),
+    issues: z.array(z.object({ kind: z.enum(['skill', 'resources', 'mcp', 'settings']), resourceId: z.string(), code: z.string() }).strict()),
+  }).strict(),
   modules: z.object({ skills: z.boolean(), mcp: z.boolean(), teams: z.boolean(), installer: z.boolean(), tpcoworkhub: z.boolean() }).strict(),
   defaultMcpIds: z.array(z.string()),
   userSkillsDirectory: z.string().optional(),
@@ -21,6 +25,10 @@ export const descriptors: readonly InvocationDescriptor[] = [{
   invocation: { kind: 'direct' }, parameters: [],
   result: { mode: 'strict', typeSymbol: `${packageName}/contracts#ToolboxDescription`, create: () => descriptionSchema },
 }, {
+  id: `${packageName}#toolbox/retryInitialization`, service: 'toolbox', namespace: 'toolbox', method: 'retryInitialization',
+  invocation: { kind: 'direct' }, parameters: [],
+  result: { mode: 'strict', typeSymbol: `${packageName}/contracts#ToolboxDescription`, create: () => descriptionSchema },
+}, {
   id: `${packageName}#toolboxChanges/watch`, service: 'toolboxChanges', namespace: 'toolboxChanges', method: 'watch',
   invocation: { kind: 'direct' }, mode: 'stream', parameters: [], cancellation: { parameter: 'signal' },
   result: { mode: 'strict', typeSymbol: `${packageName}/contracts#ChangeFrame`, create: () => changeFrameSchema },
@@ -33,7 +41,7 @@ export const hostContribution: TypertContribution = {
 }
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertClientRemote {
-    toolbox: { describe(): Promise<RemoteResult<ToolboxDescription>> }
+    toolbox: { describe(): Promise<RemoteResult<ToolboxDescription>>; retryInitialization(): Promise<RemoteResult<ToolboxDescription>> }
     toolboxChanges: { watch(signal: AbortSignal): RemoteStreamHandle<ChangeFrame, never> }
   }
 }

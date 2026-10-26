@@ -62,6 +62,12 @@ export class ToolboxModel {
   }
   live(): void { if (!this.disposed) this.state.update(s => { s.connection = 'live' }) }
 
+  async retryInitialization(): Promise<void> {
+    if (this.disposed) return
+    await unwrap(this.remote.toolbox.retryInitialization())
+    await this.refresh()
+  }
+
   async refresh(domain: Change['domain'] = 'modules'): Promise<void> {
     if (this.disposed) return
     if (domain === 'installer') domain = 'skills'

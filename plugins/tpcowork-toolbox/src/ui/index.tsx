@@ -77,7 +77,7 @@ export function registerToolboxUi(ctx: Context): void {
     openReference: (session, reference) => removeInlineCapability(model, session.sessionId, reference.ref),
   }))
   const actions: UiActions = {
-    refresh: () => model.refresh(), refreshSkills: () => model.refresh('skills'), setTab: tab => model.setTab(tab),
+    refresh: () => model.refresh(), retryInitialization: () => model.retryInitialization(), refreshSkills: () => model.refresh('skills'), setTab: tab => model.setTab(tab),
     skillDetail: request => unwrap(remote.toolboxSkills.detail(request)), skillEnable: request => model.setSkillEnabled(request),
     skillRemove: request => unwrap(remote.toolboxSkills.remove(request)), skillCheck: request => model.checkSkill(request),
     callSetup: request => unwrap(remote.toolboxSkills.callSetup(request)),

@@ -11,7 +11,7 @@ export const catalog = (): SelectionCatalog => structuredClone({ revision: 8, sk
 export const t = (key: UiKey, params?: Record<string, unknown>): string => en[key].replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
 export function actions(): UiActions {
   return {
-    refresh: vi.fn(async () => {}), refreshSkills: vi.fn(async () => {}), setTab: vi.fn(),
+    retryInitialization: vi.fn(async () => {}), refresh: vi.fn(async () => {}), refreshSkills: vi.fn(async () => {}), setTab: vi.fn(),
     skillDetail: vi.fn(async () => ({ item: skillCatalog.items[0]!, content: '# Office skill\nFull resources.' })),
     skillEnable: vi.fn(async () => skillCatalog), skillRemove: vi.fn(async () => {}), skillCheck: vi.fn(async () => skillCatalog.items[0]!),
     callSetup: vi.fn(async request => ({ ...phoneSetup, ...request })), saveCallSetup: vi.fn(async request => ({ ...phoneSetup, ...request, confirmed: true })),

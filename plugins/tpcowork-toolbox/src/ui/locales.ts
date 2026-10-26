@@ -6,6 +6,11 @@ import { skillZh, skillEn } from './skill-locales.ts'
 import { suggestionsZh, suggestionsEn } from './suggestions/locales.ts'
 
 export const zh = {
+  initializationRunning: '正在准备内置资源…',
+  initializationFailed: '部分内置资源未准备完成。已就绪的功能仍可使用，请处理以下问题后重试。',
+  initializationSkill: '技能', initializationResources: '内置资源', retryInitialization: '重试初始化',
+  initializationAccess: '无法访问文件，请检查目录写入权限或文件占用后重试。',
+  initializationInventory: '技能来源尚未完整读取，请检查技能目录是否可访问后重试。',
   ...suggestionsZh,
   ...skillZh,
   ...callZh,
@@ -64,6 +69,11 @@ export const zh = {
 } as const
 export type UiKey = keyof typeof zh
 export const en: Record<UiKey, string> = {
+  initializationRunning: 'Preparing built-in resources…',
+  initializationFailed: 'Some built-in resources could not be prepared. Available features remain usable. Resolve the issues below and retry.',
+  initializationSkill: 'Skill', initializationResources: 'Built-in resources', retryInitialization: 'Retry initialization',
+  initializationAccess: 'Cannot access files. Check directory write permissions or file locks, then retry.',
+  initializationInventory: 'Skill sources could not be fully read. Check access to the skill directories, then retry.',
   ...suggestionsEn,
   ...skillEn,
   ...callEn,

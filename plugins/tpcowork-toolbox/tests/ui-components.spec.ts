@@ -431,3 +431,20 @@ describe('toolbox user paths', () => {
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull()
   })
 })
+
+it('shows failed default resources and offers one explicit initialization retry', async () => {
+  const { InitializationNotice } = await import('../src/ui/InitializationNotice.tsx')
+  const completion = Promise.withResolvers<void>()
+  const retry = vi.fn(() => completion.promise)
+  const value = { state: 'failed' as const, issues: [{ kind: 'skill' as const, resourceId: 'office-pptx', code: 'skills/filesystem-EACCES' }] }
+  const view = render(React.createElement(InitializationNotice, { value, retry, t }))
+  expect(screen.getByRole('alert').textContent).toContain('office-pptx')
+  expect(screen.getByRole('alert').textContent).toContain('write permissions')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry initialization' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry initialization' }))
+  expect(retry).toHaveBeenCalledOnce()
+  completion.resolve()
+  await waitFor(() => expect(screen.getByRole('button').hasAttribute('disabled')).toBe(false))
+  view.rerender(React.createElement(InitializationNotice, { value: { state: 'ready', issues: [] }, retry, t }))
+  expect(screen.queryByRole('alert')).toBeNull()
+})

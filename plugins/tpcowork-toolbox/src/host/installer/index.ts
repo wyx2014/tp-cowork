@@ -183,5 +183,8 @@ function sourceIdentity(source: InstallSource, name: string): string {
   return source.kind === 'tpcoworkhub' ? `tpcoworkhub:${source.skillId}` : `${source.kind}:${name}`
 }
 function safeCode(error: unknown): string {
-  return error instanceof SkillError ? error.code : 'skills/installation-failed'
+  if (error instanceof SkillError) return error.code
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+    && ['EACCES', 'EPERM', 'EBUSY', 'ENOENT', 'ENOSPC', 'ENOTDIR', 'EIO', 'EROFS'].includes(error.code)) return `skills/filesystem-${error.code}`
+  return 'skills/installation-failed'
 }

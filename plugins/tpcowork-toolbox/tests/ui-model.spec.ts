@@ -8,11 +8,11 @@ import { mcpForm, parseMcp } from '../src/ui/mcp-form.ts'
 import type { FirstSubmissionRequest } from '../src/contracts/index.ts'
 
 const ok = <T>(value: T) => ({ ok: true as const, value })
-const description = { contractVersion: 1 as const, modules: { skills: true, mcp: true, teams: true, installer: true, tpcoworkhub: true }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
+const description = { contractVersion: 1 as const, initialization: { state: 'ready' as const, issues: [] }, modules: { skills: true, mcp: true, teams: true, installer: true, tpcoworkhub: true }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
 function bench() {
   const current = catalog()
   const remote = {
-    toolbox: { describe: vi.fn(async () => ok(description)) },
+    toolbox: { describe: vi.fn(async () => ok(description)), retryInitialization: vi.fn(async () => ok(description)) },
     toolboxSkills: { inventory: vi.fn(async () => ok(current.skills)), setEnabled: vi.fn(async () => ok(current.skills)) },
     toolboxMcp: { inventory: vi.fn(async () => ok(current.mcp)) },
     toolboxTeams: { inventory: vi.fn(async () => ok(current.teams)) },

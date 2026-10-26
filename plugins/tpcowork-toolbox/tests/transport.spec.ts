@@ -9,7 +9,7 @@ import * as host from '../src/host.ts'
 import * as client from '../src/client.ts'
 import { descriptionSchema } from '../src/remote.ts'
 
-const description = { contractVersion: 1, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
+const description = { contractVersion: 1, initialization: { state: 'pending', issues: [] }, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
 describe('DSH plugin seam', () => {
   it('announces teams only while both the catalog and task services are available', async () => {
     const ctx = new Context()
@@ -66,7 +66,7 @@ describe('DSH plugin seam', () => {
   it('mounts the real Client Remote facade and withdraws it on unload', async () => {
     const globals = ['location', '__DSH_TRANSPORT__'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const)
     const ctx = new Context()
-    const mock = RemoteMock.create().unary('toolbox/describe', () => ok(description))
+    const mock = RemoteMock.create().unary('toolbox/describe', () => ok(description)).unary('toolbox/retryInitialization', () => ok(description))
     try {
       Object.defineProperty(globalThis, 'location', { configurable: true, value: { hostname: '127.0.0.1', search: '' } })
       Object.defineProperty(globalThis, '__DSH_TRANSPORT__', { configurable: true, value: { rpc: mock.rpc } })
@@ -76,6 +76,7 @@ describe('DSH plugin seam', () => {
       const plugin = await ctx.plugin(client)
       await vi.waitFor(() => expect(ctx.connection.generation.getSnapshot()).toBeDefined())
       expect(await ctx.toolbox.describe()).toEqual(description)
+      expect(await ctx.toolbox.retryInitialization()).toEqual(description)
       await plugin.dispose()
       expect(ctx.get('toolbox')).toBeUndefined()
       expect(ctx.typert.remotes.list()).toEqual([])

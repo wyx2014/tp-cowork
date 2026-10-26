@@ -1,6 +1,6 @@
 /** A fresh profile boots the shipped Host, templates and launcher, including after an offline tgz install. */
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, cp } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -18,8 +18,10 @@ const [Sessions, Agents, Projections, Fs, Directory, experts] = await Promise.al
   import('@deepseek-ai/dsh-fs-local'), import('@deepseek-ai/dsh-working-directory'), import(pathToFileURL(resolve(expertsRoot, 'lib/host.js'))),
 ])
 const dir = join(home, 'profiles/test')
+const resources = join(home, 'release')
 const contexts = []
 try {
+  await cp(resolve(root, 'resources/skills'), resources, { recursive: true })
   initProfile(dir, ['test-bundle'])
   const bundle = join(dir, 'node_modules/test-bundle')
   await mkdir(bundle, { recursive: true })
@@ -31,11 +33,11 @@ try {
     { id: 'prompt', name: 'cordis:prompt' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'sessions', name: 'cordis:sessions' }, { id: 'agents', name: 'cordis:agents' }, { id: 'projections', name: 'cordis:projections' },
     { id: 'fs', name: 'cordis:fs' }, { id: 'directory', name: 'cordis:directory' },
-    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills') }, tpcoworkhub: { endpoint: '' } } },
+    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills'), bundledRoot: resources }, tpcoworkhub: { endpoint: '' } } },
   ] }]))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
   const profile = { name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined }
-  async function start() {
+  async function start(expectedState = 'ready') {
     const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), ctx => {
       ctx.provide('profileContext', profile)
       Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
@@ -49,6 +51,7 @@ try {
           })
           // Discovery only; the native workflow/AgentLoop execution is exercised by experts tests.
           inner.provide('sessionController', { inspect: async () => ({ events: [] }) })
+          inner.provide('sessionQuery', { observeSession: async () => ({ header: { cwd: home }, [Symbol.dispose]() {} }) })
           inner.provide('workflowEngine', {})
           inner.provide('subagents', { getProvider: () => undefined })
         } },
@@ -56,9 +59,10 @@ try {
     })
     contexts.push(ctx)
     const ready = Promise.withResolvers()
-    ctx.inject(['toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks'], () => { ready.resolve() })
+    ctx.inject(['toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks', 'toolboxInitialization'], () => { ready.resolve() })
     const timeout = setTimeout(() => ready.reject(new Error('toolbox/default-initialization-timeout')), 30000)
     try { await ready.promise } finally { clearTimeout(timeout) }
+    assert.equal((await ctx.toolbox.retryInitialization()).initialization.state, expectedState)
     return ctx
   }
   const ctx = await start()
@@ -86,7 +90,22 @@ try {
   const restored = await start()
   assert.equal(await readFile(profile.patchPath, 'utf8'), patch)
   assert.deepEqual((await restored.toolboxSkills.inventory({})).items.map(item => item.name).sort(), bundledNames)
-  console.log(`Compiled toolbox + experts: TpcoworkHub, two teams, ${bundledNames.length} complete skills, 3 credential references, no global MCP, unchanged restart passed.`)
+  await restored.fiber.dispose()
+  await writeFile(join(resources, 'summarize/SKILL.md'), '---\nname: [\n---\nInvalid release resource\n')
+  const partial = await start('failed')
+  const description = await partial.toolbox.describe()
+  assert.ok(Object.values(description.modules).every(Boolean))
+  assert.deepEqual(description.initialization.issues, [{ kind: 'skill', resourceId: 'summarize', code: 'skills/invalid-frontmatter' }])
+  assert.equal((await partial.toolboxTeams.inventory()).items.length, 2)
+  assert.equal((await partial.toolboxMcp.inventory()).items.length, 3)
+  const session = partial.sessions.create()
+  const choices = await partial.toolboxTasks.selection({ sessionId: session.id })
+  assert.equal(choices.skills.complete, true)
+  assert.equal(choices.skills.items.length, bundledNames.length)
+  await cp(resolve(root, 'resources/skills/summarize/SKILL.md'), join(resources, 'summarize/SKILL.md'))
+  const repaired = await partial.typertGateway.invoke({ namespace: 'toolbox', method: 'retryInitialization', args: {} })
+  assert.deepEqual(repaired.initialization, { state: 'ready', issues: [] })
+  console.log(`Compiled toolbox + experts: TpcoworkHub, two teams, ${bundledNames.length} complete skills, 3 credential references, no global MCP, unchanged restart, partial upgrade and retry passed.`)
 } finally {
   for (const ctx of contexts) await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true }); hook.deregister()

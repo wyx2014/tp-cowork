@@ -20,7 +20,7 @@ import { teamItem } from '../../../../tpcowork-experts/src/teams.ts'
 import { nameTeamSession } from '../../../../tpcowork-experts/src/native-presentation.ts'
 
 export const name = 'toolbox-teams'
-export const inject = ['typert', 'experts', 'agents', 'sessions', 'sessionController', 'workingDirectory', 'systemPrompt']
+export const inject = ['typert', 'experts', 'agents', 'sessions', 'sessionController', 'workingDirectory', 'systemPrompt', 'toolboxSkills', 'toolboxMcp', 'toolboxMcpRuntime']
 declare module '@deepseek-ai/cordis' { interface Context { toolboxTasks: TaskSubmissionApi } }
 
 class Teams extends TypertRemoteService implements TeamsApi {

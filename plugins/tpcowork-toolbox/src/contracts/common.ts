@@ -22,10 +22,25 @@ export interface Change {
   id?: string
 }
 export type ChangeFrame = { type: 'ready' } | { type: 'changed'; change: Change }
+/** Resource identifiers and safe error codes; never raw filesystem errors or credentials. */
+export interface InitializationIssue {
+  kind: 'skill' | 'resources' | 'mcp' | 'settings'
+  resourceId: string
+  code: string
+}
+export interface ToolboxInitialization {
+  state: 'pending' | 'running' | 'ready' | 'failed'
+  issues: InitializationIssue[]
+}
 export interface ToolboxDescription {
   contractVersion: 1
+  initialization: ToolboxInitialization
   modules: { skills: boolean; mcp: boolean; teams: boolean; installer: boolean; tpcoworkhub: boolean }
   defaultMcpIds: string[]
   userSkillsDirectory?: string | undefined
 }
-export interface ToolboxApi { describe(): Promise<ToolboxDescription> }
+export interface ToolboxApi {
+  describe(): Promise<ToolboxDescription>
+  /** Retry default resources without restarting modules or restoring user-removed defaults. */
+  retryInitialization(): Promise<ToolboxDescription>
+}

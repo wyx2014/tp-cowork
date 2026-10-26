@@ -20,6 +20,8 @@ for (const [directory, buildArgs] of [
   await runCommand(process.execPath, buildArgs, { cwd, env })
 }
 await runCommand(process.execPath, [join(productRoot, 'scripts/prepare-toolbox-runtime.mjs'), '--download'], { env })
+// Exercise the compiled services with fresh and existing profiles before creating the installer.
+await runCommand(process.execPath, [join(productRoot, 'plugins/tpcowork-toolbox/tests/bootstrap-artifact-smoke.mjs')], { env })
 
 // Build deployment defaults in staging; local credentials and generated files stay in their source directory.
 const coreSource = join(productRoot, 'plugins/tpcowork-core')

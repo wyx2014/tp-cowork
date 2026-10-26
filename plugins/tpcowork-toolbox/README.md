@@ -15,6 +15,8 @@ npm run test:artifact
 
 构建使用 `../../deepseek-harness` 已安装的 TypeScript、esbuild、React 和 DSH 声明，不修改该工作区或自动化插件。Host 产物为 `lib/host.js`，浏览器 ModuleLoader 入口为 `lib/client.js`，类型入口为 `lib/types/`。依赖版本与当前 DSH `0.2.1-alpha.2` 对齐。
 
+默认资源初始化按技能隔离失败，MCP、专家团队及技能商店按各自依赖启动。`toolbox/describe` 返回 `initialization` 状态和失败资源标识、安全错误码；工具箱显示具体失败项，可通过「重试初始化」调用 `toolbox/retryInitialization`，普通刷新只重新读取状态。重试合并并发请求，停止时取消并等待初始化；只记录成功安装或明确保留的默认版本，保留用户删除、禁用及修改。安装目录访问错误保留 OS 错误码，不返回原始路径或凭据。
+
 内置技能由 `resources/skills/` 随包交付。已移除 `office-documents`、`xlsx`、`portfolio-analysis`、`corporate-ppt`、`docx`、`pdf`、`writing-plans`、`write-article`、`weekly-report`、`long-goal`、`memory`、`my`、`weather`、`cron` 和 `create-skill`；升级只清理未经用户修改的产品副本，保留用户自建或编辑的同名技能。技能编写统一使用 `skill-creator`（技能创建与优化），不再提供重复的内置入口。
 
 `call` 在“工具箱 → 技能 → call → 设置电话”首次配置。每个用户填写自己的四位办公分机号，软件从旧版个人技能目录下的 `call/内部分机信息表.md` 精确匹配话机 IP；重复或缺失分机不会自动选设备。可读取同目录 `config.json` 中同一主叫的 `caller`、`phone_ip`、`pbx_ip`、`scheme`、`outgoing_prefix` 和登录凭据；仅确认保存后才导入凭据。没有旧配置时，首次填写话机登录账号和密码；匹配不到 IP 时，在“话机与分机表设置”填写话机 HTTP(S) 地址。电话服务器与外线前缀沿用参考实现默认值 `12.100.10.9`、`9`，可在同一页面修改；不会预设用户分机号。安装包不携带个人分机表或密码，新电脑需导入企业提供的本机配置或手动填写。

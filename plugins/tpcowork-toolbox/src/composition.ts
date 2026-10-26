@@ -11,9 +11,10 @@ import { fingerprint, readTree, sha256 } from './host/installer/files.ts'
 import { present, skillId } from './host/installer/index.ts'
 import { SkillError } from './host/installer/errors.ts'
 import { parseDefinition } from './host/mcp/schema.ts'
-import type { McpDefinition } from './contracts/index.ts'
+import type { InitializationIssue, McpDefinition } from './contracts/index.ts'
 import * as TpcoworkHub from './host/tpcoworkhub/index.ts'
 import * as Teams from './host/teams/index.ts'
+import { DefaultInitialization, initializationCode } from './initialization.ts'
 import { bundledPythonPath } from './runtime-paths.ts'
 
 export interface Config {
@@ -64,42 +65,74 @@ async function localPlaywright(ctx: Context): Promise<{ command: string; args: s
   } catch { return undefined }
 }
 
-/** First install and upgrades only add unseen defaults or replace unmodified, product-owned resources. */
-export async function initializeDefaults(ctx: Context, config: Config): Promise<void> {
+/** Failures are contained per resource; only successful or preserved defaults get release hashes. */
+export async function initializeDefaults(ctx: Context, config: Config, signal: AbortSignal): Promise<InitializationIssue[]> {
+  const issues: InitializationIssue[] = []
+  const attempt = async (kind: InitializationIssue['kind'], resourceId: string, work: () => Promise<void>) => {
+    signal.throwIfAborted()
+    try { await work() }
+    catch (error) {
+      signal.throwIfAborted()
+      issues.push({ kind, resourceId, code: initializationCode(error) })
+    }
+  }
   const installer = requireInstaller(ctx)
   const skillVersions = { ...config.defaults.skills.get() }
-  for (const name of retiredSkills) {
+  for (const name of retiredSkills) await attempt('skill', name, async () => {
     const target = join(installer.options.root, name)
-    if (!(await present(target))) { delete skillVersions[name]; continue }
+    if (!(await present(target))) { delete skillVersions[name]; return }
     let marker
     try { marker = await installer.owned(target) }
     catch (error) {
-      if (error instanceof SkillError && preservedSkillErrors.has(error.code)) continue
+      if (error instanceof SkillError && preservedSkillErrors.has(error.code)) return
       throw error
     }
-    if (marker.source !== `bundled:${name}`) continue
+    if (marker.source !== `bundled:${name}`) return
     const catalog = await ctx.toolboxSkills.inventory({})
     const item = catalog.items.find(item => item.id === skillId(target) && item.origin === 'bundled')
-    if (!item) throw new Error(`toolbox/retired-skill-missing:${name}`)
+    if (!item) throw new SkillError('skills/retired-skill-missing')
+    signal.throwIfAborted()
     await ctx.toolboxSkills.remove({ id: item.id, expectedRevision: catalog.revision })
     delete skillVersions[name]
-  }
-  for (const entry of await readdir(config.skills.bundledRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) throw new Error('toolbox/default-resource-invalid')
-    const id = entry.name
-    if (retiredSkills.includes(id)) continue
-    if (excluded.has(id)) throw new Error('toolbox/default-resource-excluded')
-    const files = await readTree(join(config.skills.bundledRoot, id), config.skills.maxBytes, config.skills.maxFiles)
-    const hash = fingerprint(files)
-    const target = join(installer.options.root, id)
-    if (config.skills.removedBundled.get().includes(id) || (skillVersions[id] && !(await present(target)))) continue
-    if (skillVersions[id] === hash) continue
-    const result = await installer.install({ requestId: randomUUID(), source: { kind: 'bundled', resourceId: id }, scope: { kind: 'user' }, conflict: 'replace-owned' })
-    if (result.state !== 'installed' && result.state !== 'unchanged' && !preservedSkillErrors.has(result.error?.code ?? '')) {
-      throw new Error(`toolbox/default-install-failed:${result.error?.code ?? result.state}`)
+  })
+  await attempt('resources', 'bundled-skills', async () => {
+    for (const entry of await readdir(config.skills.bundledRoot, { withFileTypes: true })) {
+      const id = entry.name
+      if (retiredSkills.includes(id)) continue
+      await attempt('skill', id, async () => {
+        if (!entry.isDirectory()) throw new SkillError('skills/default-resource-invalid')
+        if (excluded.has(id)) throw new SkillError('skills/default-resource-excluded')
+        const target = join(installer.options.root, id)
+        if (config.skills.removedBundled.get().includes(id) || (skillVersions[id] && !(await present(target)))) return
+        const files = await readTree(join(config.skills.bundledRoot, id), config.skills.maxBytes, config.skills.maxFiles)
+        const hash = fingerprint(files)
+        if (skillVersions[id] === hash) return
+        signal.throwIfAborted()
+        const requestId = randomUUID()
+        const cancel = () => { void installer.cancel({ operationId: requestId }) }
+        signal.addEventListener('abort', cancel, { once: true })
+        try {
+          const result = await installer.install({ requestId, source: { kind: 'bundled', resourceId: id }, scope: { kind: 'user' }, conflict: 'replace-owned' })
+          if (result.state !== 'installed' && result.state !== 'unchanged' && !preservedSkillErrors.has(result.error?.code ?? '')) {
+            issues.push({ kind: 'skill', resourceId: id, code: result.error?.code ?? 'skills/installation-failed' })
+            return
+          }
+          skillVersions[id] = hash
+        } finally { signal.removeEventListener('abort', cancel) }
+      })
     }
-    skillVersions[id] = hash
-  }
+  })
+  await attempt('settings', 'skills', async () => {
+    if (JSON.stringify(skillVersions) === JSON.stringify(config.defaults.skills.get())) return
+    const descriptor = ctx.settings.describe().find(row => row.ns === config.settingsEntry)
+    if (!descriptor) throw new SkillError('skills/settings-entry-missing')
+    await ctx.settings.mutate(config.settingsEntry, [{ op: 'set', path: ['defaults', 'skills'], value: skillVersions }], descriptor.revision)
+  })
+  await attempt('mcp', 'default-connectors', () => initializeMcpDefaults(ctx, config, signal))
+  return issues
+}
+
+async function initializeMcpDefaults(ctx: Context, config: Config, signal: AbortSignal): Promise<void> {
   const playwright = config.deployment.playwrightCommand
     ? { command: config.deployment.playwrightCommand, args: config.deployment.playwrightArgs }
     : await localPlaywright(ctx)
@@ -127,10 +160,9 @@ export async function initializeDefaults(ctx: Context, config: Config): Promise<
   }
   const descriptor = ctx.settings.describe().find(row => row.ns === config.settingsEntry)
   if (!descriptor) throw new Error('toolbox/default-settings-entry-missing')
-  if (JSON.stringify(skillVersions) === JSON.stringify(config.defaults.skills.get())
-    && JSON.stringify(versions) === JSON.stringify(config.defaults.mcp.get()) && JSON.stringify(rows) === JSON.stringify(previous)) return
+  if (JSON.stringify(versions) === JSON.stringify(config.defaults.mcp.get()) && JSON.stringify(rows) === JSON.stringify(previous)) return
+  signal.throwIfAborted()
   await ctx.settings.mutate(config.settingsEntry, [
-    { op: 'set', path: ['defaults', 'skills'], value: skillVersions },
     { op: 'set', path: ['defaults', 'mcp'], value: versions },
     { op: 'set', path: ['mcp', 'servers'], value: rows },
     { op: 'set', path: ['mcp', 'configRevision'], value: revision },
@@ -143,16 +175,18 @@ export function mountOptionalModule<T>(ctx: Context, module: OptionalToolboxModu
   ctx.inject(module.inject, inner => module.apply(inner, config))
 }
 
-/** Compose only after DSH authorities exist. Defaults finish before exposing MCP management. */
+/** Management modules depend on their services, independently of default resource installation. */
 export function composeToolbox(ctx: Context, config: Config): void {
   // The parent must be ACTIVE before DSH settings can edit its Loader entry.
   ctx.inject(['toolbox', 'skills', 'settings', 'profileContext'], inner => {
     applySkillsModule(inner, { ...config.skills, settingsEntry: config.settingsEntry, settingsPath: ['skills'] })
-    inner.inject(['toolboxInstaller'], async defaultsCtx => {
-      await initializeDefaults(defaultsCtx, config)
-      mountOptionalModule(defaultsCtx, TpcoworkHub, config.tpcoworkhub)
-      defaultsCtx.inject(['tools', 'credentials'], mcpCtx => applyMcpModule(mcpCtx, { ...config.mcp, settingsEntry: config.settingsEntry, settingsPath: ['mcp'] }))
-      mountOptionalModule(defaultsCtx, Teams, undefined)
+    mountOptionalModule(inner, TpcoworkHub, config.tpcoworkhub)
+    inner.inject(['tools', 'credentials'], mcpCtx => applyMcpModule(mcpCtx, { ...config.mcp, settingsEntry: config.settingsEntry, settingsPath: ['mcp'] }))
+    mountOptionalModule(inner, Teams, undefined)
+    inner.inject(['toolboxInstaller', 'toolboxSkills'], async defaultsCtx => {
+      const initialization = new DefaultInitialization(defaultsCtx, signal => initializeDefaults(defaultsCtx, config, signal))
+      defaultsCtx.provide('toolboxInitialization', initialization)
+      await initialization.retry()
     })
   })
 }

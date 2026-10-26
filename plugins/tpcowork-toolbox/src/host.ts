@@ -25,9 +25,16 @@ export const name = 'tpcowork-toolbox'
 export const inject = ['typert']
 export class ToolboxService extends TypertRemoteService implements ToolboxApi {
   constructor(ctx: Context, private readonly config: Config) { super(ctx, 'toolbox') }
+  async retryInitialization(): Promise<ToolboxDescription> {
+    const initialization = this.ctx.get('toolboxInitialization')
+    if (!initialization) throw new Error('toolbox/initialization-unavailable')
+    await initialization.retry()
+    return this.describe()
+  }
   async describe(): Promise<ToolboxDescription> {
     return {
       contractVersion: 1,
+      initialization: this.ctx.get('toolboxInitialization')?.describe() ?? { state: 'pending', issues: [] },
       modules: {
         skills: this.ctx.get('toolboxSkills') !== undefined, mcp: this.ctx.get('toolboxMcp') !== undefined,
         teams: this.ctx.get('toolboxTeams') !== undefined && this.ctx.get('toolboxTasks') !== undefined,

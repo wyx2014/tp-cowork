@@ -8,6 +8,7 @@ import { Teams } from './teams/index.tsx'
 import { TpcoworkHub } from './tpcoworkhub/index.tsx'
 import { PageLayout } from './layout.tsx'
 import { ToolboxIcon } from './Icon.tsx'
+import { InitializationNotice } from './InitializationNotice.tsx'
 
 export function ToolboxPage(props: PageProps) {
   const { t } = props
@@ -26,7 +27,7 @@ export function ToolboxPage(props: PageProps) {
       heading: <div><h1>{t('title')}</h1><p>{t('subtitle')}</p></div>,
       refresh: <Button className="tp-toolbox-icon-button" aria-label={t('refresh')} title={t('refresh')} disabled={busy} onClick={() => { void props.refresh() }}><ToolboxIcon name="refresh" /></Button>,
       toolbar,
-      notices: <>{state.connection !== 'live' && <p role="status">{t(state.connection === 'interrupted' ? 'interrupted' : 'connecting')}</p>}{state.failed && <p role="alert">{t('failed')}</p>}</>,
+      notices: <>{state.connection !== 'live' && <p role="status">{t(state.connection === 'interrupted' ? 'interrupted' : 'connecting')}</p>}{state.failed && <p role="alert">{t('failed')}</p>}{state.description && <InitializationNotice value={state.description.initialization} retry={props.retryInitialization} t={t} />}</>,
       panelLabel: t(state.tab),
     }}>
       {state.tab === 'skills' && <Skills {...sections} load={state.skills} available={modules?.skills === true} />}

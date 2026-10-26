@@ -5,6 +5,7 @@ import type { McpApi, TpcoworkHubApi, TeamItem, SelectionDraft } from '../contra
 
 export type UiActions = {
   refresh(): Promise<void>
+  retryInitialization(): Promise<void>
   refreshSkills(): Promise<void>
   setTab(tab: Tab): void
   skillDetail: SkillsClientApi['detail']
