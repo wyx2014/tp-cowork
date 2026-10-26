@@ -59,6 +59,8 @@ test('brands the welcome flow, native menus, developer application and browser b
   for (const [file, size] of [['icon-windows.png', 512], ['icon.png', 512], ['icon-macos.png', 1024]]) {
     assert.equal((await sharp(await readFile(join(harness, 'apps/desktop/resources', file))).metadata()).width, size)
   }
+  const startupLogo = await sharp(await readFile(join(harness, 'apps/web/public/startup-logo.png'))).metadata()
+  assert.deepEqual([startupLogo.width, startupLogo.height], [192, 192], 'the startup cover logo is twice its 96px size')
   const wordmark = await readFile(join(harness, 'apps/desktop/renderer/assets/welcome-brand.svg'), 'utf8')
   const embedded = Buffer.from(/base64,([^"]+)"/u.exec(wordmark)[1], 'base64')
   assert.equal((await sharp(embedded).metadata()).width, 256, 'the wordmark embeds a small rendition')

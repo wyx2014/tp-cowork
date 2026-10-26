@@ -25,3 +25,28 @@ export function adaptDeveloperMode(ctx, React) {
     return () => { stop(); dispose?.(); };
   });
 }
+
+/**
+ * Undo the native onboarding's Developer mode for installations that ran before the product skipped it.
+ * That onboarding stored `developerTools: true` in its own user layer when it found a model key; the product
+ * composes it as false, so a stored true can only come from there. Clearing both fields re-inherits the
+ * product defaults once: a later manual opt-in writes only the developer-tools preference and is kept.
+ * @param forms - `ctx.configForms`.
+ * @returns stop observing.
+ */
+export function resetOnboardingDeveloperMode(forms) {
+  const account = forms.get('ui-settings-account');
+  const developer = forms.get('ui-settings');
+  let running = false;
+  const ready = form => form.getSnapshot().status === 'ready' && form.getSnapshot().writable;
+  const check = () => {
+    if (running || !ready(account) || !ready(developer) || account.getSnapshot().user?.developerTools !== true) return;
+    running = true;
+    // The preference goes first, so a refused write leaves the marker for the next launch to retry.
+    void developer.unset('enabled').then(cleared => cleared && account.unset('developerTools'))
+      .catch(() => false).finally(() => { running = false; });
+  };
+  const disposers = [account.subscribe(check), developer.subscribe(check)];
+  check();
+  return () => { for (const dispose of disposers) dispose(); };
+}

@@ -14,7 +14,6 @@
     "navigationBack": "后退",
     "navigationForward": "前进",
     "navigationFailed": "无法打开此页面，请重试。",
-    "greeting": "今天有什么工作，交给我吧",
     "accountMenu": "账号菜单",
     "more": "更多",
     "settings": "设置",
@@ -47,6 +46,11 @@
     "theme_light": "浅色",
     "accountId": "账号 ID：{id}",
     "authLoading": "正在确认账号…",
-    "preferenceFailed": "设置未能保存，请重试"
+    "preferenceFailed": "设置未能保存，请重试",
+    "greetingMorning": "早上好，",
+    "greetingAfternoon": "下午好，",
+    "greetingEvening": "晚上好，",
+    "greetingTitle": "交给 TP Cowork 就行",
+    "greetingSubtitle": "以专业AI赋能规范工作"
   }
 }

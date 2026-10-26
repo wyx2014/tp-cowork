@@ -6,7 +6,14 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
     h('span', { className: 'tpcowork-brand-name' }, t('brand')),
     h('span', { className: 'tpcowork-preview-badge' }, t('preview')));
   const Mark = () => h('img', { className: 'tpcowork-brand-mark', src: brandIcon, alt: '', width: 24, height: 24, 'aria-hidden': true });
-  const Greeting = ({ t }) => h('h1', { className: 'tpcowork-greeting' }, t('greeting'));
+  // The reference product greets by the hour: morning from 5, afternoon from 12, evening from 18.
+  const Greeting = ({ t }) => {
+    const hour = new Date().getHours();
+    const hello = hour >= 5 && hour < 12 ? 'greetingMorning' : hour >= 12 && hour < 18 ? 'greetingAfternoon' : 'greetingEvening';
+    return h('div', { className: 'tpcowork-hero-greeting' },
+      h('h1', { className: 'tpcowork-greeting' }, h('span', null, t(hello)), h('span', null, t('greetingTitle'))),
+      h('p', { className: 'tpcowork-greeting-subtitle' }, t('greetingSubtitle')));
+  };
   const CurrentVersion = ({ t }) => h('div', { className: 'tpcowork-current-version' }, t('currentVersion'));
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);
@@ -19,6 +26,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       ctx.effect(() => ctx.theme.overrideTokens(id, tokens), 'tpcowork: theme overrides');
       ctx.effect(() => ctx.locale.register('tpcowork', locales), 'tpcowork: localized labels');
       adaptDeveloperMode(ctx, React);
+      ctx.effect(() => resetOnboardingDeveloperMode(ctx.configForms), 'tpcowork: onboarding developer mode reset');
       ctx.inject(['sessions', 'workspaces', 'uiWorkspace', 'shortcuts'], scope => {
         const navigation = createNavigation(scope);
         scope.effect(() => () => navigation.dispose(), 'tpcowork: navigation history');

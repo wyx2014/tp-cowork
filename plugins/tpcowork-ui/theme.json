@@ -326,5 +326,29 @@
   "--dsh-sidebar-action-border-style": {
     "light": "none",
     "dark": "none"
+  },
+  "--tpcowork-home-ink": {
+    "light": "#0b1744",
+    "dark": "#e4edff"
+  },
+  "--tpcowork-home-text": {
+    "light": "#36558b",
+    "dark": "#b0c3e4"
+  },
+  "--tpcowork-home-art-opacity": {
+    "light": "0.42",
+    "dark": "0.45"
+  },
+  "--tpcowork-home-card-stroke": {
+    "light": "rgba(54, 85, 139, 0.2)",
+    "dark": "rgba(176, 195, 228, 0.22)"
+  },
+  "--tpcowork-home-card-glow": {
+    "light": "0 12px 32px rgba(28, 64, 128, 0.08)",
+    "dark": "0 12px 32px rgba(0, 0, 0, 0.3)"
+  },
+  "--tpcowork-home-wash": {
+    "light": "linear-gradient(180deg, #e1efff 0%, #f4f9ff 48%, #f0f7ff 100%)",
+    "dark": "linear-gradient(180deg, #051c3d 0%, #0c2d54 48%, #03152f 100%)"
   }
 }

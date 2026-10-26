@@ -187,6 +187,8 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, name, true)],
     ['apps/web/public/favicon.svg', productSvg(icon256, name)],
     ['apps/web/public/favicon-dark.svg', productSvg(icon256, name)],
+    // The startup cover shows the logo at 96 CSS pixels; twice that stays sharp on high-density displays.
+    ['apps/web/public/startup-logo.png', await sharp(icon).resize(192, 192).png().toBuffer()],
     ['apps/desktop/installer/product-theme.nsh', installerTheme()],
   ]
   for (const dark of [false, true]) {

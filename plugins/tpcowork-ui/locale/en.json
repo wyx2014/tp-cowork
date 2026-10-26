@@ -14,7 +14,6 @@
     "navigationBack": "Back",
     "navigationForward": "Forward",
     "navigationFailed": "Could not open this page. Try again.",
-    "greeting": "What's on your plate today? Leave it to me.",
     "accountMenu": "Account menu",
     "more": "More",
     "settings": "Settings",
@@ -47,6 +46,11 @@
     "theme_light": "Light",
     "accountId": "Account ID: {id}",
     "authLoading": "Checking account…",
-    "preferenceFailed": "Could not save this setting. Try again."
+    "preferenceFailed": "Could not save this setting. Try again.",
+    "greetingMorning": "Morning,",
+    "greetingAfternoon": "Afternoon,",
+    "greetingEvening": "Evening,",
+    "greetingTitle": "Leave it to TP Cowork",
+    "greetingSubtitle": "Expert AI for research, analysis, and working together"
   }
 }

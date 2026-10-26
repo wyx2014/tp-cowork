@@ -81,14 +81,17 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
       return component === undefined ? options?.fallback ?? null : React.createElement(component, { t: (key: string) => zh[key] })
     },
   }))
-  expect(view.getByRole('heading', { name: zh.greeting })).toBeTruthy()
+  // The first line greets by the hour, so the heading is matched by its fixed second line.
+  const heading = view.getByRole('heading', { name: new RegExp(`${zh.greetingTitle}$`) })
+  expect([zh.greetingMorning, zh.greetingAfternoon, zh.greetingEvening]).toContain(heading.firstElementChild?.textContent)
+  expect(view.getByText(zh.greetingSubtitle)).toBeTruthy()
   const original = view.getByText('Into the Unknown').closest(`.${maps.hero.titleGroup}`)!
   expect(getComputedStyle(original).display).toBe('none')
   expect(view.container.textContent).not.toContain('预览版')
   for (const dispose of disposers.reverse()) dispose()
   view.rerender(React.createElement(HeroShell, { t: makeTranslate(en, commonEn),
     renderSlot: (_name, _owner, options) => options?.fallback ?? null }))
-  expect(view.queryByRole('heading', { name: zh.greeting })).toBeNull()
+  expect(view.queryByRole('heading', { name: new RegExp(`${zh.greetingTitle}$`) })).toBeNull()
   expect(getComputedStyle(view.getByText('Into the Unknown').closest(`.${maps.hero.titleGroup}`)!).display).toBe('flex')
   expect(view.getByText('Preview')).toBeTruthy()
 })

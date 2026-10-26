@@ -48,13 +48,47 @@ export function upstreamStyles(modules) {
   rule('hero', 'stack', 'gap: var(--dsh-hero-gap); max-width: var(--dsh-hero-width);');
   rule('hero', 'titleGroup', 'display: none;');
   rule('hero', 'fishHitbox', 'flex: 1; min-width: 0; max-width: 100%;');
-  rule('conversation', 'composerHero', `width: min(calc(var(--dsh-hero-width)
-    + 2 * var(--dsh-composer-side-clearance)), 100%);`);
-  // 参考页按 29dvh 设置顶部留白，避免推荐列表的高度把输入框向上挤。
-  rules.push(`${scope} [data-content-phase="hero"] .${className('conversation', 'scrollBody')} {
-    justify-content: flex-start; padding-top: max(52px, 29dvh); box-sizing: border-box;
+  // Home: the greeting, workspace row, composer and task suggestions share one centered column of 82% (at most
+  // 880px); the greeting starts on the composer card's left edge.
+  // The skyline's waterline sits at about 49% of the column height, so the greeting block reserves the space down
+  // to half the window: the composer card starts on the water and never covers the buildings. The 40px header,
+  // the 28px workspace row and its two 8px gaps complete that height. The greeting sits at the bottom of that
+  // space, just above the workspace row, so no gap opens between them on tall windows. A fixed inset keeps the
+  // suggestions' height from pushing the composer up.
+  const home = `${scope} [data-conversation-content][data-content-phase="hero"]`;
+  rules.push(`${home} { --tpcowork-home-top: clamp(48px, 8vh, 88px); --tpcowork-home-column: clamp(min(100%, 600px), 82%, 880px); }`);
+  rules.push(`${home} .${className('conversation', 'scrollBody')} {
+    justify-content: flex-start; padding-top: var(--tpcowork-home-top); box-sizing: border-box;
   }`);
-  rule('conversation', 'composerHero', 'padding-bottom: 16px;');
+  // The card otherwise follows the transcript width (64% of the column, 680-920px), which matches this 82% column
+  // only at some window sizes; elsewhere it centers inside it and the workspace chip sticks out to its left.
+  rules.push(`${home} .${className('conversation', 'composerHero')} {
+    box-sizing: border-box; width: 100%; padding: 0 clamp(32px, 5.5%, 80px) 32px; align-items: center;
+    --dsh-composer-card-max-width: 100%;
+  }`);
+  rules.push(`${home} .${className('conversation', 'composerHero')} > .${className('hero', 'root')} {
+    align-self: center; justify-content: flex-start; box-sizing: border-box; width: var(--tpcowork-home-column); max-width: 100%;
+    padding: 0 0 28px; margin: 0; min-height: calc(50vh - 40px - var(--tpcowork-home-top) - 44px); align-items: flex-end;
+  }`);
+  // The stack's gap would also open below the greeting, before an empty slot.
+  rules.push(`${home} .${className('hero', 'stack')} { max-width: none; gap: 0; }`);
+  rules.push(`${home} .${className('conversation', 'heroWorkspaceRow')} { padding-left: 0; }`);
+  rules.push(`${home} .${className('hero', 'headline')} { justify-content: flex-start; }`);
+  // Descendants, not children: the composer card sits inside a display:contents slot wrapper.
+  rules.push(`${home} .${className('conversation', 'composerHero')} :is(.${className('conversation', 'heroWorkspaceRow')}, .${className('input', 'root')}, .tp-task-suggestions) {
+    box-sizing: border-box; width: var(--tpcowork-home-column); max-width: 100%;
+  }`);
+  rules.push(`${home} .${className('input', 'card')} { --dsw-elevation-stroke-color: var(--tpcowork-home-card-stroke);
+    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); }`);
+  // The skyline covers the whole conversation column, header included: it sits top right and fades out to
+  // the left, and its water continues under the composer. It stays a faded backdrop behind the greeting.
+  const backdrop = `${selector('conversation', 'root')}[data-phase="hero"]`;
+  rules.push(`${backdrop} { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }`);
+  rules.push(`${backdrop}::before, ${backdrop}::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }`);
+  rules.push(`${backdrop}::before { inset: 0; background: var(--tpcowork-home-art) right top / auto 82% no-repeat;
+    mask-image: linear-gradient(90deg, transparent 10%, #000 48%, #000); opacity: var(--tpcowork-home-art-opacity); }`);
+  rules.push(`${backdrop}::after { inset: 49% 0 0; background: var(--tpcowork-home-art) right bottom / 100% 275% no-repeat;
+    mask-image: linear-gradient(180deg, transparent, #000 32%); opacity: var(--tpcowork-home-art-opacity); }`);
   rule('input', 'root', 'padding: var(--dsh-composer-padding);');
   rule('input', 'card', `gap: var(--dsh-composer-gap); padding-top: var(--dsh-composer-top-padding);
     border-radius: var(--dsh-composer-radius);`);

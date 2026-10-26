@@ -1,6 +1,6 @@
 # TP Cowork 外观插件
 
-把本地 `tp-cowork` 的中性灰浅色/深色配色、264px 侧栏、居中工作问候、672px 首页输入区和紧凑圆角控件应用到 DSH。聊天、工作区、设置及工具执行继续使用 DSH 的现有组件与服务。助手身份和通用提示词由独立的 [tpcowork-core](../tpcowork-core/README.md) 维护。
+把本地 `tp-cowork` 的中性灰浅色/深色配色、264px 侧栏和紧凑圆角控件应用到 DSH，首页参照 nanobot-gui。聊天、工作区、设置及工具执行继续使用 DSH 的现有组件与服务。助手身份和通用提示词由独立的 [tpcowork-core](../tpcowork-core/README.md) 维护。
 
 ## 维护位置
 
@@ -63,8 +63,8 @@
 
 `icon.png` 使用用户提供的 512×512 渐变机器人图标，侧栏展开时保留纯文字 TP Cowork，收起后的导航图标使用这张品牌图。产品构建先运行 `scripts/desktop-branding.mjs`，由同一资源生成登录欢迎页标志、浏览器图标、Windows 托盘 ICO 和 macOS ICNS；浏览器浅色与深色主题都保留图标原色。该步骤同时将桌面中英文菜单、关于窗口、登录页、更新提示及开发版应用名称统一为 TP Cowork。Windows 安装包构建已自动执行此步骤；本地开发在产品目录运行 `npm run dev`，自动准备品牌、构建并启动。`npm run desktop:preview` 将现有桌面产物复制到 `.desktop-build/branded-desktop`，用于查看品牌资源，不修改底座源码。
 
-侧栏顶部参照 Zcode 增加后退与前进，支持会话、工具箱、自动化等主页面历史，以及 Command/Ctrl+[ 和 Command/Ctrl+]。规则和验收见[侧栏顶部导航](../../docs/sidebar-navigation.md)。首页采用参考页的 29dvh 顶部留白（最少 52px），输入框和任务推荐向下自然排列，不因推荐列表高度改变输入框位置；小窗口可滚动访问全部内容。
+侧栏顶部参照 Zcode 增加后退与前进，支持会话、工具箱、自动化等主页面历史，以及 Command/Ctrl+[ 和 Command/Ctrl+]。规则和验收见[侧栏顶部导航](../../docs/sidebar-navigation.md)。首页参照 nanobot-gui：会话栏铺满浦江天际线背景（浅色/深色两版，取自 nanobot-gui 并转为 WebP 内嵌），左对齐的两行问候（按时段显示早上好/下午好/晚上好，第二行「交给 TP Cowork 就行」）与副标题「以专业AI赋能规范工作」从顶部 clamp(64px, 11vh, 120px) 处开始；输入框固定从窗口一半高度开始，正好落在天际线的水面上，不遮挡建筑；工作区、输入框和任务推荐共用居中的 82% 列宽（最宽 980px）。推荐列表高度不改变输入框位置；小窗口可滚动访问全部内容。在 tp-coworkdsh 目录执行 `npx vitest run --config scripts/tests/home-layout.config.mjs` 检查布局并在 `artifacts/home-layout` 生成浅色、深色和窄屏截图。
 
-TP Cowork 默认关闭通用设置中的“开发者模式”（原生 `ui-settings.enabled`，用户已保存的开关优先）。产品使用自己的模型配置与登录入口，通过发行配置将原生账户引导设为已跳过，避免首次检测到 API Key 时重新开启开发者模式。关闭时隐藏全部 Agent 预设入口，新任务默认使用标准模式；开启后显示原生预设选择和管理。已有会话保留原模式，关闭再开启不会恢复之前的新任务默认值。此行为依赖底座 `ui-agent-preset` 的开发者工具控制，文案适配复用原生开关和保存动作。
+TP Cowork 默认关闭通用设置中的“开发者模式”（原生 `ui-settings.enabled`，用户已保存的开关优先）。产品使用自己的模型配置与登录入口，通过发行配置将原生账户引导设为已跳过，避免首次检测到 API Key 时重新开启开发者模式。旧版本安装由原生引导写入的 `developerTools: true` 会在启动时清除一次：同时清除 `ui-settings.enabled` 与该标记，恢复产品默认的关闭状态；之后用户手动开启只写入开发者开关，不会再被重置。关闭时隐藏全部 Agent 预设入口，新任务默认使用标准模式；开启后显示原生预设选择和管理。已有会话保留原模式，关闭再开启不会恢复之前的新任务默认值。此行为依赖底座 `ui-agent-preset` 的开发者工具控制，文案适配复用原生开关和保存动作。
 
 确认弹窗参照参考项目的 `ConfirmDialog`：448px 默认宽度、16px 圆角、20px 内边距、灰色说明、右对齐的描边取消按钮与实心确认按钮；不可恢复的操作使用危险色。外观通过 DSH `Modal` / `Button` 的 `data-dsh-modal`、`data-dsh-modal-part` 和 `data-dsh-button` 标记适配，需使用支持这些标记与 `showCloseButton` 的底座。工具箱关闭推荐、卸载及更新，自动化删除及迁移，以及浏览器数据清理均复用原生 Modal 的焦点管理。浏览器登录导入继续使用面板内浮层与既有提醒偏好，采用相同的颜色、圆角和按钮样式。
