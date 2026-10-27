@@ -8,9 +8,11 @@ import { artifactPeers } from './artifact-peers.mjs'
 const root = process.env.TOOLBOX_PACKAGE_ROOT ?? fileURLToPath(new URL('../', import.meta.url))
 const expertsRoot = process.env.EXPERTS_PACKAGE_ROOT ?? fileURLToPath(new URL('../../tpcowork-experts/', import.meta.url))
 const hook = await artifactPeers()
-const [{ boot, initProfile, readProfilePatches }, { default: Editor }, { default: Settings }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Tools }, { default: Prompt }, toolbox] = await Promise.all([
+const [{ boot, initProfile, readProfilePatches }, { default: Editor }, { default: Settings }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Tools }, { default: Prompt }, toolbox,
+  { default: RemoteAccess }, { Peer }] = await Promise.all([
   import('@deepseek-ai/dsh-app-boot'), import('@deepseek-ai/dsh-config-editor'), import('@deepseek-ai/dsh-settings'), import('@deepseek-ai/dsh-typert-registry'),
   import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'), import('@deepseek-ai/dsh-tools'), import('@deepseek-ai/dsh-system-prompt'), import(pathToFileURL(resolve(root, 'lib/host.js'))),
+  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'),
 ])
 const home = await realpath(await mkdtemp(join(tmpdir(), 'toolbox-release-')))
 const [Sessions, Agents, Projections, Fs, Directory, experts] = await Promise.all([
@@ -29,7 +31,8 @@ try {
   await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: 'test-bundle', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [
     { id: 'editor', name: 'cordis:editor' }, { id: 'settings', name: 'cordis:settings' }, { id: 'typert', name: 'cordis:typert' },
-    { id: 'gateway', name: 'cordis:gateway' }, { id: 'skills', name: 'cordis:skills' }, { id: 'tools', name: 'cordis:tools' },
+    { id: 'remote-access', name: 'cordis:remoteAccess' }, { id: 'gateway', name: 'cordis:gateway' },
+    { id: 'skills', name: 'cordis:skills' }, { id: 'tools', name: 'cordis:tools' },
     { id: 'prompt', name: 'cordis:prompt' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'sessions', name: 'cordis:sessions' }, { id: 'agents', name: 'cordis:agents' }, { id: 'projections', name: 'cordis:projections' },
     { id: 'fs', name: 'cordis:fs' }, { id: 'directory', name: 'cordis:directory' },
@@ -40,7 +43,7 @@ try {
   async function start(expectedState = 'ready') {
     const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), ctx => {
       ctx.provide('profileContext', profile)
-      Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
+      Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, remoteAccess: RemoteAccess, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
         sessions: Sessions.default, agents: Agents.default, projections: Projections.default, fs: Fs.default, directory: Directory.default, experts,
         credentials: { apply(inner) {
           const credentials = new Map()
@@ -59,16 +62,17 @@ try {
     })
     contexts.push(ctx)
     const ready = Promise.withResolvers()
-    ctx.inject(['toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks', 'toolboxInitialization'], () => { ready.resolve() })
+    ctx.inject(['typertGateway', 'toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks', 'toolboxInitialization'], () => { ready.resolve() })
     const timeout = setTimeout(() => ready.reject(new Error('toolbox/default-initialization-timeout')), 30000)
     try { await ready.promise } finally { clearTimeout(timeout) }
     assert.equal((await ctx.toolbox.retryInitialization()).initialization.state, expectedState)
     return ctx
   }
   const ctx = await start()
+  const peer = new Peer(ctx, { principal: { kind: 'owner' } })
   assert.deepEqual((await ctx.toolbox.describe()).modules, { skills: true, installer: true, mcp: true, teams: true, tpcoworkhub: true })
   assert.equal((await ctx.toolboxTpcoworkHub.account()).state, 'unconfigured')
-  const teams = await ctx.typertGateway.invoke({ namespace: 'toolboxTeams', method: 'inventory', args: {} })
+  const teams = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTeams', method: 'inventory', args: {} })
   assert.deepEqual(teams.items.map(item => item.id), ['asset-research-team', 'supply-chain-bottleneck-team'])
   assert.ok(teams.items.every(item => item.readiness.state === 'blocked'))
   const items = (await ctx.toolboxSkills.inventory({})).items
@@ -103,7 +107,8 @@ try {
   assert.equal(choices.skills.complete, true)
   assert.equal(choices.skills.items.length, bundledNames.length)
   await cp(resolve(root, 'resources/skills/summarize/SKILL.md'), join(resources, 'summarize/SKILL.md'))
-  const repaired = await partial.typertGateway.invoke({ namespace: 'toolbox', method: 'retryInitialization', args: {} })
+  const partialPeer = new Peer(partial, { principal: { kind: 'owner' } })
+  const repaired = await partial.typertGateway.invoke({ peer: partialPeer, namespace: 'toolbox', method: 'retryInitialization', args: {} })
   assert.deepEqual(repaired.initialization, { state: 'ready', issues: [] })
   console.log(`Compiled toolbox + experts: TpcoworkHub, two teams, ${bundledNames.length} complete skills, 3 credential references, no global MCP, unchanged restart, partial upgrade and retry passed.`)
 } finally {
