@@ -32,6 +32,8 @@ npm run dev
 
 详细设置、构建模式及本地命令见 [Windows 云端打包操作](docs/windows-github-actions.md)。
 
+麒麟 Linux x86_64 安装包使用 **Actions → Build Kylin Linux Packages**，由 Ubuntu 22.04 托管 Runner 构建 AppImage 和 DEB。操作与实机验证范围见 [麒麟 Linux 打包](docs/kylin-linux-github-actions.md)。
+
 安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建和本地启动自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
 
 Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命令”。

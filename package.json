@@ -14,7 +14,8 @@
     "desktop:brand": "node scripts/desktop-branding.mjs",
     "desktop:preview": "node scripts/desktop-branding.mjs --stage",
     "build:win": "node scripts/build-windows.mjs",
-    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs scripts/tests/desktop-branding.test.mjs scripts/tests/dev-desktop.test.mjs"
+    "build:linux": "node scripts/build-linux.mjs",
+    "test:packaging": "node --test scripts/tests/windows-package.test.mjs scripts/tests/linux-package.test.mjs scripts/tests/check-worktree.test.mjs scripts/tests/upstream-css.test.mjs scripts/tests/desktop-branding.test.mjs scripts/tests/dev-desktop.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.61.1",

@@ -1,0 +1,142 @@
+name: Build Kylin Linux Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      harness_repository:
+        description: '底座 fork 仓库（账号/deepseek-harness）'
+        type: string
+        default: wyx2014/deepseek-harness
+        required: true
+      harness_ref:
+        description: '底座分支、标签或 commit（需包含 linux-x64 产品打包支持）'
+        type: string
+        default: feat/tpcowork-workbench-ui
+        required: true
+      build_version:
+        description: '构建版本：auto 按日期和流水线编号生成'
+        type: string
+        default: auto
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kylin-linux-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-packages:
+    # Matches nanobot-gui's Linux build baseline. This is an Ubuntu build,
+    # and does not certify installation/UI compatibility on a Kylin machine.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+        working-directory: tp-cowork
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout TP Cowork
+        uses: actions/checkout@v4
+        with:
+          path: tp-cowork
+          persist-credentials: false
+      - name: Checkout harness fork
+        id: harness
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.harness_repository }}
+          ref: ${{ inputs.harness_ref }}
+          path: deepseek-harness
+          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tp-cowork/package-lock.json
+      - name: Set up Python for native build tools
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Prepare hosted Linux build dependencies
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config dpkg-dev fakeroot libfuse2 xvfb xauth \
+            libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxshmfence1 \
+            libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+            libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
+            libx11-xcb1 libxtst6 fonts-noto-cjk xdg-utils
+      - name: Install product build tools
+        run: npm ci
+      - name: Resolve pnpm store directory
+        id: pnpm-store
+        run: |
+          set -euo pipefail
+          echo "path=$(node node_modules/pnpm/bin/pnpm.cjs store path)" >> "$GITHUB_OUTPUT"
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-linux-x64-${{ hashFiles('deepseek-harness/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-linux-x64-
+      - name: Cache verified runtime downloads
+        uses: actions/cache@v4
+        with:
+          path: deepseek-harness/apps/desktop/.desktop-build/downloads
+          key: primary-runtime-downloads-linux-x64-${{ hashFiles('deepseek-harness/scripts/primary-runtime/lock.json') }}
+      - name: Cache toolbox Chromium
+        uses: actions/cache@v4
+        with:
+          path: tp-cowork/plugins/tpcowork-toolbox/runtime/browsers
+          key: toolbox-playwright-chromium-linux-x64-${{ hashFiles('tp-cowork/plugins/tpcowork-toolbox/package-lock.json') }}
+      - name: Cache toolbox Linux Python wheels
+        uses: actions/cache@v4
+        with:
+          path: tp-cowork/.cache/toolbox-linux-wheels
+          key: toolbox-linux-wheels-${{ hashFiles('tp-cowork/plugins/tpcowork-toolbox/runtime-scripts/requirements-linux-x64-py312.txt') }}
+      - name: Install harness build dependencies
+        run: node node_modules/pnpm/bin/pnpm.cjs --dir ../deepseek-harness install --frozen-lockfile
+      - name: Verify packaging helpers
+        run: npm run test:packaging
+      - name: Build and verify AppImage and DEB packages
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+          TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
+          TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
+          TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
+          TPCOWORK_IMAGE_EXTRACT_MODEL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_MODEL }}
+          TPCOWORK_IMAGE_EXTRACT_API_KEY: ${{ secrets.TPCOWORK_IMAGE_EXTRACT_API_KEY }}
+        run: xvfb-run -a npm run build:linux
+      - name: Record packaged sources and compatibility scope
+        run: |
+          cat dist/installers/build-info.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'Built and runtime-tested on Ubuntu 22.04 x64. Kylin installation/UI verification remains required.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPCowork-kylin-linux-x64-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            tp-cowork/dist/installers/*.AppImage
+            tp-cowork/dist/installers/*.deb
+            tp-cowork/dist/installers/*.sha256
+            tp-cowork/dist/installers/build-info.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain packaging diagnostics
+        if: always() && steps.harness.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: deepseek-harness/apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14

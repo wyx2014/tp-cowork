@@ -15,4 +15,9 @@ describe('toolbox interpreter paths', () => {
     expect(bundledPythonPath('darwin', pathToFileURL(join(root, 'lib/composition.js')).href))
       .toBe(join(root, 'runtime/python/python'))
   })
+  it('selects the Linux standalone interpreter outside ASAR', () => {
+    const root = join(tmpdir(), 'installed with spaces/resources')
+    expect(bundledPythonPath('linux', pathToFileURL(join(root, 'app.asar/dsh/node_modules/toolbox/lib/composition.js')).href))
+      .toBe(join(root, 'app.asar.unpacked/dsh/node_modules/toolbox/runtime/python/bin/python3'))
+  })
 })

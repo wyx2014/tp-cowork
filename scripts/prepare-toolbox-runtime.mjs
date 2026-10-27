@@ -1,6 +1,7 @@
 /** Stage platform-specific offline dependencies. Network access is opt-in at package preparation only. */
 import { runCommand } from './package-command.mjs'
 import { prepareToolboxWindowsPython } from './prepare-toolbox-windows-python.mjs'
+import { prepareToolboxLinuxPython } from './prepare-toolbox-linux-python.mjs'
 import { createRequire } from 'node:module'
 import { mkdir, cp, chmod, writeFile, access, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -13,7 +14,7 @@ async function run(command, args, env = process.env, capture = false) {
   return runCommand(command, args, { cwd: root, env, capture })
 }
 const py = resolve(root, 'runtime/python')
-if (process.platform !== 'win32' && (process.platform !== 'darwin' || process.arch !== 'x64')) throw new Error('Toolbox runtime supports Windows x64 or macOS x64')
+if (!['win32', 'darwin', 'linux'].includes(process.platform) || process.arch !== 'x64') throw new Error('Toolbox runtime supports Windows, Linux or macOS x64')
 await mkdir(resolve(py, 'wheels'), { recursive: true })
 await run('npm', ['ci', '--ignore-scripts', '--legacy-peer-deps', '--cache', '.npm-cache', '--no-audit', '--no-fund', ...(online ? [] : ['--offline'])])
 const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: resolve(root, 'runtime/browsers') }
@@ -32,6 +33,8 @@ await writeFile(resolve(root, 'runtime/playwright.json'), JSON.stringify({ versi
 }, null, 2) + '\n')
 if (process.platform === 'win32') {
   await prepareToolboxWindowsPython(process.env.TPCOWORK_PACKAGED_PYTHON_SOURCE, py, online)
+} else if (process.platform === 'linux') {
+  await prepareToolboxLinuxPython(process.env.TPCOWORK_PACKAGED_PYTHON_SOURCE, py, online)
 } else {
 const identity = JSON.parse(await run(python, ['-I', '-c', 'import json,sys,platform;print(json.dumps({"python":list(sys.version_info[:2]),"platform":sys.platform,"machine":platform.machine()}))'], process.env, true))
 if (identity.platform !== 'darwin' || identity.machine !== 'x86_64' || identity.python.join('.') !== '3.13') throw new Error('Prepare and review a wheel hash lock for this target Python/platform before packaging.')

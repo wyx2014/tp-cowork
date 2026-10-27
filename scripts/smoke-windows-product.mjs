@@ -44,10 +44,11 @@ const core = JSON.parse(readFileSync(join(runtime, 'node_modules/@tpcowork/dsh-c
 assert.equal(core.apiKey, process.env.TPCOWORK_DEEPSEEK_API_KEY || undefined, 'Product package must embed only the configured deployment API key')
 const toolbox = join(runtime, 'node_modules/@tpcowork/dsh-toolbox')
 const browser = JSON.parse(readFileSync(join(toolbox, 'runtime/playwright.json'), 'utf8'))
-assert.equal(browser.platform, 'win32')
+assert.equal(browser.platform, process.platform)
 assert.equal(browser.arch, 'x64')
 assert.equal(createHash('sha256').update(readFileSync(join(toolbox, 'runtime', browser.archive))).digest('hex'), browser.archiveSha256)
-const python = join(resources, 'app.asar.unpacked/dsh/node_modules/@tpcowork/dsh-toolbox/runtime/python/python.exe')
+const python = join(resources, 'app.asar.unpacked/dsh/node_modules/@tpcowork/dsh-toolbox/runtime/python',
+  process.platform === 'linux' ? 'bin/python3' : 'python.exe')
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)))
 execFileSync(python, ['-I', '-B', '-c', 'import pptx,docx,PIL,yaml; print("Installed product Python ready")'], {
   env: { ...env, PATH: '', PYTHONPATH: '', PYTHONHOME: '' }, stdio: 'inherit', windowsHide: true, timeout: 60_000,
