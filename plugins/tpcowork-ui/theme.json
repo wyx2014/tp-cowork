@@ -350,5 +350,9 @@
   "--tpcowork-home-wash": {
     "light": "linear-gradient(180deg, #e1efff 0%, #f4f9ff 48%, #f0f7ff 100%)",
     "dark": "linear-gradient(180deg, #051c3d 0%, #0c2d54 48%, #03152f 100%)"
+  },
+  "--tpcowork-success": {
+    "light": "#1e8a3e",
+    "dark": "#46bf72"
   }
 }

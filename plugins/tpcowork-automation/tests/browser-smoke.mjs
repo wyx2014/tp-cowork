@@ -29,18 +29,21 @@ async function collect(directory) {
 await collect(resolve(harness, 'packages')); await collect(resolve(harness, 'vendor'));
 const hook = registerHooks({ resolve(specifier, context, next) { return next(peers.get(specifier) ?? specifier, context); } });
 const [{ Context }, { default: Storage }, { DomainFacility }, { JsonStorageBackend }, { default: Registry }, { default: Gateway }, host,
-  { default: Sessions }, { default: Projections }, { default: SystemPrompt }, { default: Tools }, { default: Skills }, { default: Fs }, { default: WorkingDirectory }] = await Promise.all([
+  { default: Sessions }, { default: Projections }, { default: SystemPrompt }, { default: Tools }, { default: Skills }, { default: Fs }, { default: WorkingDirectory },
+  { default: RemoteAccess }, { Peer }] = await Promise.all([
   import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-storage'), import('@deepseek-ai/dsh-storage-domain'), import('@deepseek-ai/dsh-storage-json'),
   import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import(pathToFileURL(resolve(root, 'lib/host.js'))),
   import('@deepseek-ai/dsh-session'), import('@deepseek-ai/dsh-session-projection'), import('@deepseek-ai/dsh-system-prompt'), import('@deepseek-ai/dsh-tools'),
   import('@deepseek-ai/dsh-skill'), import('@deepseek-ai/dsh-fs-local'), import('@deepseek-ai/dsh-working-directory'),
+  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'),
 ]);
 const output = resolve(root, 'test-results/ui-browser'); await mkdir(output, { recursive: true });
 const medium = await mkdtemp(resolve(output, '_host-'));
 const ctx = new Context(); let server; let browser;
 const errors = []; const evidence = [];
 try {
-  for (const plugin of [Storage, Registry, Gateway, Sessions, Projections, SystemPrompt, Tools, Skills, Fs, WorkingDirectory]) await ctx.plugin(plugin);
+  for (const plugin of [Storage, Registry, RemoteAccess, Gateway, Sessions, Projections, SystemPrompt, Tools, Skills, Fs, WorkingDirectory]) await ctx.plugin(plugin);
+  const peer = new Peer(ctx, { principal: { kind: 'owner' } });
   const backend = new JsonStorageBackend(medium);
   ctx.effect(() => ctx.storage.backend.register('ui-browser', backend));
   const facility = new DomainFacility(ctx, { backend: 'ui-browser' }); ctx.provide('storageDomain', facility);
@@ -68,7 +71,7 @@ try {
         if (request.url === '/stream') {
           response.setHeader('Content-Type', 'application/x-ndjson'); response.flushHeaders();
           const lifetime = new AbortController(); response.on('close', () => lifetime.abort());
-          try { for await (const value of await ctx.typertGateway.stream({ namespace, method, args, signal: lifetime.signal })) response.write(JSON.stringify({ value }) + '\n'); }
+          try { for await (const value of await ctx.typertGateway.stream({ peer, namespace, method, args, signal: lifetime.signal })) response.write(JSON.stringify({ value }) + '\n'); }
           catch (error) { if (!lifetime.signal.aborted) response.write(JSON.stringify({ error: { message: error.message } }) + '\n'); }
           response.end(); return;
         }
@@ -78,7 +81,7 @@ try {
           groups: [{ id: 'test', name: 'Test', models: [{ id: 'standard', name: 'Standard' }, { id: 'reasoner', name: 'Reasoner', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } }] }],
         } : endpoint === 'permissionPresets/catalog' ? { defaultPreset: 'workspace-write', defaultOptions: [],
           options: [{ value: 'workspace-write', name: 'Workspace write' }, { value: 'danger-full-access', name: 'Full access' }],
-        } : await ctx.typertGateway.invoke({ namespace, method, args }) }; }
+        } : await ctx.typertGateway.invoke({ peer, namespace, method, args }) }; }
         catch (error) { result = { ok: false, error: { code: error.code ?? 'gateway/internal', message: error.message, details: {} } }; }
         response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(result)); return;
       }
@@ -98,7 +101,7 @@ try {
     const details = page.locator(selector); if (!await details.count()) return;
     if (!await details.evaluate(node => node.open)) await details.locator('summary').click();
   };
-  page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.message); });
+  page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.stack ?? error.message); });
   for (const locale of ['zh', 'en']) for (const mode of ['light', 'dark']) {
     await page.goto(`${origin}/?locale=${locale}&theme=${mode}`); await page.waitForFunction(() => window.ready === true);
     const heading = locale === 'zh' ? '自动化' : 'Automations';
@@ -219,6 +222,36 @@ try {
   evidence.push('Unavailable project renders a warning, survives an unrelated edit and JSON save/reload, and is removed only by explicit No project selection');
   assert.equal((await ctx.automation.list()).tasks[0].skillName, 'report');
   assert.deepEqual((await ctx.automation.list()).tasks[0].mcpPresets, [{ name: 'docs' }, { name: 'mail' }]);
+  // The chat tool keeps raw Cron; the built editor must still show its calendar time.
+  task = (await ctx.automation.list()).tasks[0];
+  const chatSchedule = { frequency: 'custom', cronExpression: '0 9 * * *', timezone: 'Asia/Shanghai' };
+  await ctx.automation.update({ id: task.id, data: { name: task.name, prompt: task.prompt, schedule: chatSchedule,
+    description: task.description, workspacePath: task.workspacePath, skillName: task.skillName, mcpPresets: task.mcpPresets } });
+  await page.reload();
+  assert.ok((await page.locator('.tp-auto-schedule-badge').innerText()).includes('Daily 09:00'));
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  assert.equal(await page.getByLabel('Frequency', { exact: true }).inputValue(), 'daily');
+  assert.equal(await page.getByLabel('Time', { exact: true }).inputValue(), '09:00');
+  assert.equal(await page.getByLabel('Time', { exact: true }).isVisible(), true);
+  await page.screenshot({ path: resolve(output, 'editor-chat-daily.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.getByLabel('Time', { exact: true }).isVisible(), true);
+  assert.equal(await page.locator('.tp-automation').evaluate(node => node.scrollWidth > node.clientWidth), false);
+  await page.screenshot({ path: resolve(output, 'editor-chat-daily-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1080, height: 860 });
+  await page.getByLabel('Instructions', { exact: true }).fill('Updated news briefing instructions');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('heading', { name: 'Browser once', exact: true }).waitFor();
+  assert.deepEqual((await ctx.automation.list()).tasks[0].schedule, chatSchedule);
+  await page.reload(); await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Time', { exact: true }).fill('10:15');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('heading', { name: 'Browser once', exact: true }).waitFor();
+  assert.deepEqual((await ctx.automation.list()).tasks[0].schedule, { frequency: 'daily', time: { hour: 10, minute: 15 }, timezone: 'Asia/Shanghai' });
+  await page.reload(); await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  assert.equal(await page.getByLabel('Time', { exact: true }).inputValue(), '10:15');
+  await page.getByRole('button', { name: 'Automations', exact: true }).click();
+  evidence.push('Chat-created 0 9 * * * displays Daily 09:00 with a visible time control at desktop/mobile widths; unrelated JSON saves keep raw Cron, explicit time edits persist and reload as Daily 10:15');
   for (const frequency of ['monthly', 'manual', 'custom']) {
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await open('.tp-auto-schedule-picker');

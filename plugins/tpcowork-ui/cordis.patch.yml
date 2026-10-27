@@ -1,5 +1,8 @@
 - id: ui-plugin-manager
   disabled: true
+# Its More-menu rows open the plugin list above, which the product hides.
+- id: entry-customization
+  disabled: true
 - id: ui-settings-plugins
   disabled: true
 - id: ui-settings

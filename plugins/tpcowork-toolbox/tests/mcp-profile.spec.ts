@@ -9,10 +9,12 @@ import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import Tools from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { Context } from '@deepseek-ai/cordis'
 import * as mcp from '../src/host/mcp/index.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 it('CRUD persists through real DSH profile patches and reload, preserving custom servers and removal policy', async () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'toolbox-mcp-')))
@@ -24,7 +26,7 @@ it('CRUD persists through real DSH profile patches and reload, preserving custom
   writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: 'test-bundle', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   writeFileSync(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [
     { id: 'config-editor', name: 'cordis:editor' }, { id: 'settings', name: 'cordis:settings' },
-    { id: 'typert', name: 'cordis:typert' }, { id: 'gateway', name: 'cordis:gateway' },
+    { id: 'typert', name: 'cordis:typert' }, { id: 'remote-access', name: 'cordis:remoteAccess' }, { id: 'gateway', name: 'cordis:gateway' },
     { id: 'prompt', name: 'cordis:prompt' }, { id: 'tools', name: 'cordis:tools' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'toolbox-mcp', name: 'cordis:toolbox', config: { servers: mcp.defaultMcpDefinitions().map(definition => ({ definition, revision: 1 })) } },
   ] }]))
@@ -34,7 +36,7 @@ it('CRUD persists through real DSH profile patches and reload, preserving custom
   const start = async () => {
     const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), ctx => {
       ctx.provide('profileContext', profile)
-      Object.assign(ctx.loader.builtins, { editor: ConfigEditor, settings: Settings, typert: TypertRegistry, gateway: Gateway, tools: Tools, prompt: SystemPrompt, toolbox: mcp,
+      Object.assign(ctx.loader.builtins, { editor: ConfigEditor, settings: Settings, typert: TypertRegistry, remoteAccess: RemoteAccess, gateway: Gateway, tools: Tools, prompt: SystemPrompt, toolbox: mcp,
         credentials: { apply(inner: Context) { inner.provide('credentials', { describe: async () => ({ configured: false, writable: false }) } as never) } },
       })
     })
@@ -52,7 +54,7 @@ it('CRUD persists through real DSH profile patches and reload, preserving custom
   await ctx.toolboxMcp.remove({ id: 'juyuan', expectedRevision: (await ctx.toolboxMcp.inventory()).revision })
   await ctx.fiber.dispose()
   const restored = await start()
-  const inventory = await restored.typertGateway.invoke({ namespace: 'toolboxMcp', method: 'inventory', args: {} })
+  const inventory = await restored.typertGateway.invoke({ peer: ownerPeer(restored),  namespace: 'toolboxMcp', method: 'inventory', args: {} })
   expect(inventory).toMatchObject({ items: [
     { id: 'caihui_mcp', enabled: false, configRevision: 3 }, { id: 'playwright' }, { id: 'my_custom', origin: 'custom' },
   ] })

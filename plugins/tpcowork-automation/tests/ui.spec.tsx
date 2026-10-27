@@ -121,6 +121,31 @@ describe('task page and detached editor', () => {
     expect((await ctx.automation.list()).tasks[0]!.schedule).toMatchObject({ frequency: 'weekly', dayOfWeek: 5, time: { hour: 14, minute: 1 }, timezone: zone })
   })
 
+  it('shows a chat-created daily Cron as daily at 09:00, preserves it on unrelated saves and edits its time inline', async () => {
+    const { ctx, services } = await harness()
+    const schedule: ScheduleConfig = { frequency: 'custom', cronExpression: '0 9 * * *', timezone: 'Asia/Shanghai' }
+    await ctx.automation.create(draft(schedule))
+    render(<AutomationPage services={services} locale="zh" t={key => zh[key]} />)
+    expect(await screen.findByText('每天 09:00')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: zh.edit }))
+    expect(screen.getByLabelText(zh.frequency)).toHaveProperty('value', 'daily')
+    expect(screen.getByLabelText(zh.time)).toHaveProperty('value', '09:00')
+    input(zh.prompt, 'Updated news instructions')
+    fireEvent.click(screen.getByRole('button', { name: zh.save }))
+    await screen.findByRole('heading', { name: 'Round trip' })
+    expect((await ctx.automation.list()).tasks[0]!.schedule).toEqual(schedule)
+    fireEvent.click(screen.getByRole('button', { name: zh.edit }))
+    input(zh.time, '10:15')
+    fireEvent.click(screen.getByRole('button', { name: zh.save }))
+    await screen.findByRole('heading', { name: 'Round trip' })
+    expect((await ctx.automation.list()).tasks[0]!.schedule).toEqual({ frequency: 'daily', time: { hour: 10, minute: 15 }, timezone: 'Asia/Shanghai' })
+    fireEvent.click(screen.getByRole('button', { name: zh.edit }))
+    expect(screen.getByLabelText(zh.time)).toHaveProperty('value', '10:15')
+    input(zh.frequency, 'custom')
+    expect(screen.getByLabelText(zh.frequency)).toHaveProperty('value', 'custom')
+    expect(screen.getByLabelText(zh.cronExpression)).toHaveProperty('value', '0 9 * * *')
+  })
+
   it('shows only the edited task in its history tab and preserves unsaved settings when returning', async () => {
     const { ctx, services } = await harness()
     for (const name of ['First', 'Second']) {

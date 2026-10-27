@@ -1,11 +1,13 @@
 /** Display stored timing rules without calculating or changing the Host's schedule. */
 import type { ScheduleConfig } from './types.ts'
 import type { UiKey, UiText } from './ui-locales.ts'
+import { displaySchedule } from './schedule-display.ts'
 
 const weekdays: UiKey[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 /** @param schedule - Saved rule or editor draft. @param t - Localized copy. @param locale - Viewer locale. @returns Human-readable rule; dates use the saved timezone without exposing it in the label. */
 export function scheduleDescription(schedule: ScheduleConfig, t: UiText, locale: string): string {
+  schedule = displaySchedule(schedule)
   const frequency = t(schedule.frequency)
   if (schedule.frequency === 'manual') return frequency
   if (schedule.frequency === 'once' && schedule.at) {

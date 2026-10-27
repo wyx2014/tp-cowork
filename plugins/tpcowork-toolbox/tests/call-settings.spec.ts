@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { activeCallSettings, directoryPhone, getCallSetup, saveCallSetup } from '../src/host/skills/call-settings.ts'
 import { nativeMissing, sendCall, type NativeOptions } from '../src/host/skills/native.ts'
 import { skillsFixture } from './skills-fixture.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const refs: NativeOptions = { callUsernameRef: 'CALL_USER', callPasswordRef: 'CALL_PASSWORD', requestTimeoutMs: 1000, imageMaxBytes: 1000, visionMaxTokens: 100, visionKeyRef: 'VISION_KEY' }
 const table = '| 分机短号 | 显示名称 | 显示名称(英文) | 终端IP | 分机注册状态 |\n| --- | --- | --- | --- | --- |\n| 1234 | 测试甲 | Test A | 192.0.2.10 | 已注册 |\n| 5678 | 测试乙 | Test B | 192.0.2.20 | 已注册 |\n'
@@ -30,7 +31,7 @@ describe('local phone setup', () => {
     const local = await fixture()
     const { ctx, installer, dir } = await skillsFixture()
     ctx.provide('credentials', local.ctx.credentials)
-    const invoke = (method: string, request: unknown) => ctx.typertGateway.invoke({ namespace: 'toolboxSkills', method, args: { request } })
+    const invoke = (method: string, request: unknown) => ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxSkills', method, args: { request } })
     expect(await invoke('callSetup', { caller: '1234' })).toMatchObject({ phoneUrl: 'https://192.0.2.10', confirmed: false })
     const result = await invoke('saveCallSetup', { caller: '1234', phoneUrl: '', pbx: 'pbx.test', outgoingPrefix: '9', username: 'test-user', password: 'test-password' })
     expect(result).toMatchObject({ confirmed: true, issues: [] })

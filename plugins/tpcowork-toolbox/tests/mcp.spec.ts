@@ -2,6 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import TypertGateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
@@ -15,6 +16,7 @@ import * as mcp from '../src/host/mcp/index.ts'
 import { parseDefinition } from '../src/host/mcp/schema.ts'
 import { sanitizeMcpError } from '../../../../deepseek-harness/packages/mcp/mcp-client/src/redact.ts'
 import { startHttpMcpFixture } from '../../../../deepseek-harness/packages/mcp/mcp-client/tests/http-fixture.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const roots: Context[] = []
 vi.setConfig({ testTimeout: 15000 })
@@ -25,7 +27,7 @@ function task(sessionId: string, ids = ['local']): TaskContext {
 }
 async function setup(definitions: McpDefinition[] = [stdio], secrets: Record<string, string> = {}, timeoutMs = 10000) {
   const ctx = new Context(); roots.push(ctx)
-  await ctx.plugin(TypertRegistry); await ctx.plugin(TypertGateway); await ctx.plugin(SystemPrompt); await ctx.plugin(ToolRuntime); await ctx.plugin(McpResources)
+  await ctx.plugin(TypertRegistry); await ctx.plugin(RemoteAccess); await ctx.plugin(TypertGateway); await ctx.plugin(SystemPrompt); await ctx.plugin(ToolRuntime); await ctx.plugin(McpResources)
   let rows = definitions.map(definition => ({ definition: structuredClone(definition), revision: 1 }))
   let removed: string[] = []; let settingsRevision = 1; let configRevision = 1
   const write = vi.fn(async (_namespace, operations, expected) => {
@@ -199,9 +201,9 @@ describe('MCP profile management and native runtime', () => {
       secrets.CAIHUI_MCP_API_KEY = 'test-only-refreshed-key'
       await service.probe({ id: 'http' }, new AbortController().signal)
       expect(http.authorization).toContain('test-only-refreshed-key')
-      const result = await ctx.typertGateway.invoke({ namespace: 'toolboxMcp', method: 'inventory', args: {} })
+      const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxMcp', method: 'inventory', args: {} })
       expect(JSON.stringify(result)).not.toContain('test-only-')
-      expect(await ctx.typertGateway.invoke({ namespace: 'toolboxMcp', method: 'definition', args: { request: { id: 'http' } } })).toEqual(definition)
+      expect(await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxMcp', method: 'definition', args: { request: { id: 'http' } } })).toEqual(definition)
     } finally { await http.close() }
   })
   it('abort or timeout of negotiation drains the transport and exposes no capability', async () => {

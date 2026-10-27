@@ -25,7 +25,7 @@ export function viewportScale(canvas, viewport, zoom) {
   return Math.min(1, width / viewport.width, height / viewport.height);
 }
 
-function IconButton({ icon, label, disabled = false, active = false, pressed, onClick, spin = false, ...props }) {
+export function IconButton({ icon, label, disabled = false, active = false, pressed, onClick, spin = false, ...props }) {
   return <button type="button" className={`tpcb-icon-button${active ? ' tpcb-active' : ''}`} title={label} aria-label={label}
     aria-pressed={pressed} disabled={disabled} onClick={onClick} {...props}><Icon name={icon} className={spin ? 'tpcb-spin' : undefined} /></button>;
 }
@@ -46,8 +46,10 @@ export function Floating({ anchor, place, className, children, role, ...props })
         const style = place(rect, node.getBoundingClientRect());
         node.style.left = `${Math.round(style.left)}px`;
         node.style.top = `${Math.round(style.top)}px`;
-        // A placement may also size the element, as a cover over the whole surface does.
-        if (style.width !== undefined) { node.style.width = `${Math.round(style.width)}px`; node.style.height = `${Math.round(style.height)}px`; }
+        // A placement may also size the element, as a cover over the whole surface does; a list under the address
+        // takes only its width and grows with its rows.
+        if (style.width !== undefined) node.style.width = `${Math.round(style.width)}px`;
+        if (style.height !== undefined) node.style.height = `${Math.round(style.height)}px`;
         node.style.visibility = rect.width > 0 && rect.height > 0 ? 'visible' : 'hidden';
       }
       frame = requestAnimationFrame(follow);
@@ -60,7 +62,7 @@ export function Floating({ anchor, place, className, children, role, ...props })
 const below = align => (rect, own) => ({ top: rect.bottom + 6, left: align === 'start' ? rect.left : rect.right - own.width });
 
 /** A small anchored menu or popover that closes on outside press or Escape. */
-function Popup({ trigger, children, align = 'end', className = '' }) {
+export function Popup({ trigger, children, align = 'end', className = '' }) {
   const [open, setOpen] = useState(false);
   const root = useRef();
   const panel = useRef();
@@ -106,18 +108,20 @@ export function SiteSettings({ origin, rules, onChange, t }) {
 }
 
 /** The reference's BrowserToolbar. */
-export function BrowserToolbar({ row, address, editing, onAddressChange, onAddressFocus, onAddressBlur, onSubmit, onBack, onForward, onReload,
-  responsive, onToggleResponsive, siteControl, menu, t }) {
+export function BrowserToolbar({ row, address, editing, onAddressChange, onAddressFocus, onAddressBlur, onAddressKeyDown, addressRef, suggestion,
+  onSubmit, onBack, onForward, onReload, responsive, onToggleResponsive, siteControl, bookmarks, menu, t }) {
   return <form className="tpcb-toolbar" onSubmit={onSubmit}>
     <IconButton icon="ChevronLeft" label={t('back')} disabled={!row?.canGoBack} onClick={onBack} />
     <IconButton icon="ChevronRight" label={t('forward')} disabled={!row?.canGoForward} onClick={onForward} />
     <IconButton icon="RefreshCw" label={t('reload')} disabled={!row?.ready} onClick={onReload} spin={row?.loading === true} />
-    <div className="tpcb-address">
+    <div className="tpcb-address" ref={addressRef}>
       <input aria-label={t('address')} placeholder={t('address')} value={address} spellCheck={false}
-        onChange={event => onAddressChange(event.target.value)} onFocus={onAddressFocus} onBlur={onAddressBlur} />
+        role="combobox" aria-autocomplete="list" aria-expanded={suggestion !== undefined} aria-activedescendant={suggestion}
+        onChange={event => onAddressChange(event.target.value)} onFocus={onAddressFocus} onBlur={onAddressBlur} onKeyDown={onAddressKeyDown} />
       {/* Hidden, not unmounted, while the URL is being edited. */}
       {siteControl && <div className="tpcb-address-site" hidden={editing}>{siteControl}</div>}
     </div>
+    {bookmarks}
     <IconButton icon="MonitorSmartphone" label={t(responsive ? 'responsiveExit' : 'responsiveEnter')} active={responsive} pressed={responsive} onClick={onToggleResponsive} />
     {menu}
   </form>;

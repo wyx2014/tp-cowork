@@ -50,6 +50,13 @@ html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero
   }
 html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_card { --dsw-elevation-stroke-color: var(--tpcowork-home-card-stroke);
     box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); }
+@keyframes tpcowork-home-enter { from { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+    html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .tpcowork-hero-greeting { animation: tpcowork-home-enter 360ms ease-out 0ms both; }
+    html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .FXhjRG_composerHero :is(.FXhjRG_heroWorkspaceRow, .-vAKla_root) { animation: tpcowork-home-enter 360ms ease-out 120ms both; }
+    html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .tp-task-suggestions { animation: tpcowork-home-enter 360ms ease-out 240ms both; }
+    html body[data-tpcowork-ui]:has(#dsh-startup):not(.dsh-startup-ready) [data-content-phase="hero"] :is(.tpcowork-hero-greeting, .FXhjRG_composerHero :is(.FXhjRG_heroWorkspaceRow, .-vAKla_root), .tp-task-suggestions) { animation-play-state: paused; }
+  }
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"] { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::before, html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::before { inset: 0; background: var(--tpcowork-home-art) right top / auto 82% no-repeat;
@@ -70,5 +77,6 @@ html body[data-tpcowork-ui] .-vAKla_primary { width: var(--dsh-composer-submit-s
     background: var(--dsh-composer-submit-fill); color: var(--dsh-composer-submit-ink);
     transform: var(--dsh-composer-submit-transform); }
 html body[data-tpcowork-ui] .-vAKla_primary:hover:not(:disabled) { background: var(--dsh-composer-submit-hover); }
+html body[data-tpcowork-ui]:not([data-tpcowork-developer]) .c8irWG_root { display: none; }
 html body[data-tpcowork-ui] .u3cv6q_bubble { border: var(--dsh-chat-user-border); border-radius: var(--dsh-chat-user-radius); }
 html body[data-tpcowork-ui] [data-plugin-package^="@tpcowork/"] ._dj94W_cardDesc { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; line-height: 20px; }

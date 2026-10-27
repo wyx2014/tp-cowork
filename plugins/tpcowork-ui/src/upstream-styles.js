@@ -80,6 +80,19 @@ export function upstreamStyles(modules) {
   }`);
   rules.push(`${home} .${className('input', 'card')} { --dsw-elevation-stroke-color: var(--tpcowork-home-card-stroke);
     box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); }`);
+  // Entrance whenever the home appears: the greeting fades in, then the workspace row and composer, then the
+  // suggestions. Opacity only, so nothing moves while the layout settles. Under the startup cover it waits and starts as
+  // the cover fades, continuing from the splash; reduced motion skips it.
+  const entering = [
+    ['.tpcowork-hero-greeting', 0],
+    [`.${className('conversation', 'composerHero')} :is(.${className('conversation', 'heroWorkspaceRow')}, .${className('input', 'root')})`, 120],
+    ['.tp-task-suggestions', 240],
+  ];
+  rules.push('@keyframes tpcowork-home-enter { from { opacity: 0; } }');
+  rules.push(`@media (prefers-reduced-motion: no-preference) {
+    ${entering.map(([target, delay]) => `${home} ${target} { animation: tpcowork-home-enter 360ms ease-out ${delay}ms both; }`).join('\n    ')}
+    ${scope}:has(#dsh-startup):not(.dsh-startup-ready) [data-content-phase="hero"] :is(${entering.map(([target]) => target).join(', ')}) { animation-play-state: paused; }
+  }`);
   // The skyline covers the whole conversation column, header included: it sits top right and fades out to
   // the left, and its water continues under the composer. It stays a faded backdrop behind the greeting.
   const backdrop = `${selector('conversation', 'root')}[data-phase="hero"]`;
@@ -103,6 +116,8 @@ export function upstreamStyles(modules) {
     background: var(--dsh-composer-submit-fill); color: var(--dsh-composer-submit-ink);
     transform: var(--dsh-composer-submit-transform);`);
   rules.push(`${selector('input', 'primary')}:hover:not(:disabled) { background: var(--dsh-composer-submit-hover); }`);
+  // The context meter is not a slot; the developer flag on body (set by gateComposerStats) decides its visibility.
+  rules.push(`${scope}:not([data-tpcowork-developer]) .${className('meter', 'root')} { display: none; }`);
   rule('chat', 'bubble', 'border: var(--dsh-chat-user-border); border-radius: var(--dsh-chat-user-radius);');
   rule('plugins', 'cardDesc', 'display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; line-height: 20px;',
     `${scope} [data-plugin-package^="@tpcowork/"]`);

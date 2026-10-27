@@ -4,6 +4,7 @@ import { writeFile, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { readZip } from '../src/host/installer/archive.ts'
 import { skillsFixture } from './skills-fixture.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const { zipSync } = createRequire(resolve(import.meta.dirname, '../../../../deepseek-harness/package.json'))('fflate') as {
   zipSync(files: Record<string, Uint8Array>): Uint8Array
@@ -18,7 +19,7 @@ describe('local skill packages', () => {
     const image = new Uint8Array([0, 255, 3, 128])
     const files = { ...resources, '_meta.json': Buffer.from('{"slug":"sample","version":"1.0.0"}'), 'assets/image.bin': image }
     const zip = zipSync(Object.fromEntries(Object.entries(files).map(([name, bytes]) => [wrapped ? `sample/${name}` : name, bytes])))
-    const prepared = await ctx.typertGateway.invoke({ namespace: 'toolboxInstaller', method: 'prepareArchive', args: { request: { contentBase64: Buffer.from(zip).toString('base64') } } }) as { importId: string; name: string }
+    const prepared = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxInstaller', method: 'prepareArchive', args: { request: { contentBase64: Buffer.from(zip).toString('base64') } } }) as { importId: string; name: string }
     expect(prepared.name).toBe('sample')
     const result = await installer.install({ requestId: 'browser-zip', source: { kind: 'local', importId: prepared.importId }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(result.state).toBe('installed')

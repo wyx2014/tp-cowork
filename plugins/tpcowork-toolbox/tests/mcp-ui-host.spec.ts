@@ -3,6 +3,7 @@ import * as React from 'react'
 import { Context } from '@deepseek-ai/cordis'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import TypertGateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../../../deepseek-harness/node_modules/@testing-library/react/dist/index.js'
 import { ToolboxMcp, defaultMcpDefinitions, type McpRecord } from '../src/host/mcp/index.ts'
@@ -13,6 +14,7 @@ import { mcpForm, parseMcp, type McpForm } from '../src/ui/mcp-form.ts'
 import { parseDefinition } from '../src/host/mcp/schema.ts'
 import type { Catalog, McpApi, McpDefinition, McpItem } from '../src/contracts/index.ts'
 import { actions, t } from './ui-fixture.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const roots: Context[] = []
 afterEach(async () => { cleanup(); await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose())) })
@@ -20,7 +22,7 @@ const custom: McpDefinition = { id: 'custom', label: 'Custom', origin: 'custom',
 
 async function setup(definition = custom) {
   const ctx = new Context(); roots.push(ctx)
-  await ctx.plugin(TypertRegistry); await ctx.plugin(TypertGateway)
+  await ctx.plugin(TypertRegistry); await ctx.plugin(RemoteAccess); await ctx.plugin(TypertGateway)
   let rows: McpRecord[] = [{ definition: structuredClone(definition), revision: 1 }]
   const failures: unknown[] = []
   let settingsRevision = 1, configRevision = 1, removed: string[] = []
@@ -46,7 +48,7 @@ async function setup(definition = custom) {
     const descriptor = managementContribution.descriptors.find(row => row.namespace === 'toolboxMcp' && row.method === method)!
     const request = descriptor.parameters[0]?.codec.create().parse(args[0])
     try {
-      const value = await ctx.typertGateway.invoke({ namespace: 'toolboxMcp', method, args: request === undefined ? {} : { request } })
+      const value = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxMcp', method, args: request === undefined ? {} : { request } })
       return descriptor.result.create().parse(value) as Awaited<ReturnType<McpApi[K]>>
     } catch (error) { failures.push(error); throw error }
   }
@@ -109,7 +111,7 @@ describe('MCP UI → Client codecs → Gateway → actual T3 Host', () => {
     await screen.findAllByRole('alert')
     expect(String(failures.at(-1))).toContain('toolbox/stale-selection')
     expect(await service.definition({ id: 'custom' })).toEqual(custom)
-    if (operation === 'remove') fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+    if (operation === 'remove') fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
     if (operation === 'edit') fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await act(async () => { await api.refresh() })
     await operate(operation)

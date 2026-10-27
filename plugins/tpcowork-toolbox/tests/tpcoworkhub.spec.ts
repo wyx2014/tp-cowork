@@ -7,6 +7,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { hubFixture, deferred, password, sampleFiles, secret } from './tpcoworkhub-fixture.ts'
 import { fingerprint, sha256 } from '../src/host/installer/files.ts'
 import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
   it('loads website catalog metadata with null optional fields and uses the published version', async () => {
@@ -21,7 +22,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
       ] }))
       return true
     }
-    const page = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: {} } })
+    const page = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: {} } })
     expect(page).toEqual({ items: [
       { id: 'published', name: 'published-skill', description: '', versionId: 'v1', version: '1.0.0', visibility: 'public', approvalStatus: 'approved' },
       { id: 'pending', name: 'pending-skill', description: '', versionId: '', version: '', visibility: 'public', approvalStatus: 'pending' },
@@ -54,7 +55,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
       ] }))
       return true
     }
-    const page = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: { query: 'AI' } } }) as Awaited<ReturnType<typeof service.list>>
+    const page = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: { query: 'AI' } } }) as Awaited<ReturnType<typeof service.list>>
     expect(page.items).toEqual([expect.objectContaining({ id: 'approved', displayName: 'Industry insights', tags: ['AI', 'research'], visibility: 'public', approvalStatus: 'approved' })])
     expect((await service.list({ query: 'AI', cursor: page.cursor })).items.map(item => item.id)).toEqual(['pending'])
     expect((await service.list({ query: 'INSIGHTS' })).items.map(item => item.id)).toEqual(['approved'])
@@ -65,7 +66,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it('previews verified SKILL.md through the Gateway without installing or downloading other resources', async () => {
     const { service, login, ctx, state, requests } = await hubFixture()
     await login()
-    const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'store-1', preview: true } } }) as Awaited<ReturnType<typeof service.detail>>
+    const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'store-1', preview: true } } }) as Awaited<ReturnType<typeof service.detail>>
     expect(result.content).toBe(Buffer.from(state.files[0]!.bytes).toString('utf8'))
     expect(requests.filter(row => row.path.startsWith('/tpcoworkapi/skill-versions/files?'))).toHaveLength(1)
     expect((await ctx.toolboxSkills.inventory({})).items).toEqual([])
@@ -87,7 +88,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it('validates the website session, restores the shared desktop account and clears it on sign-out', async () => {
     const { ctx, endpoint, requests, service, start, attach } = await hubFixture()
     expect(await service.browserAuth()).toEqual({ loginUrl: endpoint + '/desktop/authorize', timeoutMs: 300000 })
-    await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'acceptBrowserSession', args: { request: { token: secret } } })
+    await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'acceptBrowserSession', args: { request: { token: secret } } })
     expect(requests.some(request => (request.body as { path?: string })?.path === 'users:me')).toBe(true)
     const account = await service.account()
     expect(account).toMatchObject({ state: 'signed_in', user: { id: 'user-1', username: 'fixture-user', name: 'Fixture User' } })
@@ -110,7 +111,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(await login()).toEqual({ configured: true })
     expect(state.loginHash).toBe(password)
     expect(await service.account()).toMatchObject({ configured: true, state: 'signed_in' })
-    const page = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: {} } }) as Awaited<ReturnType<typeof service.list>>
+    const page = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'list', args: { request: {} } }) as Awaited<ReturnType<typeof service.list>>
     expect(page.items[0]!.name).toBe('hub-sample'); expect(page.cursor).toBeTruthy()
     expect((await service.list({ cursor: page.cursor! })).items[0]!.name).toBe('another')
     expect((await service.list({ query: 'ANOTHER' })).items).toHaveLength(1)
@@ -119,7 +120,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const detail = await service.detail({ id: 'store-1' })
     expect(detail.fingerprint).toBe(fingerprint(state.files))
     const request = installRequest('first')
-    const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'install', args: { request } }) as Awaited<ReturnType<typeof service.install>>
+    const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'install', args: { request } }) as Awaited<ReturnType<typeof service.install>>
     expect(result.state).toBe('installed')
     expect(await service.install(request)).toEqual(result)
     expect((await service.install(installRequest('again'))).state).toBe('unchanged')
@@ -191,7 +192,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     const { login, service, state, ctx, dir, installRequest, fiber, installer } = await hubFixture()
     await login(); state.hold = deferred()
     const controller = new AbortController()
-    const pending = ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: installRequest('cancel') }, signal: controller.signal })
+    const pending = ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: installRequest('cancel') }, signal: controller.signal })
     await state.entered.promise
     controller.abort()
     await pending.catch(() => undefined)
@@ -201,7 +202,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect((await service.install(installRequest('retry'))).state).toBe('installed')
     await fiber.dispose()
     expect((await installer.install(installRequest('after-unload'))).error?.code).toBe('skills/source-unavailable')
-    await expect(ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'account', args: {} })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
+    await expect(ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'account', args: {} })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
   })
   it('times out network operations, refuses redirects and never exposes remote error bodies', async () => {
     const { login, service, state } = await hubFixture({ requestTimeoutMs: 100 })
@@ -224,7 +225,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await mkdir(join(path, '.git')); await writeFile(join(path, '.git/config'), 'private')
     expect(requests.filter(row => row.path === '/tpcoworkapi/skills/publish')).toHaveLength(0)
     const request = { requestId: 'publish-once', sourceSkillId: installed.skillId!, slug: 'hub-sample', displayName: 'Shared sample', version: '1.0.0' }
-    const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'publish', args: { request } })
+    const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'publish', args: { request } })
     expect(result).toMatchObject({ skillId: 'published-1', fileCount: 3 })
     expect(state.uploaded.map(file => file.path).sort()).toEqual(['SKILL.md', 'assets/template.bin', 'scripts/helper.py'])
     expect(state.uploaded.find(file => file.path === 'assets/template.bin')?.bytes).toEqual(new Uint8Array([0, 255, 10, 128, 200]))

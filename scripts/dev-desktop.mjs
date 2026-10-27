@@ -61,7 +61,7 @@ function missingPluginLinks(product, profile) {
 
 /** Keep the data paths identical to the framework's ordinary development launcher. */
 export function desktopPlan({ product = productRoot, harness = harnessRoot, environment = process.env,
-  rebuild = false, plugins = false } = {}) {
+  rebuild = false, plugins = false, pluginsOnly = false } = {}) {
   if (!existsSync(join(harness, 'apps/desktop/package.json'))) {
     throw new Error('缺少桌面底座，请将 deepseek-harness 仓库放到 tp-coworkdsh 的同级目录。')
   }
@@ -71,6 +71,8 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
     DSH_HOME: resolve(environment.DSH_HOME || join(development, 'home')),
     DSH_DESKTOP_USER_DATA_DIR: resolve(environment.DSH_DESKTOP_USER_DATA_DIR || join(development, 'electron-user-data')),
     DSH_DESKTOP_OPEN_DEVTOOLS: environment.DSH_DESKTOP_OPEN_DEVTOOLS ?? '0',
+    // The harness launcher prepares product plugins itself unless this launcher already did.
+    TPCOWORK_PLUGINS_PREPARED: '1',
   }
   const steps = []
   const add = (label, command, args, cwd = product) => steps.push({ label, command, args, cwd })
@@ -87,12 +89,18 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
   // existing missing-artifact checks instead of forcing a rebuild of artifacts that already exist.
   const harnessChanged = stored.harness !== undefined && fingerprints.harness !== undefined && fingerprints.harness !== stored.harness
   const pluginsChanged = stored.plugins !== undefined && fingerprints.plugins !== undefined && fingerprints.plugins !== stored.plugins
-  const buildHarness = rebuild || harnessChanged || harnessArtifacts.some(file => !existsSync(join(harness, file)))
+  // The UI plugin is generated from the harness's built styles, so plugins rebuild once the harness they were
+  // built against changes.
+  const pluginsHarnessChanged = stored.pluginsHarness !== undefined && fingerprints.harness !== undefined
+    && fingerprints.harness !== stored.pluginsHarness
+  // Plugins only: the harness's own launcher builds and starts the desktop and asks this script for the product
+  // plugins alone.
+  const buildHarness = !pluginsOnly && (rebuild || harnessChanged || harnessArtifacts.some(file => !existsSync(join(harness, file)))
     || missingDependencies(harness, ['devDependencies'])
-    || missingDependencies(join(harness, 'apps/desktop'), ['dependencies', 'devDependencies'])
-  const buildPlugins = buildHarness || plugins || pluginsChanged || !pluginsReady(product, harness)
+    || missingDependencies(join(harness, 'apps/desktop'), ['dependencies', 'devDependencies']))
+  const buildPlugins = buildHarness || plugins || pluginsChanged || pluginsHarnessChanged || !pluginsReady(product, harness)
   if (buildHarness) add('准备底座依赖', 'pnpm', ['install', '--frozen-lockfile'], harness)
-  if (buildHarness || !electronReady(harness)) {
+  if (!pluginsOnly && (buildHarness || !electronReady(harness))) {
     add('准备 Electron', 'pnpm', ['--filter', '@deepseek-ai/dsh-desktop', 'exec', 'node', 'node_modules/electron/install.js'], harness)
   }
   if (buildHarness) {
@@ -123,17 +131,20 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
       for (const name of missingLinks) node(`修复 ${name} 插件链接`, 'scripts/desktop-plugin.mjs', ['install', name])
     }
   }
-  add('启动 TP Cowork', 'pnpm', ['run', 'start:desktop',
-    ...(buildHarness && missingLinks.length === 0 ? ['--rebuild-runtime'] : [])], harness)
-  return { env, steps, fingerprintFile, fingerprints }
+  if (!pluginsOnly) {
+    add('启动 TP Cowork', 'pnpm', ['run', 'start:desktop',
+      ...(buildHarness && missingLinks.length === 0 ? ['--rebuild-runtime'] : [])], harness)
+  }
+  return { env, steps, fingerprintFile, fingerprints, stored, pluginsOnly }
 }
 
 /** Record the checkouts' current state once they are the state actually running, so the next launch can tell what changed. */
-function saveFingerprints(fingerprintFile, fingerprints) {
+function saveFingerprints(fingerprintFile, fingerprints, stored = {}, pluginsOnly = false) {
   const { harness, plugins } = fingerprints
   if (harness === undefined && plugins === undefined) return
   mkdirSync(join(fingerprintFile, '..'), { recursive: true })
-  writeFileSync(fingerprintFile, JSON.stringify({ harness, plugins }))
+  // A plugins-only run built no harness, so the harness record stays as the last full launch left it.
+  writeFileSync(fingerprintFile, JSON.stringify({ harness: pluginsOnly ? stored.harness : harness, plugins, pluginsHarness: harness }))
 }
 
 /** Electron's singleton marker prevents rebuilding a profile used by a live desktop. */
@@ -156,30 +167,30 @@ export function assertDesktopStopped(userData, kill = process.kill) {
 
 /** Stop on a failed build or install; launch only after all product bundles are ready. */
 export async function runDesktop(options = {}, { run = runCommand, log = console.log } = {}) {
-  const { env, steps, fingerprintFile, fingerprints } = desktopPlan(options)
-  assertDesktopStopped(env.DSH_DESKTOP_USER_DATA_DIR)
-  if (steps.length === 1) log('复用已有构建：未检测到插件或底座改动。')
+  const { env, steps, fingerprintFile, fingerprints, stored, pluginsOnly } = desktopPlan(options)
+  if (!pluginsOnly) assertDesktopStopped(env.DSH_DESKTOP_USER_DATA_DIR)
+  if (steps.length === (pluginsOnly ? 0 : 1)) log(pluginsOnly ? 'TP Cowork 插件无改动，复用已有构建。' : '复用已有构建：未检测到插件或底座改动。')
   for (const [index, step] of steps.entries()) {
     if (step.label === '初始化桌面配置') assertDesktopStopped(env.DSH_DESKTOP_USER_DATA_DIR)
     log(`\n[${index + 1}/${steps.length}] ${step.label}`)
     const started = performance.now()
     try { await run(step.command, step.args, { cwd: step.cwd, env }) }
     catch (error) { throw new Error(`${step.label}失败：${error.message}`, { cause: error }) }
-    if (index < steps.length - 1) log(`完成，用时 ${((performance.now() - started) / 1000).toFixed(1)} 秒`)
+    if (pluginsOnly || index < steps.length - 1) log(`完成，用时 ${((performance.now() - started) / 1000).toFixed(1)} 秒`)
   }
-  saveFingerprints(fingerprintFile, fingerprints)
+  saveFingerprints(fingerprintFile, fingerprints, stored, pluginsOnly)
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
     const { values } = parseArgs({ options: { plan: { type: 'boolean' }, help: { type: 'boolean' },
-      rebuild: { type: 'boolean' }, plugins: { type: 'boolean' } } })
+      rebuild: { type: 'boolean' }, plugins: { type: 'boolean' }, 'plugins-only': { type: 'boolean' } } })
     if (values.help) console.log('npm run dev           一键启动：自动检测插件或底座自上次构建以来的改动并重建，其余复用已有构建\nnpm run dev:plugins   强制重建产品插件并启动\nnpm run dev:rebuild   强制完整重建底座和插件并启动\nnpm run dev -- --plan 查看启动步骤，不执行构建或启动')
-    else if (values.plan) console.log(JSON.stringify(desktopPlan(values).steps, null, 2))
+    else if (values.plan) console.log(JSON.stringify(desktopPlan({ ...values, pluginsOnly: values['plugins-only'] }).steps, null, 2))
     else {
       if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('本地启动需要 Node.js 24 或更新版本。')
       if (!['darwin', 'win32'].includes(process.platform)) throw new Error('本地桌面启动支持 macOS 和 Windows。')
-      await runDesktop(values)
+      await runDesktop({ ...values, pluginsOnly: values['plugins-only'] })
     }
   } catch (error) {
     console.error(`TP Cowork: ${error.message}`)

@@ -16,7 +16,7 @@ import { Session, SessionId, SessionLogOffset, appendPluginRecord } from '@deeps
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import DefaultModel from '@deepseek-ai/dsh-agent-default-model'
-import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Query from '@deepseek-ai/dsh-session-query-sqlite'
 import Workspaces from '@deepseek-ai/dsh-workspace'
 import Skills from '@deepseek-ai/dsh-skill'

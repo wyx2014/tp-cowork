@@ -51,6 +51,22 @@
     "greetingAfternoon": "Afternoon,",
     "greetingEvening": "Evening,",
     "greetingTitle": "Leave it to TP Cowork",
-    "greetingSubtitle": "Expert AI for research, analysis, and working together"
+    "greetingSubtitle": "Expert AI for research, analysis, and working together",
+    "thoughtOff": "Off",
+    "thoughtMinimal": "Minimal",
+    "thoughtLow": "Low",
+    "thoughtMedium": "Medium",
+    "thoughtHigh": "High",
+    "thoughtXhigh": "Extra high",
+    "thoughtMax": "Max",
+    "thoughtOn": "On",
+    "thoughtUltra": "Ultra",
+    "providerLabel": "Provider",
+    "providerApiBadge": "API",
+    "modelsTitle": "Models",
+    "effortTitle": "Effort",
+    "selectModel": "Select model",
+    "visionBadge": "Vision",
+    "effortCycle": "Cycle thinking effort"
   }
 }

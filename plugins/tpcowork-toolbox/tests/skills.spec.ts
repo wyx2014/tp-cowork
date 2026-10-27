@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { skillsFixture } from './skills-fixture.ts'
 import { ToolboxSkills } from '../src/host/skills/index.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 describe('skills profile lifecycle through real Loader and Gateway', () => {
   it('shows missing runtime dependencies and configuration without running external actions', async () => {
     const { ctx, installer } = await skillsFixture({ python: '/not-installed/toolbox-python' })
@@ -16,7 +17,7 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
     const { ctx, installer, start, dir } = await skillsFixture()
     const installed = await installer.install({ requestId: 'brainstorming', source: { kind: 'bundled', resourceId: 'brainstorming' }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(installed.state).toBe('installed')
-    const list = () => ctx.typertGateway.invoke({ namespace: 'toolboxSkills', method: 'inventory', args: { request: {} } })
+    const list = () => ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxSkills', method: 'inventory', args: { request: {} } })
     const catalog = await ctx.toolboxSkills.inventory({})
     expect(catalog.items[0]).toMatchObject({ id: installed.skillId, installed: true, enabled: true, origin: 'bundled', readiness: { state: 'ready' } })
     expect(await list()).toMatchObject({ revision: catalog.revision, complete: true, items: [{ id: installed.skillId, enabled: true }] })

@@ -2,12 +2,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { apply as applyConnection } from '@deepseek-ai/dsh-client-connection/client'
 import { apply as applyGatewayClient, inject as clientInject } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteMock, ok } from '@deepseek-ai/dsh-remote-mock'
 import * as host from '../src/host.ts'
 import * as client from '../src/client.ts'
 import { descriptionSchema } from '../src/remote.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const description = { contractVersion: 1, initialization: { state: 'pending', issues: [] }, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
 describe('DSH plugin seam', () => {
@@ -15,13 +17,13 @@ describe('DSH plugin seam', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(TypertRegistry)
-      await ctx.plugin(TypertGatewayService)
+      await ctx.plugin(RemoteAccess); await ctx.plugin(TypertGatewayService)
       await ctx.plugin(host)
       await ctx.plugin({ name: 'teams-fixture', apply(inner: Context) {
         inner.provide('toolboxTeams', { inventory: async () => ({ revision: 1, complete: true, items: [] }) })
       } })
       expect((await ctx.toolbox.describe()).modules.teams).toBe(false)
-      const stream = (await ctx.typertGateway.stream({ namespace: 'toolboxChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
+      const stream = (await ctx.typertGateway.stream({ peer: ownerPeer(ctx),  namespace: 'toolboxChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
       expect((await stream.next()).value).toEqual({ type: 'ready' })
       const unused = async () => { throw new Error('Task methods are not used by describe') }
       const tasks = await ctx.plugin({ name: 'tasks-fixture', apply(inner: Context) {
@@ -40,10 +42,10 @@ describe('DSH plugin seam', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(TypertRegistry)
-      await ctx.plugin(TypertGatewayService)
+      await ctx.plugin(RemoteAccess); await ctx.plugin(TypertGatewayService)
       const plugin = await ctx.plugin(host)
-      expect(descriptionSchema.parse(await ctx.typertGateway.invoke({ namespace: 'toolbox', method: 'describe', args: {} }))).toEqual(description)
-      const stream = (await ctx.typertGateway.stream({ namespace: 'toolboxChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
+      expect(descriptionSchema.parse(await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolbox', method: 'describe', args: {} }))).toEqual(description)
+      const stream = (await ctx.typertGateway.stream({ peer: ownerPeer(ctx),  namespace: 'toolboxChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
       expect((await stream.next()).value).toEqual({ type: 'ready' })
       const module = await ctx.plugin({ name: 'installer-fixture', apply(inner: Context) {
         inner.provide('toolboxInstaller', { install: async () => ({ operationId: 'unused', state: 'unchanged' }), cancel: async () => {} })
@@ -60,7 +62,7 @@ describe('DSH plugin seam', () => {
       expect((await stopped).done).toBe(true)
       expect(ctx.get('toolbox')).toBeUndefined()
       expect(ctx.typert.local.list()).toEqual([])
-      await expect(ctx.typertGateway.invoke({ namespace: 'toolbox', method: 'describe', args: {} })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
+      await expect(ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolbox', method: 'describe', args: {} })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
     } finally { await ctx.fiber.dispose() }
   })
   it('mounts the real Client Remote facade and withdraws it on unload', async () => {

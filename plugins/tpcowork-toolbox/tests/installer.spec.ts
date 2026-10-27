@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { skillsFixture } from './skills-fixture.ts'
 import { fingerprint, readTree, sha256, validateFiles } from '../src/host/installer/files.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 const text = (body: string) => `---\nname: sample\ndescription: A sample\n---\n${body}\n`
 async function draft(home: string, body = 'first') {
   const path = join(home, 'draft')
@@ -14,7 +15,7 @@ async function draft(home: string, body = 'first') {
 describe('unified installer', () => {
   it('creates manually authored skills through the real Gateway and native discovery, preserving conflicts', async () => {
     const { ctx, installer, dir } = await skillsFixture()
-    const prepared = await ctx.typertGateway.invoke({ namespace: 'toolboxInstaller', method: 'prepareSkill', args: { request: { content: text('Manually authored instructions.') } } }) as { importId: string }
+    const prepared = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxInstaller', method: 'prepareSkill', args: { request: { content: text('Manually authored instructions.') } } }) as { importId: string }
     const request = { requestId: 'manual', source: { kind: 'local' as const, importId: prepared.importId }, scope: { kind: 'user' as const }, conflict: 'reject' as const }
     expect((await installer.install(request)).state).toBe('installed')
     expect((await ctx.skills.get('sample'))?.content).toBe('Manually authored instructions.')

@@ -4,6 +4,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { apply as applyConnection } from '@deepseek-ai/dsh-client-connection/client'
 import { apply as applyGatewayClient, inject as clientInject } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteMock, ok } from '@deepseek-ai/dsh-remote-mock'
@@ -13,6 +14,7 @@ import * as clientPlugin from '../src/client.ts'
 import { payloadSchema } from '../src/schemas.ts'
 import { AutomationError } from '../src/errors.ts'
 import { isRemoteJsonValue } from '@deepseek-ai/dsh-typert-protocol'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 const empty = { tasks: [], status: { enabled: false, jobs: 0, next_wake_at_ms: null } }
 describe('shared Gateway interfaces', () => {
@@ -26,13 +28,13 @@ describe('shared Gateway interfaces', () => {
       const facility = new DomainFacility(ctx, { backend: 'fixture' })
       ctx.provide('storageDomain', facility)
       ctx.effect(() => async () => { await facility.closeAll(); await backend.close() })
-      await ctx.plugin(TypertGatewayService)
+      await ctx.plugin(RemoteAccess); await ctx.plugin(TypertGatewayService)
       const plugin = await ctx.plugin(AutomationService)
       const lifetime = new AbortController()
-      const stream = await ctx.typertGateway.stream({ namespace: 'automationChanges', method: 'watch', args: {}, signal: lifetime.signal })
+      const stream = await ctx.typertGateway.stream({ peer: ownerPeer(ctx),  namespace: 'automationChanges', method: 'watch', args: {}, signal: lifetime.signal })
       const changes = stream[Symbol.asyncIterator]()
       expect((await changes.next()).value).toEqual({ type: 'ready' })
-      const raw = await ctx.typertGateway.invoke({ namespace: 'automation', method: 'create', args: {
+      const raw = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automation', method: 'create', args: {
         request: { name: '传输测试', prompt: '生成报告', schedule: { frequency: 'manual' } },
       } })
       const result = payloadSchema.parse(raw)
@@ -40,19 +42,19 @@ describe('shared Gateway interfaces', () => {
       lifetime.abort(); await expect(changes.next()).rejects.toMatchObject({ code: 'gateway/cancelled' })
       expect(isRemoteJsonValue(raw)).toBe(true)
       expect(result.tasks[0]!.name).toBe('传输测试')
-      expect(payloadSchema.parse(await ctx.typertGateway.invoke({ namespace: 'automation', method: 'list', args: {} }))).toEqual(result)
+      expect(payloadSchema.parse(await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automation', method: 'list', args: {} }))).toEqual(result)
       const run = await ctx.automation.beginRun({ taskId: result.tasks[0]!.id, trigger: 'manual' })
       await ctx.automation.finishRun({ taskId: result.tasks[0]!.id, runId: run.id, status: 'completed', resultType: 'none', conversationAvailable: false })
-      expect(isRemoteJsonValue(await ctx.typertGateway.invoke({ namespace: 'automation', method: 'list', args: {} }))).toBe(true)
-      await expect(ctx.typertGateway.invoke({ namespace: 'automation', method: 'create', args: {
+      expect(isRemoteJsonValue(await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automation', method: 'list', args: {} }))).toBe(true)
+      await expect(ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automation', method: 'create', args: {
         request: { name: 'invalid', prompt: 'run', schedule: { frequency: 'daily', timezone: 'No/SuchZone' } },
       } })).rejects.toMatchObject({ code: 'automation/invalid_timezone' })
-      const live = (await ctx.typertGateway.stream({ namespace: 'automationChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
+      const live = (await ctx.typertGateway.stream({ peer: ownerPeer(ctx),  namespace: 'automationChanges', method: 'watch', args: {}, signal: new AbortController().signal }))[Symbol.asyncIterator]()
       await live.next(); const stopped = live.next()
       await plugin.dispose()
       expect((await stopped).done).toBe(true)
       expect(ctx.get('automationChanges')).toBeUndefined()
-      await expect(ctx.typertGateway.invoke({ namespace: 'automation', method: 'list', args: {} }))
+      await expect(ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automation', method: 'list', args: {} }))
         .rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
     } finally { await ctx.fiber.dispose() }
   })

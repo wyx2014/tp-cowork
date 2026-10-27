@@ -6,13 +6,15 @@ import Tools from '@deepseek-ai/dsh-tools'
 import Skills from '@deepseek-ai/dsh-skill'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { AutomationBindings } from '../src/bindings.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 describe('automation editor bindings', () => {
   it('lists user-invocable skills and unambiguous MCP identities without invoking tools or loading bodies', async () => {
     const ctx = new Context()
     try {
-      await ctx.plugin(TypertRegistry); await ctx.plugin(Gateway); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools); await ctx.plugin(Skills)
+      await ctx.plugin(TypertRegistry); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway); await ctx.plugin(SystemPrompt); await ctx.plugin(Tools); await ctx.plugin(Skills)
       ctx.provide('workingDirectory', { defaultDirectory: '/workspace' })
       ctx.skills.register({ name: 'report', description: 'Reports', source: 'runtime', content: 'private skill body' })
       ctx.skills.register({ name: 'hidden', description: 'Hidden', source: 'runtime', content: 'hidden body', invocation: { userInvocable: false, modelInvocable: true } })
@@ -20,11 +22,11 @@ describe('automation editor bindings', () => {
         ctx.tools.register({ name, description: 'public tool', parameters: { type: 'object', properties: {} }, output: { schema: { type: 'string' }, render: value => [{ type: 'text', text: value }] }, execute: async () => { throw new Error('must not execute') } })
       }
       const plugin = await ctx.plugin(AutomationBindings)
-      const result = await ctx.typertGateway.invoke({ namespace: 'automationBindings', method: 'list', args: { request: { workspacePath: '/project' } } })
+      const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automationBindings', method: 'list', args: { request: { workspacePath: '/project' } } })
       expect(result).toEqual({ skills: [{ name: 'report', description: 'Reports' }], connectors: [{ name: 'docs' }, { name: 'mail' }], skillsAvailable: true })
       expect(JSON.stringify(result)).not.toContain('body')
       await plugin.dispose()
-      await expect(ctx.typertGateway.invoke({ namespace: 'automationBindings', method: 'list', args: { request: {} } })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
+      await expect(ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'automationBindings', method: 'list', args: { request: {} } })).rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
     } finally { await ctx.fiber.dispose() }
   })
   it('reports a missing skill registry and validates the wire input', async () => {

@@ -16,7 +16,7 @@ import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import Workspaces from '@deepseek-ai/dsh-workspace'
 import Query from '@deepseek-ai/dsh-session-query-sqlite'
-import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import DefaultModel from '@deepseek-ai/dsh-agent-default-model'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -24,6 +24,7 @@ import Subagents from '@deepseek-ai/dsh-subagent'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import Workflow from '@deepseek-ai/dsh-workflow-ptc'
 import SessionController from '@deepseek-ai/dsh-api-session-controller'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import AttachmentLocal from '@deepseek-ai/dsh-attachment-local'
 import Commands from '@deepseek-ai/dsh-commands'
 import FileUploads from '@deepseek-ai/dsh-client-file-upload'
@@ -88,7 +89,7 @@ export async function fixture(options: { gap?: string; fail?: string; hang?: boo
   }
   const infra = { async apply(inner: Context) {
     const ctx = inner.root
-    await ctx.plugin(Typert); await ctx.plugin(Gateway); await ctx.plugin(Storage)
+    await ctx.plugin(Typert); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway); await ctx.plugin(Storage)
     const backend = new JsonStorageBackend(join(root, 'storage'))
     ctx.effect(() => ctx.storage.backend.register('test', backend))
     const domains = new DomainFacility(ctx, { backend: 'test' })

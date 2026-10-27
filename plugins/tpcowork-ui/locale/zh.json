@@ -51,6 +51,22 @@
     "greetingAfternoon": "下午好，",
     "greetingEvening": "晚上好，",
     "greetingTitle": "交给 TP Cowork 就行",
-    "greetingSubtitle": "以专业AI赋能规范工作"
+    "greetingSubtitle": "以专业AI赋能规范工作",
+    "thoughtOff": "关闭",
+    "thoughtMinimal": "极低",
+    "thoughtLow": "低",
+    "thoughtMedium": "中",
+    "thoughtHigh": "高",
+    "thoughtXhigh": "极高",
+    "thoughtMax": "最高",
+    "thoughtOn": "开启",
+    "thoughtUltra": "极致",
+    "providerLabel": "供应商",
+    "providerApiBadge": "API",
+    "modelsTitle": "模型",
+    "effortTitle": "思考强度",
+    "selectModel": "选择模型",
+    "visionBadge": "视觉",
+    "effortCycle": "切换思考强度"
   }
 }

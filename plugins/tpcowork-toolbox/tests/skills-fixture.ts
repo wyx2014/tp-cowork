@@ -9,6 +9,7 @@ import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as skills from '../src/host/skills/index.ts'
 export async function skillsFixture(options: { python?: string; separateUserRoot?: boolean } = {}) {
@@ -23,7 +24,7 @@ export async function skillsFixture(options: { python?: string; separateUserRoot
   const bundledRoot = resolve(import.meta.dirname, '../resources/skills')
   writeFileSync(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [
     { id: 'config-editor', name: 'cordis:editor' }, { id: 'settings', name: 'cordis:settings' },
-    { id: 'typert', name: 'cordis:typert' }, { id: 'gateway', name: 'cordis:gateway' },
+    { id: 'typert', name: 'cordis:typert' }, { id: 'remote-access', name: 'cordis:remoteAccess' }, { id: 'gateway', name: 'cordis:gateway' },
     { id: 'skills', name: 'cordis:registry' }, { id: 'toolbox-skills', name: 'cordis:toolbox', config: { bundledRoot, userRoot, ...(options.python ? { python: options.python } : {}) } },
   ] }]))
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
@@ -32,7 +33,7 @@ export async function skillsFixture(options: { python?: string; separateUserRoot
   const start = async () => {
     const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), ctx => {
       ctx.provide('profileContext', profile)
-      Object.assign(ctx.loader.builtins, { editor: ConfigEditor, settings: Settings, typert: TypertRegistry, gateway: Gateway, registry: SkillRegistry, toolbox: skills })
+      Object.assign(ctx.loader.builtins, { editor: ConfigEditor, settings: Settings, typert: TypertRegistry, remoteAccess: RemoteAccess, gateway: Gateway, registry: SkillRegistry, toolbox: skills })
     })
     contexts.push(ctx)
     return ctx

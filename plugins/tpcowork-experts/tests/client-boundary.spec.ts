@@ -5,13 +5,14 @@ import { managementContribution } from '../../tpcowork-toolbox/src/client/remote
 import { ToolboxService } from '../../tpcowork-toolbox/src/host.ts'
 import { join } from 'node:path'
 import { bundledTeamIds } from '../src/teams.ts'
+import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 it.each(bundledTeamIds)('current Client → codecs → Gateway → native %s preserves pins, uploads and request identity', async teamId => {
   const h = await fixture({ skill: true, mcp: true })
   const remote = Object.fromEntries(['selection', 'context', 'submit'].map(method => [method, async (input: unknown) => {
     const descriptor = managementContribution.descriptors.find(row => row.namespace === 'toolboxTasks' && row.method === method)!
     const request = descriptor.parameters[0]!.codec.create().parse(input)
-    const value = await h.ctx.typertGateway.invoke({ namespace: 'toolboxTasks', method, args: { request } })
+    const value = await h.ctx.typertGateway.invoke({ peer: ownerPeer(h.ctx),  namespace: 'toolboxTasks', method, args: { request } })
     return { ok: true, value: descriptor.result.create().parse(value) }
   }]))
   // The Client reads the Host's module description before any task choice; it answers from the loaded services.

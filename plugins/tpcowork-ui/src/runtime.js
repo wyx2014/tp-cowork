@@ -19,6 +19,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
   const SettingsLauncher = createSettingsLauncher(React, primitives);
   const NotificationSetting = createNotificationSetting(React, primitives);
   const NavigationControls = createNavigationControls(React, ReactDOM.createPortal, primitives, classes);
+  const ModelControls = createModelControls(React, ReactDOM.createPortal, primitives);
   return {
     inject: ['theme', 'slots', 'locale', 'layout', 'configForms'],
     apply(ctx) {
@@ -26,6 +27,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       ctx.effect(() => ctx.theme.overrideTokens(id, tokens), 'tpcowork: theme overrides');
       ctx.effect(() => ctx.locale.register('tpcowork', locales), 'tpcowork: localized labels');
       adaptDeveloperMode(ctx, React);
+      ctx.effect(() => gateComposerStats(ctx, React), 'tpcowork: developer-only composer stats');
       ctx.effect(() => resetOnboardingDeveloperMode(ctx.configForms), 'tpcowork: onboarding developer mode reset');
       ctx.inject(['sessions', 'workspaces', 'uiWorkspace', 'shortcuts'], scope => {
         const navigation = createNavigation(scope);
@@ -85,6 +87,52 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
         name: 'conversation.input.dock', id: 'todo', order: 0, priority: -10, locale: 'tpcowork',
       }, TaskDock));
+      // Shadow the native model seat with the reference product's combined model and effort picker over the same
+      // directory, and cycle the effort with its Control+T.
+      ctx.inject(['shortcuts'], scope => {
+        const tp = scope.locale.bind('tpcowork');
+        scope.effect(() => scope.shortcuts.register({
+          id: 'tpcowork.thought.cycle', label: () => tp('effortCycle'), aliases: ['effort', 'thinking'],
+          // Browsers keep Control+T, so the web profiles take the plugin's Primary+Alt pattern instead.
+          defaults: {
+            ...Object.fromEntries(['desktop:macos', 'desktop:windows', 'desktop:linux']
+              .map(profile => [profile, { code: 'KeyT', modifiers: ['control'] }])),
+            ...Object.fromEntries(['web:macos', 'web:windows']
+              .map(profile => [profile, { code: 'KeyT', modifiers: ['primary', 'alt'] }])),
+          },
+          regions: ['page', 'editable'], modals: [],
+          resolve: ({ modal }) => {
+            if (modal !== null) return { status: 'blocked', reason: 'modal' };
+            return { status: 'handled', run: () => { ModelControls.cycleThought(); } };
+          },
+        }), 'tpcowork: cycle thinking level');
+      });
+      ctx.slots.inject('conversation.input.model', () => {
+        const name = 'conversation.input.model';
+        const tp = ctx.locale.bind('tpcowork');
+        let current;
+        let dispose;
+        const sync = () => {
+          const entry = ctx.slots.entries(name).find(entry => entry.locale === 'model' && (entry.options.priority ?? 0) === 0);
+          if (entry === current) return;
+          current = entry;
+          dispose?.();
+          dispose = undefined;
+          if (entry === undefined) return;
+          dispose = ctx.slots.register({
+            name, priority: -10, locale: entry.locale, store: entry.store,
+            inject: sessionId => ({ ...entry.inject(sessionId), tp, shortcuts: ctx.get('shortcuts')?.catalog }),
+          }, ModelControls);
+        };
+        const unsubscribe = ctx.slots.subscribe(name, sync);
+        try {
+          sync();
+        } catch (error) {
+          unsubscribe();
+          throw error;
+        }
+        return () => { unsubscribe(); dispose?.(); };
+      });
       // Shadow the Schedule entries while preserving their components and business props.
       for (const [name, cell] of [['sidebar.panellist', 'id'], ['main', 'key']]) {
         ctx.slots.inject(name, () => {

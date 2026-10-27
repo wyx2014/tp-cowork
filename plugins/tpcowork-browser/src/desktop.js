@@ -5,12 +5,13 @@ import { basename, join } from 'node:path';
 import { BrowserGuestManager, BrowserTabRecoveryStore, DesktopBrowserScreenshotSurfaceCoordinator, DesktopBrowserScreenshotActivityController, createElectronBrowserWebmRecorder } from './reference.js';
 import { parseCommand } from './schema.js';
 import { BrowserData } from './desktop-data.js';
+import { BookmarkStore } from './bookmarks.js';
 import { resolveConfig } from './config.js';
 import { BrowserError, CHANNEL, VERSION, PARTITION, IPC, envelope, failure, OperationQueue } from './protocol.js';
 
 const SCOPE = 'dsh-desktop';
 const BROWSER = 'tpcowork-dsh-iab';
-const USER_OPERATIONS = new Set(['snapshot', 'humanOpen', 'command', 'close', 'pause', 'resume', 'ensure', 'surfaceReady', 'importChrome', 'clearData', 'permissionRespond', 'permissionSet', 'security', 'devtools', 'external', 'revealDownload', 'saveScreenshot', 'saveRecording', 'presentation']);
+const USER_OPERATIONS = new Set(['snapshot', 'humanOpen', 'command', 'close', 'pause', 'resume', 'ensure', 'surfaceReady', 'importChrome', 'bookmarks', 'importBookmarks', 'clearData', 'permissionRespond', 'permissionSet', 'security', 'devtools', 'external', 'revealDownload', 'saveScreenshot', 'saveRecording', 'presentation']);
 
 /** Favicons the renderer may load: page-supplied web or inline image addresses only. */
 function faviconUrl(candidates) {
@@ -44,7 +45,10 @@ class DesktopBrowser {
     this.browserSession = session.fromPartition(PARTITION);
     this.recovery = new BrowserTabRecoveryStore(join(this.directory, 'tabs.json'), { onWarning: message => console.warn('[tpcowork-browser]', message) });
     this.data = new BrowserData(this.browserSession, this.directory, () => this.publish(), () => this.config.permissionTimeoutMs);
-    this.ready = this.data.start(contents => [...this.records.values()].some(record => record.guest === contents), (url, network) => this.allowedUrl(url, network));
+    // Tests point the reader at fixture folders instead of the person's own browsers.
+    this.bookmarks = new BookmarkStore(this.directory, () => this.publish(), options.bookmarkDirs);
+    this.ready = this.data.start(contents => [...this.records.values()].some(record => record.guest === contents), (url, network) => this.allowedUrl(url, network))
+      .then(() => this.bookmarks.start());
     this.downloadListener = (_event, item, contents) => {
       const record = [...this.records.values()].find(row => row.guest === contents);
       if (!this.enabled || !record) { _event.preventDefault(); return; }
@@ -296,6 +300,8 @@ class DesktopBrowser {
         return await this.data.clear(payload.mode, payload.confirmed);
       } finally { this.dataBusy = false; }
     });
+    if (op === 'bookmarks') return this.bookmarks.list();
+    if (op === 'importBookmarks') return this.dataQueue.run('bookmarks', undefined, () => this.bookmarks.import(payload.browser));
     if (op === 'permissionRespond') { await this.data.respond(payload.id, payload.allow, payload.remember); return {}; }
     if (op === 'permissionSet') { await this.data.setPermission(payload.origin, payload.permission, payload.decision); return {}; }
     if (op === 'security') { await this.data.setSecurity(payload); return {}; }
@@ -346,7 +352,7 @@ class DesktopBrowser {
   snapshot() {
     return { version: VERSION, enabled: this.enabled, generation: this.generation, devTools: !app.isPackaged,
       tabs: [...this.records.values()].map(({ guest, ...row }) => ({ ...row, guestId: guest && !guest.isDestroyed() ? guest.id : undefined })),
-      downloads: [...this.downloads.values()], ...this.data.snapshot() };
+      downloads: [...this.downloads.values()], bookmarks: this.bookmarks.summary(), ...this.data.snapshot() };
   }
   emit(kind, payload) {
     const window = this.options.window();

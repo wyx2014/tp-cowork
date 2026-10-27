@@ -5,7 +5,11 @@ import { $nodesOfType, HISTORY_PUSH_TAG, REDO_COMMAND, UNDO_COMMAND } from '../.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '../../../../deepseek-harness/node_modules/@testing-library/react/dist/index.js'
 import { createElement } from 'react'
-import { projectUserText } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { UserTextReference } from '@deepseek-ai/dsh-client-ui-primitives'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { UserTextRegistry } from '../../../../deepseek-harness/packages/client/ui-conversation/src/client/conversation/user-text-registry.ts'
+import { PlainUserText, UserText } from '../../../../deepseek-harness/packages/client/ui-conversation/src/client/user-text/UserText.tsx'
+import { CapabilityReference, capabilityReferenceRule } from '../../../../deepseek-harness/packages/client/ui-chat/src/client/chat/CapabilityReference.tsx'
 import { SessionInputShell } from '../../../../deepseek-harness/packages/client/ui-conversation/src/client/input/facade.ts'
 import { ReferenceChipNode } from '../../../../deepseek-harness/packages/client/ui-conversation/src/client/input/editor/chip-node.tsx'
 import type { InputTriggerController } from '../../../../deepseek-harness/packages/client/ui-conversation/src/client/contract/input.ts'
@@ -55,6 +59,21 @@ function bench(skillLabel?: (name: string) => string) {
   }
 }
 
+/** Render sent user text the way Chat does: the capability rule over the Session's published references. */
+function sentUserText(text: string, capabilityReferences: readonly UserTextReference[], actions: { openFile: (path: string) => void; openSkill: (name: string) => void }) {
+  const registry = new UserTextRegistry(new Context())
+  registry.register(capabilityReferenceRule)
+  const renderSlot = (_name: string, owner: { node: { id: string } }) => owner.node.id === 'capability'
+    ? createElement(CapabilityReference as never, { ...owner, ...actions })
+    : createElement(PlainUserText as never, owner)
+  return createElement('div', null, createElement(UserText as never, {
+    text, facts: { capabilityReferences }, interactive: true, renderSlot,
+    useUserTextRevision: bindSnapshotSelector({ getSnapshot: () => registry.getSnapshot(), subscribe: (listener: () => void) => registry.subscribe(listener) }),
+    createUserTextEvaluator: () => registry.createEvaluator(),
+    reportTransformFailure: (error: unknown): never => { throw error },
+  }))
+}
+
 function slashSkillSource(ctx: Context): InputTriggerSource {
   let source!: InputTriggerSource
   ctx.provide('inputTriggers', { registerSource: (value: InputTriggerSource) => { source = value; return () => {} } })
@@ -62,6 +81,7 @@ function slashSkillSource(ctx: Context): InputTriggerSource {
   ctx.provide('remote', { skills: {}, $on: () => () => {} })
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key })
   ctx.provide('slots', { inject: () => () => {} })
+  ctx.provide('uiConversation', { userText: { register: () => () => {} } })
   applySkillUi(ctx)
   return source
 }
@@ -123,8 +143,7 @@ describe('inline capability selection', () => {
     expect(capabilityTextReferences(undefined)).toBeUndefined()
     const openFile = vi.fn()
     const openSkill = vi.fn()
-    const view = render(createElement('div', null, projectUserText(text, [], [], 'skill',
-      { openFile, openSkill }, capabilityTextReferences(b.choice()))))
+    const view = render(sentUserText(text, capabilityTextReferences(b.choice())!, { openFile, openSkill }))
     fireEvent.click(view.getByRole('button', { name: '/office-docx' }), { detail: 1 })
     expect(openFile).toHaveBeenCalledWith('/personal/skills/office-docx/SKILL.md')
     expect(openSkill).not.toHaveBeenCalled()

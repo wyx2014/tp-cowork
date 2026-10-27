@@ -56,11 +56,12 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
     effect: (effect: () => () => void) => { disposers.push(effect()) },
     theme: { overrideTokens: () => () => {}, getTheme: () => ({ preference: 'system' }) },
     locale: { register: () => () => {}, bind: () => () => '', getLocale: () => ({ locales: [] }), subscribe: () => () => {} },
-    configForms: { get: () => ({ getSnapshot: () => ({}), subscribe: () => () => {} }) }, on: () => () => {},
+    configForms: { get: () => ({ getSnapshot: () => ({}), subscribe: () => () => {} }),
+      developerTools: { enabled: { getSnapshot: () => false, subscribe: () => () => {} } } }, on: () => () => {},
     slots: {
       entries: (name: string) => name === 'root' ? [{ store: { create: () => instance } }] : [],
       subscribe: () => () => {},
-      inject: (_name: string, effect: () => () => void) => { disposers.push(effect()) },
+      inject: (_name: string, effect: () => () => void) => { const dispose = effect(); disposers.push(dispose); return dispose },
       register: (options: { name: string }, component: React.FunctionComponent<{ t: (key: string) => string }>) => {
         entries.set(options.name, component)
         return () => { entries.delete(options.name) }

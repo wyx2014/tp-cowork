@@ -7,6 +7,7 @@ import type { UiKey, UiText } from './ui-locales.ts'
 import { newDraft } from './ui-state.ts'
 import { wallTime, wallTimeInstant } from './editor-time.ts'
 import { scheduleDescription } from './schedule-format.ts'
+import { displaySchedule } from './schedule-display.ts'
 import { AutomationIcon } from './AutomationIcon.tsx'
 import { AutomationProjectPicker } from './AutomationProjectPicker.tsx'
 
@@ -49,7 +50,8 @@ function EditorPopover({ label, className = '', children, onOpen }: { label: Rea
 
 /** Save and Run now validate the same draft; task actions preserve local edits. */
 export function AutomationEditor({ initial, services, projects, t, locale = 'en', pending, editing, task, runEnabled, run, toggle, remove, history, failure, save, close }: Props) {
-  const [draft, setDraft] = React.useState(() => ({ ...structuredClone(initial), name: initial.name || t('unnamedTask') }))
+  const [draft, setDraft] = React.useState(() => ({ ...structuredClone(initial), schedule: structuredClone(displaySchedule(initial.schedule)), name: initial.name || t('unnamedTask') }))
+  const [scheduleEdited, setScheduleEdited] = React.useState(false)
   const [tab, setTab] = React.useState<'settings' | 'history'>('settings')
   const [scheduleAdded, setScheduleAdded] = React.useState(Boolean(editing || initial.name || initial.prompt))
   const initialZone = initial.schedule.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -72,10 +74,11 @@ export function AutomationEditor({ initial, services, projects, t, locale = 'en'
     return () => { cancelled = true }
   }, [services, retry])
   const change = (patch: Partial<ScheduleTaskDraft>) => setDraft(current => ({ ...current, ...patch }))
-  const timing = (patch: Partial<ScheduleConfig>) => change({ schedule: { ...draft.schedule, ...patch } })
+  const timing = (patch: Partial<ScheduleConfig>) => { setScheduleEdited(true); change({ schedule: { ...draft.schedule, ...patch } }) }
   const frequency = draft.schedule.frequency
   const setFrequency = (next: ScheduleFrequency) => {
     if (next === frequency) return
+    setScheduleEdited(true)
     const schedule: ScheduleConfig = { frequency: next, timezone: draft.schedule.timezone }
     if (next === 'custom') Object.assign(schedule, initial.schedule.frequency === 'custom' ? initial.schedule : { cronExpression: '0 9 * * *' })
     else if (next === 'once') schedule.at = initial.schedule.at ?? newDraft().schedule.at
@@ -90,6 +93,8 @@ export function AutomationEditor({ initial, services, projects, t, locale = 'en'
     const runNow = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') === 'run'
     if (pending || submittingRef.current || running || (runNow && (!run || !runEnabled))) return
     const data = structuredClone(draft)
+    // Opening or changing instructions must not rewrite the original Cron expression.
+    if (!scheduleEdited) data.schedule = structuredClone(initial.schedule)
     try { new Intl.DateTimeFormat('en', { timeZone: draft.schedule.timezone ?? initialZone }) }
     catch { setInvalid('invalidTimezone'); return }
     try {

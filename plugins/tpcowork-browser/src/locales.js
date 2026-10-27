@@ -10,6 +10,11 @@ export const pluginMeta = {
 };
 
 export const zh = {
+  bookmarks: '书签', bookmarksSearch: '搜索书签', bookmarksEmpty: '还没有导入书签。从 Chrome 或 Edge 导入后，可在这里和地址栏中快速打开。', bookmarksNoMatch: '没有匹配的书签',
+  bookmarksImportFrom: '从 {browser} 导入书签', bookmarksReimport: '重新从 {browser} 导入', bookmarksImported: '已从 {browser} 导入 {count} 个书签',
+  bookmarksNotFound: '未找到 {browser} 的书签。请确认已安装并使用过 {browser}。', bookmarksUnreadable: '无法读取 {browser} 的书签文件，请稍后重试。', bookmarksUnavailable: '未检测到 {browser} 书签',
+  bookmarkBar: '书签栏', bookmarkOther: '其他书签', bookmarkSynced: '移动设备书签',
+  bookmarksSettingsHelp: '从 Chrome 或 Edge 导入书签，在浏览器的书签菜单和地址栏中使用。书签为只读，再次导入会用最新内容替换。', bookmarksSummary: '{browser}：{count} 个书签，{time} 导入',
   browser_tabs: '管理浏览器标签页', browser_navigate: '浏览网页', browser_snapshot: '读取页面', browser_act: '操作页面', browser_screenshot: '截取页面', browser_dialog: '处理网页对话框', browser_download: '下载文件', browser_viewport: '调整网页尺寸', browser_recording: '录制网页',
   showPage: '查看页面', openArtifact: '打开文件', details: '调用详情', result: '操作结果', imageUnavailable: '截图暂时无法加载',
   title: '浏览器', tabs: '页面', save: '保存录屏', description: '保存登录，与你一起浏览网页', address: '输入网址后回车', go: '访问', back: '后退', forward: '前进', reload: '刷新', external: '在默认浏览器中打开',
@@ -49,6 +54,11 @@ export const zh = {
   importPromptRetry: '重新导入',
 };
 export const en = {
+  bookmarks: 'Bookmarks', bookmarksSearch: 'Search bookmarks', bookmarksEmpty: 'No bookmarks yet. Import them from Chrome or Edge to open them here and from the address bar.', bookmarksNoMatch: 'No matching bookmarks',
+  bookmarksImportFrom: 'Import from {browser}', bookmarksReimport: 'Re-import from {browser}', bookmarksImported: 'Imported {count} bookmarks from {browser}',
+  bookmarksNotFound: 'No {browser} bookmarks were found. Make sure {browser} is installed and has been used.', bookmarksUnreadable: 'The {browser} bookmarks file could not be read. Try again later.', bookmarksUnavailable: '{browser} bookmarks not found',
+  bookmarkBar: 'Bookmarks bar', bookmarkOther: 'Other bookmarks', bookmarkSynced: 'Mobile bookmarks',
+  bookmarksSettingsHelp: 'Import bookmarks from Chrome or Edge to use them in the browser’s bookmark menu and address bar. They are read-only; importing again replaces them with the latest.', bookmarksSummary: '{browser}: {count} bookmarks, imported {time}',
   browser_tabs: 'Browser tabs', browser_navigate: 'Browse page', browser_snapshot: 'Read page', browser_act: 'Operate page', browser_screenshot: 'Capture page', browser_dialog: 'Page dialog', browser_download: 'Download file', browser_viewport: 'Resize page', browser_recording: 'Record page',
   showPage: 'Show page', openArtifact: 'Open file', details: 'Call details', result: 'Result', imageUnavailable: 'Screenshot could not be loaded',
   title: 'Browser', tabs: 'Pages', save: 'Save recording', description: 'Browse together with saved logins', address: 'Enter a URL and press Enter', go: 'Go', back: 'Back', forward: 'Forward', reload: 'Refresh', external: 'Open in default browser',

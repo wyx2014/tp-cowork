@@ -3,7 +3,7 @@ import { OPERATION_LINGER_MS } from './operation.js';
 
 /** Native facts enter one observable; only viewport anchors are retained outside serializable state. */
 export class BrowserClient {
-  state = createSnapshotStore({ enabled: false, tabs: [], downloads: [], permissions: {}, requests: [], bindings: {}, operations: {}, operationUntil: {}, security: { allowInsecureCertificates: false }, surface: null, error: null });
+  state = createSnapshotStore({ enabled: false, tabs: [], downloads: [], permissions: {}, requests: [], bindings: {}, operations: {}, operationUntil: {}, security: { allowInsecureCertificates: false }, bookmarks: { revision: 0, sources: {} }, surface: null, error: null });
   anchors = new Map();
   opening = new Set();
   mounting = new Map();

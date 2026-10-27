@@ -10,6 +10,7 @@ import Editor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
 import Typert from '@deepseek-ai/dsh-typert-registry'
 import Gateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import Skills from '@deepseek-ai/dsh-skill'
 import Tools from '@deepseek-ai/dsh-tools'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
@@ -34,7 +35,7 @@ async function fixture(initial: object = {}) {
   writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: 'test-bundle', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   writeFileSync(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [
     { id: 'editor', name: 'cordis:editor' }, { id: 'settings', name: 'cordis:settings' },
-    { id: 'typert', name: 'cordis:typert' }, { id: 'gateway', name: 'cordis:gateway' },
+    { id: 'typert', name: 'cordis:typert' }, { id: 'remote-access', name: 'cordis:remoteAccess' }, { id: 'gateway', name: 'cordis:gateway' },
     { id: 'skills', name: 'cordis:skills' }, { id: 'prompt', name: 'cordis:prompt' },
     { id: 'tools', name: 'cordis:tools' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { ...initial, skills: { bundledRoot: resources, userRoot: join(dir, 'skills') } } },
@@ -45,7 +46,7 @@ async function fixture(initial: object = {}) {
   const start = async () => {
     const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), ctx => {
       ctx.provide('profileContext', profile)
-      Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
+      Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, remoteAccess: RemoteAccess, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
         credentials: { apply(inner: Context) { inner.provide('credentials', {
           describe: async () => ({ configured: false, writable: false }), readRecord: async () => undefined,
           describeRecord: async () => ({ configured: false, writable: false }),

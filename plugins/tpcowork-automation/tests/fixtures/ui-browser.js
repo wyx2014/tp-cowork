@@ -52,7 +52,7 @@ window.__DSH_TRANSPORT__ = { rpc: {
 await ctx.plugin(Registry)
 await ctx.plugin(Connection)
 await ctx.plugin(Gateway)
-const disposeSessionCatalog = await ctx.remote.$mount({ ...sessionRemote, descriptors: sessionRemote.descriptors.filter(item => item.method === 'modelCatalog') })
+const disposeSessionCatalog = await ctx.remote.$mount({ package: sessionRemote.package, descriptors: sessionRemote.descriptors.filter(item => item.method === 'modelCatalog') })
 ctx.effect(() => disposeSessionCatalog)
 const disposePermissions = await ctx.remote.$mount(permissionRemote)
 ctx.effect(() => disposePermissions)
