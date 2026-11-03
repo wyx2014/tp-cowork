@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
+import { finishFirstRunGuide } from './installed-ui-checks.mjs'
 
 export async function inspectInstalledUi(check) {
   const [executable, homeArgument, outputArgument] = process.argv.slice(2)
@@ -82,6 +83,7 @@ export async function inspectInstalledUi(check) {
     await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 60_000 })
     await waitForPageAssets(page)
     page.setDefaultTimeout(20_000)
+    await finishFirstRunGuide(page)
     await check(page)
     await waitForPageAssets(page)
   } catch (error) {
