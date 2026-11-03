@@ -97,6 +97,8 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1080, height: 860 } });
+  // The profile has finished TP Cowork's first-run guide.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'));
   const open = async selector => {
     const details = page.locator(selector); if (!await details.count()) return;
     if (!await details.evaluate(node => node.open)) await details.locator('summary').click();

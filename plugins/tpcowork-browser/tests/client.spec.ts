@@ -33,7 +33,7 @@ assembled('loads the browser in the real client roster, renders its durable resu
   } })
   const c = await start()
   expect(c.ctx.sidebarRightTabs.get('browser').id).toBe(ID)
-  expect(c.ctx.slots.entries('tool.call.toolview').filter(row=>row.locale==='tpcoworkBrowser')).toHaveLength(9)
+  expect(c.ctx.slots.entries('tool.call.toolview').filter(row=>row.locale==='tpcoworkBrowser')).toHaveLength(10)
   const entry = c.ctx.slots.entries('tool.call.toolview').find(row => row.options.key==='browser_screenshot')
   const openFile = vi.fn()
   const view = render(React.createElement(entry.component, {

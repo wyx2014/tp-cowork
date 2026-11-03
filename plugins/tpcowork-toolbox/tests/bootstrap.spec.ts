@@ -75,7 +75,7 @@ it('initializes a fresh profile once and preserves disable/remove/override choic
   const ctx = await start()
   expect((await ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: false, tpcoworkhub: true })
   expect(await ctx.toolboxTpcoworkHub.account()).toMatchObject({ configured: false, state: 'signed_out' })
-  expect(await ctx.toolboxTpcoworkHub.browserAuth()).toMatchObject({ loginUrl: 'http://localhost:8080/desktop/authorize' })
+  expect(await ctx.toolboxTpcoworkHub.browserAuth()).toMatchObject({ loginUrl: 'http://10.17.12.229:20255/desktop/authorize' })
   const mcp = await ctx.toolboxMcp.inventory()
   expect(mcp.items.map(item => item.id)).toEqual(['juyuan', 'caihui_mcp', 'playwright'])
   expect(mcp.items.find(item => item.id === 'juyuan')?.readiness.reasons).toContainEqual(expect.objectContaining({ code: 'needs_configuration' }))

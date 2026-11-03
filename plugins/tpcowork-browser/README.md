@@ -17,6 +17,8 @@ pnpm start:desktop
 
 构建脚本安装插件开发依赖、生成 Host / Client / Electron 代码，复制原生资产到桌面壳，再编译桌面桥接。正常构建不依赖相邻的 tp-cowork 源码。升级时先退出 DSH，执行相同命令并重新启动；本地网站数据会保留。Electron 安装包构建会包含已有的 `apps/desktop/lib/tpcowork-browser/` 资产，因此构建安装包前也需先构建插件。
 
+桌面载荷也是产品进入桌面主进程的唯一插件入口，因此同时承担外观插件的界面缩放：渲染进程调用 `browserAutomation.request('windowZoom', { action: 'get' | 'in' | 'out' | 'reset' })`，载荷对主窗口应用 1.1 的档位次方（−3 到 +5），调整 macOS 红绿灯或 Windows 标题栏按钮区，并把档位保存到用户数据目录的 `tpcowork-zoom.json`。缩放请求不会启动浏览器本身；浏览器仍在首次使用浏览器功能时启动。
+
 ```sh
 node scripts/desktop-plugin.mjs list
 node scripts/desktop-plugin.mjs remove browser
@@ -28,7 +30,7 @@ node scripts/desktop-plugin.mjs remove browser
 
 在会话中输入“打开掘金网站”，助手创建的网页会显示在右侧。也可从右侧新建“浏览器”标签，手动打开网站并登录，然后让助手读取或操作该页。用户创建的页需要助手先 `listUserTabs`，再 `claimTab`。网站登录在本应用全部会话、工作区间共享；每个标签的操作权限属于创建或认领它的会话，其他会话不能直接操作它。
 
-首次打开浏览器时可选择从 Chrome 导入 Cookie。“不再显示”会永久关闭自动提示；“以后再说”（或按 Esc）会关闭提示五天。选择在所有会话、标签间共享，重启后仍有效，并继承旧版本已保存的选择。之后仍可从浏览器设置手动导入。
+首次打开浏览器时会提示从 Chrome 或 Edge 导入书签（未检测到对应浏览器资料时按钮不可用），已导入过书签则不再提示。“不再显示”会永久关闭自动提示；“以后再说”（或按 Esc）会关闭提示五天。选择在所有会话、标签间共享，重启后仍有效；旧版 Cookie 导入提示的选择不会沿用。Chrome 登录（Cookie）导入不再自动弹出，仍可从浏览器设置手动导入。
 
 “手动接管”阻止该页后续自动操作，取消当前会话正在执行的 Host 请求，并停止该页由助手启动的录制脚本。已送达网页的点击或提交可能已经生效。“交还给助手”恢复工具控制。会话切换、面板折叠、Client 重载和页面进程恢复保持原生页面与会话绑定；应用重启会按需重建标签并恢复网址和视口，不恢复网页的 JavaScript 内存。
 
@@ -44,9 +46,9 @@ node scripts/desktop-plugin.mjs remove browser
 
 每轮对话的第一步，插件读取当前会话的内置浏览器状态；与上次告知的状态不同时，在对话中加入一条来源标记为 `tpcowork-browser` 的上下文消息，说明已打开的标签数量和当前网址，并注明这是界面状态而非用户指令。全部标签关闭后会告知一次“没有打开的标签”。网址只保留 HTTP(S)，去掉用户名、密码和 `#` 片段（OAuth 令牌常在其中），超过 4 KB 时省略。读取为只读操作，不恢复标签、不显示“助手正在操作”，最多等待 1 秒，失败时不影响本轮对话。配置 `ambientContext: false` 可关闭。
 
-插件随附两个技能：`control-browser`（目标标签确认、DOM 快照→定位器→操作、截图时机、录屏、异常处理与安全规则）和 `web-gui-tester`（纯 GUI 黑盒测试方法与测试报告）。两者改编自参考项目，通过 DSH 技能注册表以内置等级提供。
+插件随附技能 `control-browser`（目标标签确认、DOM 快照→定位器→操作、截图时机、录屏、异常处理与安全规则），改编自参考项目，通过 DSH 技能注册表以内置等级提供。
 
-插件通过 `ctx.tools` 注册 9 组工具，使用 DSH 原有的权限检查、取消信号、PTC 和会话日志。`browser_tabs` 管理标签和认领；`browser_navigate` 导航；`browser_snapshot` 读取页面；`browser_act` 执行 Playwright 定位器、ARIA / DOM 读取及坐标操作；`browser_screenshot` 返回持久化图片附件；`browser_dialog` 处理网页 JavaScript 弹窗；`browser_download` 获取下载；`browser_viewport` 设置视口；`browser_recording` 管理 WebM 任务。每组完整参数在运行时工具 schema 中提供。
+插件通过 `ctx.tools` 注册 9 组工具，使用 DSH 原有的权限检查、取消信号、PTC 和会话日志。`browser_tabs` 管理标签和认领；`browser_navigate` 导航；`browser_snapshot` 读取页面；`browser_act` 执行 Playwright 定位器、ARIA / DOM 读取及坐标操作；`browser_screenshot` 返回持久化图片附件；`browser_dialog` 处理网页 JavaScript 弹窗；`browser_download` 获取下载；`browser_viewport` 设置视口；`browser_recording` 管理 WebM 任务。每组完整参数在运行时工具 schema 中提供。另有只读的 `browser_bookmarks`：按标题、网址和文件夹搜索用户从 Chrome / Edge 导入的书签（不传 query 时按文件夹顺序列出，最多 100 条），系统提示会要求助手在用户只说网站名称时先查书签再打开对应网址；无头后端没有书签，返回空结果。
 
 最小调用顺序示例：
 
@@ -118,3 +120,7 @@ BROWSER_TEST_LIB=../../test-results/lib node tests/native-smoke.mjs
 `tests/sdk.spec.ts` 在构建产物上运行真实的 `run_code` 程序；`tests/headless.spec.ts` 中启动 Chromium 的用例在本机找不到 Chrome 时跳过。原生冒烟测试需要 `openssl` 生成自签名证书，用于验证证书设置。
 
 原生测试使用独立临时 userData 和本地测试网站。`--output` 用于暂存构建，避免写入正在运行的插件。正式分发包可在完成默认构建后于插件目录执行 `npm pack --ignore-scripts` 生成。引用版本、许可证和本地补丁见 [NOTICE.md](NOTICE.md)。
+
+浏览器设置页参照 ZCode 的分组卡片：浏览器控制与 Chrome 登录导入、安全、浏览器数据；行内左侧显示说明，右侧对齐开关或操作按钮，清空全部使用红色按钮并保留确认弹窗。书签、网站权限和下载记录直接展开显示。顶部浏览器状态开关只读，反映插件实际启用状态；当前没有用户侧独立启停接口。证书开关和导入、缓存/全部清理继续调用原有请求。`tests/settings.spec.ts` 验证分组、现有操作参数与清空前确认；视觉预览在工作区 `artifacts/browser-settings/light.png`。
+
+浏览器设置的开关直接复用通用设置所用的 `@deepseek-ai/dsh-client-ui-primitives` Switch，统一尺寸、胶囊圆角、配色、焦点和禁用态；安全设置仍通过原有 security 请求保存。

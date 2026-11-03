@@ -1,0 +1,6 @@
+- insert:
+    - id: tpcowork-archives
+      name: '@tpcowork/dsh-archives'
+      config:
+        autoArchive: false
+        autoArchiveDays: 30

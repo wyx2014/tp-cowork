@@ -14,7 +14,7 @@ import { externalTestParent } from '../../../../deepseek-harness/packages/subage
 import { createSkillProvider } from '../src/skills.js'
 
 // The SDK, its docs and the skills exist only in a build, as in the distributable.
-const output = resolve('../plugins/tpcowork-browser', process.env.BROWSER_TEST_OUTPUT ?? 'lib')
+const output = resolve(import.meta.dirname, '..', process.env.BROWSER_TEST_OUTPUT ?? 'lib')
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
 let context: Context | undefined
@@ -117,15 +117,14 @@ return JSON.parse(JSON.stringify({ type: browser.type, before, tabId: tab.id, pn
   expect(existsSync(fileURLToPath(JSON.parse(url)))).toBe(false)
 })
 
-it('offers the reference browser skills, with the SDK address in the program bootstrap', async () => {
+it('offers the reference browser skill, with the SDK address in the program bootstrap', async () => {
   const provider = createSkillProvider(async () => 'file:///private/sdk/browser-client.mjs')
   const candidates = await provider.list()
-  expect(candidates.map((row: { name: string }) => row.name)).toEqual(['control-browser', 'web-gui-tester'])
+  expect(candidates.map((row: { name: string }) => row.name)).toEqual(['control-browser'])
   const signal = new AbortController().signal
   const control = await provider.get(candidates[0], { signal })
   expect(control.content).toContain('await import("file:///private/sdk/browser-client.mjs")')
   expect(control.content).not.toContain('BROWSER_SDK_URL')
   const unavailable = await createSkillProvider(async () => undefined).get(candidates[0], { signal })
   expect(unavailable.content).toContain('drive the browser with the browser_* tools')
-  expect((await provider.get(candidates[1], { signal })).content).toContain('Pure GUI black-box testing')
 })

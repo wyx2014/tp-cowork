@@ -12,18 +12,27 @@ import type { SkillInstaller } from '../installer/index.ts'
 import { parseSkill, sha256, validateFiles, type SkillFile } from '../installer/files.ts'
 import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
+import { allowedHubUrl } from './hub-url.ts'
 import { decode, detail, fileContentSchema, loginResultSchema, page, websiteUserSchema } from './protocol.ts'
 import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
+import { apiBase, HUB_API, RelayAuthError, startRelay } from './relay.ts'
+import type {} from '@deepseek-ai/dsh-shell-env'
+import { bundledPythonPath } from '../../runtime-paths.ts'
 
 export const name = 'toolbox-tpcoworkhub'
 export const inject = ['credentials', 'skills', 'profileContext', 'typert', 'toolboxInstaller']
-export interface Config { endpoint: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number }
+export interface Config {
+  endpoint: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number
+  /** Internal APIs skills may call with the user's login through the relay: name → base URL. `hub` is always the Hub. */
+  apis: Record<string, string>
+}
 export const Config = z.object({
-  endpoint: z.string().default('http://localhost:8080'), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
+  endpoint: z.string().default('http://10.17.12.229:20255'), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
   requestTimeoutMs: z.number().min(1).default(30000), pageSize: z.number().min(1).max(100).default(30),
   maxCatalogItems: z.number().min(1).default(10000), maxResponseBytes: z.number().min(1).default(96 * 1024 * 1024),
   browserAuthTimeoutMs: z.number().min(1000).max(900000).default(300000),
+  apis: z.dict(z.string()).default({}).description('Internal APIs skills may call with the signed-in user\'s login: name → base URL.'),
 })
 export const sessionKey = credentialKey(name, 'session')
 type Session = { endpoint: string; token?: string; expired?: boolean; user?: import('../../contracts/tpcoworkhub.ts').TpcoworkHubUser }
@@ -59,6 +68,49 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       }
     }))
     ctx.effect(() => async () => { this.lifetime.abort(); await Promise.allSettled([...this.pending]); this.pages.clear() })
+    // Skills call internal APIs as the signed-in user through a loopback relay; see relay.ts and docs/toolbox/skill-api-auth.md.
+    ctx.inject(['shellEnv'], scope => {
+      scope.effect(() => {
+        let closed = false
+        let stop: (() => Promise<void>) | undefined
+        let unregister: (() => void) | undefined
+        void startRelay({
+          apis: () => this.relayApis(),
+          token: async () => {
+            try { return await this.token() }
+            catch (error) {
+              const code = error instanceof TpcoworkHubError ? error.code : ''
+              throw new RelayAuthError(code === 'tpcoworkhub/session-expired' ? 'login-expired' : code === 'tpcoworkhub/not-configured' ? 'not-configured' : 'login-required')
+            }
+          },
+          unauthorized: (_api, token) => this.expire(token),
+          timeoutMs: config.requestTimeoutMs,
+          maxBytes: config.maxResponseBytes,
+        }).then((relay) => {
+          if (closed) { void relay.close(); return }
+          stop = relay.close
+          unregister = scope.shellEnv.register({
+            name: 'tpcowork-skill-api',
+            variables: {
+              DSH_TPCOWORK_API_URL: { description: 'Loopback relay that forwards /<api>/<path> to an allowlisted internal API with the signed-in TP Cowork user\'s login.' },
+              DSH_TPCOWORK_API_KEY: { description: 'Per-run key for the relay, sent as the X-TPCowork-Key header; it is not a login token.' },
+              DSH_TPCOWORK_PYTHON: { description: 'TP Cowork\'s bundled Python launcher: run "$DSH_TPCOWORK_PYTHON" script.py.' },
+            },
+            resolve: () => ({ DSH_TPCOWORK_API_URL: relay.url, DSH_TPCOWORK_API_KEY: relay.key, DSH_TPCOWORK_PYTHON: bundledPythonPath() }),
+          })
+        }, (error: unknown) => { ctx.logger.warn(`tpcowork skill API relay did not start: ${String(error)}`) })
+        return () => { closed = true; unregister?.(); void stop?.() }
+      }, 'toolbox-tpcoworkhub: skill API relay')
+    })
+  }
+  /** The relay allowlist: configured internal APIs, and the Hub itself as `hub` when it is configured. */
+  private relayApis(): Map<string, string> {
+    const apis = new Map<string, string>()
+    for (const [name, base] of Object.entries(this.config.apis ?? {})) {
+      try { apis.set(name, apiBase(base)) } catch (error) { this.ctx.logger.warn(String(error)) }
+    }
+    try { apis.set(HUB_API, this.endpoint()) } catch { /* not configured */ }
+    return apis
   }
   private changed(): void { this.ctx.emit('toolbox/changed', { domain: 'tpcoworkhub', revision: ++this.revision }) }
   private endpoint(): string {
@@ -66,7 +118,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const input = this.config.endpoint || process.env.DSH_TPCOWORKHUB_URL
       if (!input) throw new Error()
       const url = new URL(input)
-      if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error()
+      if (url.search || url.hash || !allowedHubUrl(url)) throw new Error()
       return url.href.replace(/\/+$/, '')
     } catch { throw new TpcoworkHubError('not-configured') }
   }

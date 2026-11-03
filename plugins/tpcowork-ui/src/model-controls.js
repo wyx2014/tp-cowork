@@ -169,28 +169,41 @@ export function createModelControls(React, createPortal, primitives) {
   function ProviderRow({ groups, view, current, t, tp, onSelect }) {
     const [open, setOpen] = React.useState(false);
     const [style, setStyle] = React.useState(null);
+    const [bridge, setBridge] = React.useState(null);
+    const closeTimer = React.useRef(null);
+    const keepOpen = () => { clearTimeout(closeTimer.current); setOpen(true); };
+    const leave = event => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && (row.current?.parentElement?.contains(next) || submenu.current?.contains(next))) { clearTimeout(closeTimer.current); return; }
+      clearTimeout(closeTimer.current);
+      closeTimer.current = setTimeout(() => setOpen(false), 250);
+    };
+    React.useEffect(() => () => clearTimeout(closeTimer.current), []);
     const row = React.useRef(null);
     const submenu = React.useRef(null);
     React.useLayoutEffect(() => {
-      if (!open) { setStyle(null); return; }
+      if (!open) { setStyle(null); setBridge(null); clearTimeout(closeTimer.current); return; }
       const anchor = row.current?.getBoundingClientRect();
       const menu = row.current?.closest('[role="menu"]')?.getBoundingClientRect();
       const panel = submenu.current;
       if (!anchor || !menu || !panel) return;
       const width = panel.offsetWidth;
       const left = menu.right + 4 + width + 12 <= window.innerWidth ? menu.right + 4 : Math.max(12, menu.left - 4 - width);
-      setStyle({ left, top: Math.max(12, Math.min(anchor.top - 5, window.innerHeight - panel.offsetHeight - 12)) });
+      const top = Math.max(12, Math.min(anchor.top - 5, window.innerHeight - panel.offsetHeight - 12));
+      setStyle({ left, top });
+      const onRight = left >= menu.right;
+      setBridge({ position: 'fixed', zIndex: 1100, left: onRight ? menu.right - 1 : left + width - 1,
+        top: Math.min(top, anchor.top), width: Math.max(2, onRight ? left - menu.right + 2 : menu.left - left - width + 2),
+        height: Math.max(top + panel.offsetHeight, anchor.bottom) - Math.min(top, anchor.top) });
     }, [open, groups]);
     const name = group => group.id === 'deepseek-account' ? t('provider.account') : group.name;
     const badge = group => group.id === 'deepseek-account' ? undefined : tp('providerApiBadge');
-    return h('div', { className: 'tpcowork-provider', onMouseLeave: event => {
-      if (!(event.relatedTarget instanceof Node) || !submenu.current?.contains(event.relatedTarget)) setOpen(false);
-    } },
+    return h('div', { className: 'tpcowork-provider', onMouseEnter: keepOpen, onMouseLeave: leave },
     h('button', {
       ref: row, type: 'button', role: 'menuitem', 'aria-haspopup': 'menu', 'aria-expanded': open, 'data-menu-row': '',
       'aria-label': `${tp('providerLabel')}: ${view ? name(view) : '—'}`, 'data-testid': 'composer-provider-trigger',
       className: 'tpcowork-menu-row tpcowork-provider-row', 'data-open': open ? '' : undefined, disabled: groups.length === 0,
-      onMouseEnter: () => setOpen(true), onClick: () => setOpen(true),
+      onMouseEnter: keepOpen, onClick: keepOpen,
       onKeyDown: event => {
         if (event.key === 'ArrowRight' || event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -203,7 +216,9 @@ export function createModelControls(React, createPortal, primitives) {
     h('span', { className: 'tpcowork-menu-label' }, view ? name(view) : '—'),
     view && badge(view) ? h(Badge, null, badge(view)) : null,
     h(IconChevronRightOutlineRegular, { className: 'tpcowork-menu-chevron' })),
+    open && bridge ? h('div', { style: bridge, 'aria-hidden': true, 'data-composer-provider-bridge': '', onMouseEnter: keepOpen, onMouseLeave: leave }) : null,
     open ? h(MenuSurface, {
+      onMouseEnter: keepOpen, onMouseLeave: leave,
       ref: submenu, role: 'menu', 'aria-label': tp('providerLabel'), className: 'tpcowork-menu tpcowork-provider-menu',
       style: style ?? { visibility: 'hidden', left: 0, top: 0 }, 'data-composer-provider-list': '',
       onKeyDown: event => {
@@ -222,7 +237,7 @@ export function createModelControls(React, createPortal, primitives) {
       key: group.id, type: 'button', role: 'menuitemradio', 'aria-checked': group === view, 'data-menu-row': '',
       'data-model-provider-key': group.id, className: 'tpcowork-menu-row',
       'aria-label': [name(group), badge(group)].filter(Boolean).join(' '),
-      onClick: () => { setOpen(false); row.current?.focus(); onSelect(group); },
+      onClick: () => { clearTimeout(closeTimer.current); setOpen(false); row.current?.focus(); onSelect(group); },
     }, h(ProviderLogo, { group }), h('span', { className: 'tpcowork-menu-label' }, name(group)),
     badge(group) ? h(Badge, null, badge(group)) : null,
     h(Check, { checked: group.id === current?.provider })))) : null);

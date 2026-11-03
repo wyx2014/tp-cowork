@@ -14,7 +14,7 @@ If this skill is available, read it before browser work. Follow it before saying
 
 The in-app browser is shown in the right pane, and the user can watch and take over. Its tabs, logins and viewport persist across turns. Drive it in whichever way the current tools allow:
 
-- **Tool calls** (when `browser_*` tools are listed): each call takes `{"command": {...}}` with a `method`. `browser_tabs` manages tabs, `browser_navigate` loads pages, `browser_act` runs Playwright DOM snapshots, locators and coordinate input, and `browser_screenshot`, `browser_dialog`, `browser_download`, `browser_viewport` and `browser_recording` cover the rest. A `command` may also be passed as a JSON string.
+- **Tool calls** (when `browser_*` tools are listed): each call takes `{"command": {...}}` with a `method`. `browser_tabs` manages tabs, `browser_navigate` loads pages, `browser_act` runs Playwright DOM snapshots, locators and coordinate input, and `browser_screenshot`, `browser_dialog`, `browser_download`, `browser_viewport` and `browser_recording` cover the rest. A `command` may also be passed as a JSON string. `browser_bookmarks` takes `{"query": "..."}` instead and searches the bookmarks the user imported from Chrome or Edge; use it when the user names a site without its address.
 - **Programs** (when only `run_code` is listed): bootstrap the `agent.browsers` SDK at the start of every program, as shown in [Programs](#programs). Every program starts fresh: no `browser` or `tab` variable survives, but the tabs themselves do.
 
 Describe progress to the user in plain terms ("opening the page", "checking the result"), not in terms of tools or SDKs.

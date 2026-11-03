@@ -1,0 +1,15 @@
+{
+  "requiredFiles": [
+    "SKILL.md",
+    "scripts/tpcowork_api.py",
+    "scripts/whoami.py"
+  ],
+  "checksums": {
+    "SKILL.md": "b80e247fac41fb016d8932a4020e804c9e0f224ed1f7f32e4193406f56863f4e",
+    "scripts/tpcowork_api.py": "45d3e17ea6326269ef30077a509cb636116ea4eae23b53a700fd518874036cc8",
+    "scripts/whoami.py": "c34e69392d2d5aa8442997d9d1c263fdc956659b7f41ea93091c80ad28699f92"
+  },
+  "tools": [],
+  "pythonModules": [],
+  "limitations": []
+}

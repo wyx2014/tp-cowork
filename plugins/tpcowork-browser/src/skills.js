@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 // Built output carries its skills; a source checkout reads them from the plugin root.
 const ROOT = fileURLToPath([new URL('./skills/', import.meta.url), new URL('../skills/', import.meta.url)].find(url => existsSync(url)) ?? new URL('../skills/', import.meta.url));
-export const SKILL_NAMES = ['control-browser', 'web-gui-tester'];
+export const SKILL_NAMES = ['control-browser'];
 const PROVIDER = 'tpcowork-browser';
 
-/** Split frontmatter without a YAML dependency: both bundled skills use one-line `key: value` fields. */
+/** Split frontmatter without a YAML dependency: the bundled skill uses one-line `key: value` fields. */
 function parseSkill(raw, path) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(raw);
   if (!match) throw new Error(`tpcowork-browser: ${path} has no frontmatter`);
@@ -22,7 +22,7 @@ function parseSkill(raw, path) {
 }
 
 /**
- * Offer the browser skills at bundled rank. `sdkUrl` resolves the SDK address substituted into the
+ * Offer the browser skill at bundled rank. `sdkUrl` resolves the SDK address substituted into the
  * control-browser program bootstrap, or undefined when this deployment has no SDK.
  */
 export function createSkillProvider(sdkUrl) {

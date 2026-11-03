@@ -8,8 +8,8 @@ import SystemPrompt, { renderPrompt, type Config } from '../../../../deepseek-ha
 import { createScope, type ScopeKey } from '../../../../deepseek-harness/packages/core/scope/src/index.ts'
 import * as Persona from '../../../../deepseek-harness/packages/preset/persona/src/index.ts'
 
-const requireHarness = createRequire(process.cwd() + '/package.json')
-const core = requireHarness(resolve('../plugins/tpcowork-core/index.js'))
+const requireHarness = createRequire(new URL('../../../../deepseek-harness/package.json', import.meta.url))
+const core = requireHarness(resolve(import.meta.dirname, '../index.js'))
 const { load } = requireHarness('js-yaml')
 const codingPersona = 'You are a coding agent powered by the {{model}} model.'
 const contexts: Context[] = []
@@ -27,7 +27,7 @@ async function harness(config: Config = { personaPrefix: codingPersona }): Promi
 }
 
 async function presetPersona(preset: string): Promise<Persona.Config> {
-  const source = await readFile(resolve(`packages/bundle/web-app/presets/${preset}.patch.yml`), 'utf8')
+  const source = await readFile(new URL(`../../../../deepseek-harness/packages/bundle/web-app/presets/${preset}.patch.yml`, import.meta.url), 'utf8')
   const patches = load(source, { schema: entryListSchema }) as { insert: { config: { plugins: { id: string; config: Persona.Config }[] } }[] }[]
   return patches[0]!.insert[0]!.config.plugins.find(row => row.id === 'persona')!.config
 }
@@ -47,7 +47,7 @@ it('assembles the office identity with the configured model while retaining tool
   expect(prompt).not.toContain('You are a coding agent')
   expect(assembly.tools).toEqual([tool])
   expect(assembly.contexts[0]?.text).toBe('Workspace: /office')
-  await expect(prompt + '\n').toMatchFileSnapshot(resolve('../plugins/tpcowork-core/tests/fixtures/persona.expected.md'))
+  await expect(prompt + '\n').toMatchFileSnapshot(resolve(import.meta.dirname, 'fixtures/persona.expected.md'))
 })
 
 it.each(['standard', 'cordis', 'ptc'])('applies the office identity after the shipped %s preset shadows the deployment persona', async (preset) => {

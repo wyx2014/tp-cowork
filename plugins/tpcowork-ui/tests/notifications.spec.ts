@@ -6,7 +6,7 @@ const en: Record<string, string> = { notifyTask: 'Task: {title}', notifyComplete
   notifyQuestion: 'Needs your reply', notifyPlan: 'Plan awaiting confirmation', notifyPlanBody: 'Review the plan to continue' }
 const t = (key: string, params?: Record<string, string>) => (en[key] ?? key).replace(/\{(\w+)\}/g, (_match, name: string) => params?.[name] ?? '')
 
-function setup() {
+function setup(sound = () => true) {
   let status = new Map<string, Status>()
   const listeners = new Set<() => void>()
   const rows: Record<string, { displayTitle: string; origin?: string; parentId?: string }> = {
@@ -24,7 +24,7 @@ function setup() {
     status = new Map(entries.map(([id, value]) => [id, { running: undefined, completionUnread: false, ...value }]))
     for (const listener of listeners) listener()
   }
-  const stop = watchSessionNotifications(services, bridge, t)
+  const stop = watchSessionNotifications(services, bridge, t, sound)
   return { bridge, uiWorkspace, publish, stop, click: (id: string) => click?.(id), listeners }
 }
 afterEach(() => { vi.unstubAllGlobals() })
@@ -62,4 +62,28 @@ it('leaves subagents and scheduled runs to their owners, honours the switch, and
   f.stop()
   expect(f.listeners.size).toBe(0)
   f.click('session:one'); expect(f.uiWorkspace.openSession).toHaveBeenCalledOnce()
+})
+
+it('shows a muted notice through the page without sound, and still skips it while the window has focus', () => {
+  const shown: { title: string; options: NotificationOptions; onclick?: () => void }[] = []
+  class Native {
+    static permission = 'granted'
+    onclick: (() => void) | null = null
+    constructor(title: string, options: NotificationOptions) { shown.push(Object.assign(this, { title, options }) as never) }
+    close() {}
+  }
+  vi.stubGlobal('Notification', Native)
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const f = setup(() => false)
+  f.publish([['one', { running: true }]])
+  f.publish([['one', { running: false }]])
+  expect(shown).toEqual([])
+  focused.mockReturnValue(false)
+  f.publish([['one', { running: true }]])
+  f.publish([['one', { running: false }]])
+  expect(f.bridge.show).not.toHaveBeenCalled()
+  expect(shown.map(notice => [notice.title, notice.options])).toEqual([['Task completed', { body: 'Task: Fix the build', tag: 'completed:one', silent: true }]])
+  shown[0]!.onclick!()
+  expect(f.uiWorkspace.openSession).toHaveBeenCalledWith('one')
+  f.stop()
 })

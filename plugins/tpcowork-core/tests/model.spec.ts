@@ -51,7 +51,7 @@ it('composes the shipped core model defaults over DSH and restores upstream sele
   const rows = applyEntryPatches(original, layers.flat(), message => warnings.push(message))
   expect(warnings).toEqual([])
   expect(rows.find(row => row.id === 'agent-default-model')?.config).toEqual({
-    provider: 'asset-deepseek', model: 'deepseek_v4_flash',
+    provider: 'asset-deepseek', model: 'deepseek_v4_flash_api',
   })
   for (const id of ['llm-pi-ai', 'llm-deepseek-account', 'deepseek-account']) {
     expect(rows.find(row => row.id === id)).toEqual(original.find(row => row.id === id))
@@ -89,8 +89,8 @@ it('streams a tool call and its follow-up through the intranet Chat Completions 
   await ctx.plugin(MemoryCredentials, { [credentialReference]: 'intranet-test-key' }).await()
   await ctx.plugin(CoreModel, rows[0].insert[0].config).await()
   expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['asset-deepseek'])
-  expect(await ctx.llm.listModels('asset-deepseek')).toMatchObject([{ id: 'deepseek_v4_flash' }])
-  expect(await ctx.llm.resolveModelInfo('asset-deepseek', 'deepseek_v4_flash')).toMatchObject({
+  expect(await ctx.llm.listModels('asset-deepseek')).toMatchObject([{ id: 'deepseek_v4_flash_api' }])
+  expect(await ctx.llm.resolveModelInfo('asset-deepseek', 'deepseek_v4_flash_api')).toMatchObject({
     context: { contextWindow: 128000 }, defaultMaxTokens: 8192,
   })
   const tools = [{ name: 'read_document', description: 'Read a document.', parameters: {
@@ -110,7 +110,7 @@ it('streams a tool call and its follow-up through the intranet Chat Completions 
   expect(server.urls).toEqual(['http://gateway.test/v1/chat/completions', 'http://gateway.test/v1/chat/completions'])
   expect(server.headers.map(headers => headers.get('authorization'))).toEqual(['Bearer intranet-test-key', 'Bearer intranet-test-key'])
   for (const body of server.requests as Record<string, unknown>[]) {
-    expect(body.model).toBe('deepseek_v4_flash')
+    expect(body.model).toBe('deepseek_v4_flash_api')
     expect(body.max_tokens).toBe(8192)
     expect(body).not.toHaveProperty('reasoning_effort')
     expect(body).not.toHaveProperty('max_completion_tokens')

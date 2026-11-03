@@ -5,7 +5,7 @@ export const defaultDeployment = Object.freeze({
   apiBase: 'http://192.168.0.228:1025/v1',
   providerId: 'asset-deepseek',
   providerName: '资产DeepSeek',
-  modelId: 'deepseek_v4_flash',
+  modelId: 'deepseek_v4_flash_api',
   contextWindow: 128000,
   maxTokens: 8192,
 });

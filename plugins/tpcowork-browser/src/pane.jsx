@@ -108,18 +108,19 @@ export function SiteSettings({ origin, rules, onChange, t }) {
 }
 
 /** The reference's BrowserToolbar. */
-export function BrowserToolbar({ row, address, editing, onAddressChange, onAddressFocus, onAddressBlur, onAddressKeyDown, addressRef, suggestion,
+export function BrowserToolbar({ row, address, editing, loading = row?.loading === true, onAddressChange, onAddressFocus, onAddressBlur, onAddressKeyDown, addressRef, suggestion,
   onSubmit, onBack, onForward, onReload, responsive, onToggleResponsive, siteControl, bookmarks, menu, t }) {
   return <form className="tpcb-toolbar" onSubmit={onSubmit}>
     <IconButton icon="ChevronLeft" label={t('back')} disabled={!row?.canGoBack} onClick={onBack} />
     <IconButton icon="ChevronRight" label={t('forward')} disabled={!row?.canGoForward} onClick={onForward} />
-    <IconButton icon="RefreshCw" label={t('reload')} disabled={!row?.ready} onClick={onReload} spin={row?.loading === true} />
-    <div className="tpcb-address" ref={addressRef}>
-      <input aria-label={t('address')} placeholder={t('address')} value={address} spellCheck={false}
+    <IconButton icon="RefreshCw" label={t('reload')} disabled={!row?.ready} onClick={onReload} />
+    <div className="tpcb-address" ref={addressRef} aria-busy={loading}>
+      <input aria-label={t('address')} placeholder={t('addressPlaceholder')} value={address} spellCheck={false}
         role="combobox" aria-autocomplete="list" aria-expanded={suggestion !== undefined} aria-activedescendant={suggestion}
         onChange={event => onAddressChange(event.target.value)} onFocus={onAddressFocus} onBlur={onAddressBlur} onKeyDown={onAddressKeyDown} />
       {/* Hidden, not unmounted, while the URL is being edited. */}
       {siteControl && <div className="tpcb-address-site" hidden={editing}>{siteControl}</div>}
+      {loading && !editing && <span className="tpcb-address-loading" role="status" aria-label={t('loading')}><Icon name="Loader" className="tpcb-spin" /></span>}
     </div>
     {bookmarks}
     <IconButton icon="MonitorSmartphone" label={t(responsive ? 'responsiveExit' : 'responsiveEnter')} active={responsive} pressed={responsive} onClick={onToggleResponsive} />
@@ -205,19 +206,22 @@ function ResizeHandles({ viewport, scale, onResize, t }) {
   </>;
 }
 
+const LOAD_ERROR_MESSAGES = { '-105': 'siteNotFound', '-106': 'networkDisconnected', '-7': 'connectionTimedOut', '-118': 'connectionTimedOut', '-102': 'connectionRefused' };
+
 /** The reference's empty, load-error and crashed-page states over the page area. */
-export function PageState({ kind, message, certificate, onRetry, t }) {
+export function PageState({ kind, message, loadErrorCode, certificate, onRetry, t }) {
+  const detail = LOAD_ERROR_MESSAGES[loadErrorCode] ? t(LOAD_ERROR_MESSAGES[loadErrorCode]) : message;
   if (kind === 'error' || kind === 'crashed') return <div className="tpcb-state" role="alert">
     <Icon name="TriangleAlert" size={64} className="tpcb-state-icon tpcb-warn" />
     <h3>{t(kind === 'crashed' ? 'crashedTitle' : certificate ? 'certErrorTitle' : 'loadErrorTitle')}</h3>
-    {message && <p className="tpcb-state-detail">{message}</p>}
+    {detail && <p className="tpcb-state-detail">{detail}</p>}
     {kind === 'error' && certificate && <p>{t('certErrorHint')}</p>}
     {onRetry && <button type="button" className="tpcb-outline-button" onClick={onRetry}><Icon name="RefreshCw" />{t('retry')}</button>}
   </div>;
   return <div className="tpcb-state">
     <Icon name={kind === 'starting' ? 'Loader' : 'Globe'} size={64} className={`tpcb-state-icon${kind === 'starting' ? ' tpcb-spin' : ''}`} />
     <h3>{t('title')}</h3>
-    <p>{t(kind === 'unavailable' ? 'unavailable' : 'empty')}</p>
+    <p>{t(kind === 'unavailable' ? 'unavailable' : kind === 'starting' ? 'loading' : 'empty')}</p>
     {onRetry && <button type="button" className="tpcb-outline-button" onClick={onRetry}>{t('restore')}</button>}
   </div>;
 }

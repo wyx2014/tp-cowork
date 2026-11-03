@@ -5,6 +5,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
 import { shell, type BrowserWindow } from 'electron'
+import { allowedHubUrl } from '../src/host/tpcoworkhub/hub-url.ts'
 
 /** Safe account and authentication progress for the sidebar; mirrors TpcoworkHubAccountState in the shell. */
 export interface TpcoworkHubAccountState {
@@ -131,8 +132,7 @@ export class DesktopTpcoworkHub {
       if (!record(options) || typeof options.loginUrl !== 'string' || typeof options.timeoutMs !== 'number'
         || !Number.isFinite(options.timeoutMs) || options.timeoutMs < 1000) throw new AuthenticationError('failed')
       const login = new URL(options.loginUrl)
-      if (login.username || login.password || !(login.protocol === 'https:'
-        || (login.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(login.hostname)))) throw new AuthenticationError('failed')
+      if (!allowedHubUrl(login)) throw new AuthenticationError('failed')
       const state = await this.browserSession(login, options.timeoutMs, attempt)
       try { this.focusOwner() }
       catch (_error) { console.error('TP Cowork Hub signed in, but the application window could not be focused') }

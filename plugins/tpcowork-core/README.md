@@ -4,7 +4,7 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `persona.md` | 产品定位、办公能力介绍、模型来源说明和通用交流方式 |
+| `persona.md` | 产品定位、办公能力介绍、模型来源说明和通用交流方式（含思考过程跟随用户语言） |
 | `index.js` | 将产品身份接入 DSH 提示词组装，保留自定义角色与其他插件的贡献 |
 | `cordis.patch.yml` | 注册 core 插件并关闭官方 DeepSeek API-Key 来源，不覆盖用户的 system-prompt 或 preset 配置 |
 | `src/model.ts` → `model.js` | 独立注册内网模型，复用 DSH 的 pi-ai 适配器与配置解析 |
@@ -32,7 +32,7 @@ DSH 对声明 `complete: true` 的完整提示词拥有最终决定权，因此 
 | 项目 | 默认值 |
 | --- | --- |
 | 来源 ID / 名称 | `asset-deepseek` / 资产DeepSeek |
-| 模型 ID | `deepseek_v4_flash` |
+| 模型 ID | `deepseek_v4_flash_api` |
 | API 地址 | `http://192.168.0.228:1025/v1` |
 | 协议 | OpenAI Chat Completions，请求路径 `/v1/chat/completions` |
 | 上下文 / 输出上限 | `128000` / `8192` |

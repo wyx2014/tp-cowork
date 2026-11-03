@@ -36,6 +36,8 @@ it('keeps the packaged desktop default off with a model key and preserves an exp
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(20000)
   await page.addInitScript(() => {
     window.dshDesktop = {}
@@ -80,6 +82,8 @@ it('offers preset controls only in Developer mode and preserves existing task co
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(20000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -96,7 +100,7 @@ it('offers preset controls only in Developer mode and preserves existing task co
   const presetControls = page.locator('[data-slot="conversation.hero.agentPreset"] button')
   const settings = page.getByRole('dialog', { name: '设置', exact: true })
   const openSettings = () => page.getByRole('button', { name: '设置', exact: true }).click()
-  const closeSettings = () => settings.getByRole('button', { name: '关闭', exact: true }).last().click()
+  const closeSettings = () => settings.getByRole('button', { name: '返回工作区', exact: true }).click()
   const toggle = settings.getByRole('switch', { name: '开发者模式', exact: true })
   const defaultPreset = () => scaffold.ctx.agentPresets.defaultId
   const sessionId = () => page.locator('[data-conversation-content]').first().getAttribute('data-conversation-session')
@@ -113,6 +117,28 @@ it('offers preset controls only in Developer mode and preserves existing task co
   for (const name of ['标准模式', 'PTC 模式', '极简模式', '创造模式']) {
     expect(await settings.getByRole('button', { name: `查看配置: ${name}`, exact: true }).count()).toBe(1)
   }
+  // The page matches the other settings pages: one title, the presets as a single list of rows with a radio for the
+  // default, and no custom group or Creator entry.
+  const presetPage = await settings.locator('[data-agent-preset-id="standard"]').evaluate(row => {
+    const list = row.parentElement
+    const section = list.closest('section').parentElement.closest('section') ?? list.closest('section')
+    const visible = node => node.offsetParent !== null
+    const radio = getComputedStyle(row.querySelector('button'), '::before')
+    return {
+      headings: [...section.querySelectorAll('h2, h3')].filter(visible).length,
+      rows: [...list.children].map(item => item.getBoundingClientRect().left),
+      width: Math.round(list.getBoundingClientRect().width),
+      radio: radio.borderTopWidth,
+      text: section.innerText,
+    }
+  })
+  expect(presetPage.headings).toBe(0)
+  expect(new Set(presetPage.rows).size).toBe(1)
+  expect(presetPage.width).toBeGreaterThan(800)
+  expect(presetPage.radio).toBe('5px')
+  expect(presetPage.text).not.toContain('自定义')
+  expect(presetPage.text).not.toContain('让 Agent 帮我创建预设')
+  await page.screenshot({ path: join(output, 'preset-list.png'), fullPage: true })
   await settings.getByRole('button', { name: '设为新任务默认: 创造模式', exact: true }).click()
   await expect.poll(defaultPreset).toBe('cordis')
   await closeSettings()

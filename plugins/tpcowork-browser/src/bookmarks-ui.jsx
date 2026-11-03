@@ -9,7 +9,8 @@ import { Floating, IconButton, Popup } from './pane.jsx';
 import { flattenBookmarks, searchBookmarks } from './bookmark-search.js';
 
 const BROWSERS = ['chrome', 'edge'];
-const BROWSER_NAMES = { chrome: 'Chrome', edge: 'Edge' };
+export const BOOKMARK_BROWSER_NAMES = { chrome: 'Chrome', edge: 'Edge' };
+const BROWSER_NAMES = BOOKMARK_BROWSER_NAMES;
 const ROOT_LABELS = { bookmark_bar: 'bookmarkBar', other: 'bookmarkOther', synced: 'bookmarkSynced' };
 const fill = (text, values) => text.replace(/\{(\w+)\}/gu, (match, name) => values[name] ?? match);
 

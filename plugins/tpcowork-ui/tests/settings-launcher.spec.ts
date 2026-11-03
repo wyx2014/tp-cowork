@@ -16,7 +16,7 @@ const signedIn: TpcoworkHubAccountState = { status: 'signed_in', phase: 'idle', 
 const disposers: (() => Promise<void>)[] = []
 afterEach(async () => { cleanup(); for (const dispose of disposers.splice(0)) await dispose(); vi.restoreAllMocks() })
 
-function fixture(wide = true, initial: TpcoworkHubAccountState = signedOut) {
+function fixture(wide = true, initial: TpcoworkHubAccountState = signedOut, hasUsage = true) {
   let notify: (state: TpcoworkHubAccountState) => void = () => {}
   let state = initial
   const bridge: DesktopTpcoworkHubApi = {
@@ -27,6 +27,7 @@ function fixture(wide = true, initial: TpcoworkHubAccountState = signedOut) {
   const account = createTpcoworkHubAccount(bridge)
   disposers.push(() => account.dispose())
   const openSettings = vi.fn()
+  const openUsage = vi.fn(() => true)
   let preferences = { locales: [{ id: 'zh', label: '简体中文' }, { id: 'en', label: 'English' }], localePreference: 'system', themePreference: 'system' }
   const preferenceListeners = new Set<() => void>()
   const preferenceSource = { getSnapshot: () => preferences, subscribe: (fn: () => void) => { preferenceListeners.add(fn); return () => preferenceListeners.delete(fn) } }
@@ -38,10 +39,10 @@ function fixture(wide = true, initial: TpcoworkHubAccountState = signedOut) {
   const useInterfacePreferences = (selector: (state: typeof preferences) => typeof preferences) => selector(React.useSyncExternalStore(preferenceSource.subscribe, preferenceSource.getSnapshot))
   const useTpcoworkHub = (selector: (state: TpcoworkHubAccountState) => TpcoworkHubAccountState) => selector(React.useSyncExternalStore(account.source.subscribe, account.source.getSnapshot))
   render(React.createElement(SettingsLauncher, {
-    wide, openSettings, useInterfacePreferences, setInterfacePreference, refreshPreferences: vi.fn(), settingsShortcut: { keys: ['Meta', ','], aria: 'Meta+,' }, useTpcoworkHub,
+    wide, openSettings, openUsage, usageAvailable: () => hasUsage, useInterfacePreferences, setInterfacePreference, refreshPreferences: vi.fn(), settingsShortcut: { keys: ['Meta', ','], aria: 'Meta+,' }, useTpcoworkHub,
     startSignIn: account.startSignIn, cancelSignIn: account.cancelSignIn, signOut: account.signOut, refreshAccount: account.refreshAccount, t,
   }))
-  return { bridge, account, openSettings, setInterfacePreference, publish: (value: TpcoworkHubAccountState) => act(() => { state = value; notify(value) }) }
+  return { bridge, account, openSettings, openUsage, setInterfacePreference, publish: (value: TpcoworkHubAccountState) => act(() => { state = value; notify(value) }) }
 }
 
 it.each([true, false])('uses website authentication and shows the synchronized desktop account (wide: %s)', async wide => {
@@ -49,7 +50,7 @@ it.each([true, false])('uses website authentication and shows the synchronized d
   const { bridge } = fixture(wide)
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: /账号菜单/ }))
-  expect((await screen.findAllByRole('menuitem')).map(item => item.textContent)).toEqual(['界面语言', '界面主题', '连接使用'])
+  expect((await screen.findAllByRole('menuitem')).map(item => item.textContent)).toEqual(['界面语言', '界面主题', '使用统计', '连接使用'])
   expect(screen.queryByRole('menuitem', { name: '意见反馈' })).toBeNull()
   await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: '连接使用' })) })
   expect(bridge.start).toHaveBeenCalledOnce()
@@ -96,7 +97,7 @@ it('selects language and theme, reflects checks and restores menu focus', async 
   expect(screen.queryByRole('menu')).toBeNull()
 })
 
-it('shows account details without login, usage or plan placeholders', async () => {
+it('shows account details and the real usage entry without plan placeholders', async () => {
   fixture(true, signedIn)
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: /账号菜单/ }))
@@ -143,4 +144,22 @@ it('unsubscribes and cancels an owned website login when the appearance unloads'
   await signingIn
   expect(bridge.cancel).toHaveBeenCalledOnce()
   expect(unsubscribe).toHaveBeenCalledOnce()
+})
+
+it('opens local usage without signing in and uses the reference footer and login icons', async () => {
+  const { openUsage, bridge } = fixture()
+  await act(async () => {})
+  expect(document.querySelector('.tpcowork-profile-avatar [data-icon="user"]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /账号菜单/ }))
+  expect(screen.getByRole('menuitem', { name: '连接使用' }).querySelector('[data-icon="log-in"]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('menuitem', { name: '使用统计' }))
+  expect(openUsage).toHaveBeenCalledOnce()
+  expect(bridge.start).not.toHaveBeenCalled()
+  expect(screen.queryByRole('menu')).toBeNull()
+})
+it('hides the usage entry when its provider is not installed', async () => {
+  fixture(true, signedOut, false)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: /账号菜单/ }))
+  expect(screen.queryByRole('menuitem', { name: '使用统计' })).toBeNull()
 })

@@ -28,6 +28,8 @@ it('navigates native pages and sessions and keeps the lowered home usable across
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(20000)
   const errors = []
   const consoleMessages = []
@@ -50,8 +52,33 @@ it('navigates native pages and sessions and keeps the lowered home usable across
   const session = () => content.getAttribute('data-conversation-session')
   const first = await session()
   expect(first).toBeTruthy()
+  const navigationRow = page.getByRole('button', { name: '专家 · 技能 · 连接器', exact: true })
+  const navigationStyle = await navigationRow.evaluate(node => ({ fontSize: getComputedStyle(node).fontSize,
+    weight: getComputedStyle(node).fontWeight, height: node.getBoundingClientRect().height }))
+  expect(navigationStyle).toEqual({ fontSize: '14px', weight: '400', height: 32 })
+  // Inherited panel labels must follow the same live font setting as New Session.
+  const sidebarRows = [page.getByRole('button', { name: '新建会话', exact: true }).last(),
+    page.getByRole('button', { name: '自动化', exact: true }), navigationRow]
+  const measureRows = () => Promise.all(sidebarRows.map(row => row.evaluate(node => ({
+    fontSize: getComputedStyle(node).fontSize, icon: node.querySelector('svg').getBoundingClientRect().width,
+  }))))
+  const baselineRows = await measureRows()
+  for (const size of [12, 18, 20, 14]) {
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const settings = page.getByRole('dialog', { name: '设置', exact: true })
+    await settings.getByRole('button', { name: '外观', exact: true }).click()
+    const fontSize = settings.getByRole('spinbutton', { name: '界面字号', exact: true })
+    await fontSize.fill(String(size))
+    await fontSize.press('Enter')
+    await page.waitForFunction(size => document.body.style.getPropertyValue('--dsh-content-font-size') === `${size}px`, size)
+    await settings.getByRole('button', { name: '返回工作区', exact: true }).click()
+    await expect.poll(measureRows).toEqual(baselineRows.map(row => ({ ...row, fontSize: `${size}px` })))
+    if (size === 18) await page.screenshot({ path: join(artifacts, 'sidebar-font-18.png'), fullPage: true })
+  }
   await page.getByRole('button', { name: '专家 · 技能 · 连接器', exact: true }).click()
   await page.locator('section.tp-toolbox').waitFor()
+  expect(await navigationRow.evaluate(node => getComputedStyle(node).fontWeight)).toBe('400')
+  await page.screenshot({ path: join(artifacts, 'sidebar-zcode.png'), fullPage: true })
   expect(await back.isEnabled()).toBe(true)
   expect(await forward.isEnabled()).toBe(false)
   await back.click()

@@ -1,0 +1,6 @@
+- insert:
+    - id: tpcowork-memory
+      name: '@tpcowork/dsh-memory'
+      config:
+        enabled: false
+        extraction: true

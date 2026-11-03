@@ -84,6 +84,8 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 } }); page.setDefaultTimeout(12000);
+  // The profile has finished TP Cowork's first-run guide.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'));
   // The desktop shell's notification bridge: results arrive as system notifications, never as page UI.
   await page.addInitScript(() => {
     window.shownNotifications = [];
@@ -123,6 +125,8 @@ try {
   evidence.push('Initial history silent; run_bound is not terminal; off-page Host finish sends a single system notification and no page UI; duplicate revision/reconnect cannot re-alert; click opens exact task/run and none awaits explicit confirmation.');
   // A second Client's acknowledgement/deletion must invalidate the first Client's shared catalog.
   const second = await browser.newPage();
+  // The profile has finished TP Cowork's first-run guide.
+  await second.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'));
   await second.goto(origin); await second.waitForFunction(() => window.ready && window.streamFrames.some(frame => frame.type === 'ready'));
   await second.evaluate(async target => { const result = await window.fixture.remote.automation.markRunViewed(target); if (!result.ok) throw result.error; }, { taskId: task.id, runId: run.id });
   assert.equal((await ctx.automation.list()).tasks.find(item => item.id === task.id).runs[0].viewedAt, viewedAt);

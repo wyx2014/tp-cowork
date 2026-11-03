@@ -69,6 +69,8 @@ async function launchToolboxApp({ appearance = false, hubEndpoint = '' } = {}) {
   const browser = await chromium.launch({ executablePath: resolve(browserRoot, runtime.executable) })
   onTestFinished(async () => { await browser.close(); await rm(browserRoot, { recursive: true, force: true }) })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(15000)
   const errors = []
   const traffic = []

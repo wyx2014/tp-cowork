@@ -52,14 +52,14 @@ async function readyFixture(t) {
   const profile = join(options.environment.DSH_HOME, 'profiles/desktop')
   await mkdir(join(profile, 'node_modules/@tpcowork'), { recursive: true })
   const dependencies = {}
-  for (const name of ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'experts']) {
+  for (const name of ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts']) {
     const source = join(options.product, 'plugins', `tpcowork-${name}`)
     await mkdir(source, { recursive: true })
     await symlink(source, join(profile, 'node_modules/@tpcowork', `dsh-${name}`), process.platform === 'win32' ? 'junction' : 'dir')
     dependencies[`@tpcowork/dsh-${name}`] = `link:${source}`
   }
   for (const file of ['tpcowork-core/model.js', 'tpcowork-ui/client.js', 'tpcowork-ui/upstream.css',
-    ...['browser', 'toolbox', 'automation', 'experts'].flatMap(name => [`tpcowork-${name}/lib/host.js`, `tpcowork-${name}/lib/client.js`])]) {
+    ...['browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts'].flatMap(name => [`tpcowork-${name}/lib/host.js`, `tpcowork-${name}/lib/client.js`])]) {
     await touch(join(options.product, 'plugins', file))
   }
   // An intentionally disabled bundle must not be re-enabled by ordinary startup or rebuild.
@@ -79,7 +79,7 @@ test('one command builds, initializes, installs and launches in order, preservin
   const launch = find('run', 'start:desktop')
   assert.ok(brand >= 0 && build > brand && init > build && install > init && launch > install)
   assert.equal(launch, calls.length - 1)
-  for (const name of ['core', 'ui', 'toolbox', 'automation', 'experts']) assert.ok(find(join(options.product, `plugins/tpcowork-${name}/build.mjs`)) > build)
+  for (const name of ['core', 'ui', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts']) assert.ok(find(join(options.product, `plugins/tpcowork-${name}/build.mjs`)) > build)
   assert.ok(find(join(options.product, 'plugins/tpcowork-browser/build.mjs'), '--install-native') > build)
   for (const call of calls) {
     assert.equal(call.env.DSH_HOME, options.environment.DSH_HOME)

@@ -14,6 +14,9 @@ const plugins = {
   browser: ['tpcowork-browser', '@tpcowork/dsh-browser'],
   toolbox: ['tpcowork-toolbox', '@tpcowork/dsh-toolbox'],
   automation: ['tpcowork-automation', '@tpcowork/dsh-automation'],
+  memory: ['tpcowork-memory', '@tpcowork/dsh-memory'],
+  archives: ['tpcowork-archives', '@tpcowork/dsh-archives'],
+  usage: ['tpcowork-usage', '@tpcowork/dsh-usage'],
 };
 const expertsPackage = resolve(workspace, 'plugins/tpcowork-experts/package.json');
 const optionalPlugins = existsSync(expertsPackage)
@@ -23,10 +26,10 @@ if (target === 'experts' && !optionalPlugins.experts) {
 }
 Object.assign(plugins, optionalPlugins);
 if (!Object.hasOwn(plugins, target) && target !== 'base' && target !== 'all') {
-  throw new Error('Plugin must be core, ui, workbench, browser, toolbox, automation, experts (when delivered), base (core + ui), or all');
+  throw new Error('Plugin must be core, ui, workbench, browser, toolbox, automation, memory, archives, usage, experts (when delivered), base (core + ui), or all');
 }
 if (!['install', 'remove', 'list'].includes(operation)) {
-  throw new Error('Usage: node scripts/desktop-plugin.mjs install|remove|list [base|core|ui|workbench|browser|toolbox|automation|experts|all] (default: base)');
+  throw new Error('Usage: node scripts/desktop-plugin.mjs install|remove|list [base|core|ui|workbench|browser|toolbox|automation|memory|archives|usage|experts|all] (default: base)');
 }
 if (!existsSync(resolve(desktopHome, 'profiles/desktop/package.json'))) {
   throw new Error('Start Desktop once to initialize its profile, then quit it before managing plugins.');
@@ -42,6 +45,14 @@ if (operation === 'install' && selected.some(([directory]) => directory === 'tpc
 if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-automation')
   && !existsSync(resolve(workspace, 'plugins/tpcowork-automation/lib/host.js'))) {
   throw new Error('Build automation first: node plugins/tpcowork-automation/build.mjs');
+}
+if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-archives')
+  && !existsSync(resolve(workspace, 'plugins/tpcowork-archives/lib/host.js'))) {
+  throw new Error('Build archive management first: node plugins/tpcowork-archives/build.mjs');
+}
+if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-usage')
+  && !existsSync(resolve(workspace, 'plugins/tpcowork-usage/lib/host.js'))) {
+  throw new Error('Build usage stats first: node plugins/tpcowork-usage/build.mjs');
 }
 if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-browser')
   && !existsSync(resolve(harness, 'apps/desktop/lib/tpcowork-browser/desktop.js'))) {

@@ -6,10 +6,10 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import { Context } from '../../../../deepseek-harness/vendor/cordis/src/index.ts'
 import Loader from '../../../../deepseek-harness/vendor/loader/src/index.ts'
-import Include from '../../../../deepseek-harness/vendor/include/src/index.ts'
+import Include, { entryListSchema } from '../../../../deepseek-harness/vendor/include/src/index.ts'
 import SystemPrompt, { renderPrompt } from '../../../../deepseek-harness/packages/core/system-prompt/src/index.ts'
 
-const requireHarness = createRequire(process.cwd() + '/package.json')
+const requireHarness = createRequire(new URL('../../../../deepseek-harness/package.json', import.meta.url))
 const { load, dump } = requireHarness('js-yaml')
 let ctx: Context | undefined
 let directory: string | undefined
@@ -26,9 +26,9 @@ it('loads the shipped core and UI entries through a profile and toggles identity
   } }]
   const modules = new Map<string, unknown>([['prompt', SystemPrompt]])
   for (const plugin of ['core', 'ui']) {
-    const root = resolve(`../plugins/tpcowork-${plugin}`)
-    const patches = load(await readFile(join(root, 'cordis.patch.yml'), 'utf8')) as { insert: typeof rows }[]
-    rows.push(...patches[0]!.insert)
+    const root = resolve(import.meta.dirname, `../../tpcowork-${plugin}`)
+    const patches = load(await readFile(join(root, 'cordis.patch.yml'), 'utf8'), { schema: entryListSchema }) as { insert?: typeof rows }[]
+    rows.push(...patches.flatMap(patch => patch.insert ?? []))
     modules.set(`@tpcowork/dsh-${plugin}`, requireHarness(join(root, 'index.js')))
   }
   const config = join(directory, 'cordis.yml')

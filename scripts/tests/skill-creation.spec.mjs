@@ -25,6 +25,8 @@ it('prepares AI skill creation with a readable skill reference and editable inst
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(20000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))

@@ -10,6 +10,9 @@
 | [browser](plugins/tpcowork-browser/README.md) | 内置浏览器与桌面桥接 |
 | [toolbox](plugins/tpcowork-toolbox/README.md) | 技能、MCP、团队管理及可选 Step 搜索 |
 | [automation](plugins/tpcowork-automation/README.md) | 自动化模板、定时任务和运行记录 |
+| [memory](plugins/tpcowork-memory/README.md) | 按工作区保存跨会话记忆，默认关闭 |
+| [archives](plugins/tpcowork-archives/README.md) | 设置 › 归档管理：按工作区查看、取消归档和删除已归档会话 |
+| [usage](plugins/tpcowork-usage/README.md) | 设置 › 使用统计：按本地会话记录统计 Token、活跃度和模型用量 |
 | [experts](plugins/tpcowork-experts/README.md) | 专家协作，复用原生任务与子会话 |
 
 ## 本地运行

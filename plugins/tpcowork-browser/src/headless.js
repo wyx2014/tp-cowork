@@ -27,6 +27,8 @@ export class HeadlessBackend {
     signal?.throwIfAborted();
     if (op === 'enable') return { version: VERSION, native: false, headless: true };
     if (op === 'disable') return {};
+    // Bookmarks are imported in the desktop browser; the headless backend has none.
+    if (op === 'bookmarks') return { sources: {} };
     const sessionId = payload.sessionId;
     if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 256) throw new BrowserError('invalid_session', 'A browser session identity is required');
     if (op === 'ambient') {

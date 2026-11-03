@@ -21,13 +21,20 @@ export function notificationsEnabled(): boolean {
   catch { return true }
 }
 
+/** The General page's notification sound switch; the desktop bridge always plays the system sound. */
+export const NOTIFICATION_SOUND_KEY = 'tpcowork-notification-sound'
+export function notificationSoundEnabled(): boolean {
+  try { return globalThis.localStorage?.getItem(NOTIFICATION_SOUND_KEY) !== 'false' }
+  catch { return true }
+}
+
 const NOTIFICATION_PREFIX = 'automation:'
 const MAX_CLICK_TARGETS = 100
 
 /** Web fallback outside the desktop shell; permission remains owned by the browser. */
 export function desktopDelivery(notice: DesktopNotice): (() => void) | undefined {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-  const notification = new Notification(notice.title, { body: notice.body, tag: `automation:${notice.target.runId}` })
+  const notification = new Notification(notice.title, { body: notice.body, tag: `automation:${notice.target.runId}`, silent: !notificationSoundEnabled() })
   notification.onclick = () => { window.focus(); notice.open(); notification.close() }
   notification.onclose = () => { notification.onclick = null; notice.closed?.() }
   return () => { notification.onclick = null; notification.onclose = null; notification.close() }
@@ -97,7 +104,10 @@ export class AutomationRunMonitor {
     for (const notice of this.tracker.consume(snapshot.catalog.tasks)) {
       if (!notificationsEnabled()) continue
       const notifications = this.options.notifications
-      if (notifications) {
+      // A muted notice skips the bridge, which cannot be silenced, and is shown by the page while it is unfocused.
+      const muted = !notificationSoundEnabled() && typeof Notification !== 'undefined' && Notification.permission === 'granted'
+      if (muted && globalThis.document?.hasFocus?.()) continue
+      if (notifications && !muted) {
         const id = `${NOTIFICATION_PREFIX}${notice.runId}`
         this.targets.set(id, notice)
         if (this.targets.size > MAX_CLICK_TARGETS) this.targets.delete(this.targets.keys().next().value!)

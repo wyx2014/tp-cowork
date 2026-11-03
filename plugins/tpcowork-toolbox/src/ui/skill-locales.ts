@@ -36,6 +36,8 @@ export const skillZh = {
   "skillGifDescription": "制作适合聊天分享的 GIF 动画。",
   "skillSummaryName": "内容摘要",
   "skillSummaryDescription": "提炼文档或长文本的重点、结论和关键事项。",
+  "skillApiAuthName": "接口登录示例",
+  "skillApiAuthDescription": "演示技能以当前登录用户的身份调用内部接口，并查询“我是谁”。",
   "skillThemeName": "主题配色",
   "skillThemeDescription": "为报告、演示和网页搭配一致的颜色与字体。",
   "skillTranslateName": "中英翻译",
@@ -44,8 +46,6 @@ export const skillZh = {
   "skillWebArtifactsDescription": "创建可运行的网页与交互内容，检查后交付。",
   "skillWebTestingName": "网页测试",
   "skillWebTestingDescription": "通过真实浏览器检查网页功能和操作流程。",
-  "skillGuiTestingName": "网页交互测试",
-  "skillGuiTestingDescription": "检查页面点击、输入和导航效果，记录发现的问题。",
   "skillBrowserDescription": "在应用内浏览网页、查找资料并操作页面。"
 } as const
 export const skillEn: Record<keyof typeof skillZh, string> = {
@@ -85,6 +85,8 @@ export const skillEn: Record<keyof typeof skillZh, string> = {
   "skillGifDescription": "Create GIF animations for sharing in conversations.",
   "skillSummaryName": "Content Summary",
   "skillSummaryDescription": "Extract key points, conclusions, and actions from documents and long text.",
+  "skillApiAuthName": "Signed-in API Example",
+  "skillApiAuthDescription": "Shows how a skill calls internal APIs as the signed-in user, and asks who that is.",
   "skillThemeName": "Visual Themes",
   "skillThemeDescription": "Choose consistent colors and typography for reports, presentations, and pages.",
   "skillTranslateName": "Chinese–English Translation",
@@ -93,7 +95,5 @@ export const skillEn: Record<keyof typeof skillZh, string> = {
   "skillWebArtifactsDescription": "Build and verify working pages and interactive web content.",
   "skillWebTestingName": "Web App Testing",
   "skillWebTestingDescription": "Check web features and workflows in a real browser.",
-  "skillGuiTestingName": "Web Interaction Testing",
-  "skillGuiTestingDescription": "Test page clicks, input, and navigation, and report the findings.",
   "skillBrowserDescription": "Browse the web, find information, and interact with pages inside the app."
 }

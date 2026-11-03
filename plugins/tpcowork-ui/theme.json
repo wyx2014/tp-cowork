@@ -244,8 +244,8 @@
     "dark": "flex-start"
   },
   "--dsh-sidebar-action-height": {
-    "light": "36px",
-    "dark": "36px"
+    "light": "32px",
+    "dark": "32px"
   },
   "--dsh-sidebar-action-padding": {
     "light": "6px 8px",
@@ -256,8 +256,8 @@
     "dark": "0 2px 4px"
   },
   "--dsh-sidebar-action-radius": {
-    "light": "var(--dsw-radius-sm)",
-    "dark": "var(--dsw-radius-sm)"
+    "light": "8px",
+    "dark": "8px"
   },
   "--dsh-sidebar-action-fill": {
     "light": "transparent",
@@ -354,5 +354,13 @@
   "--tpcowork-success": {
     "light": "#1e8a3e",
     "dark": "#46bf72"
+  },
+  "--tpcowork-settings-subtle": {
+    "light": "rgba(64, 64, 64, 0.6)",
+    "dark": "rgba(229, 229, 229, 0.6)"
+  },
+  "--tpcowork-settings-surface": {
+    "light": "rgba(10, 10, 10, 0.03)",
+    "dark": "rgba(255, 255, 255, 0.05)"
   }
 }

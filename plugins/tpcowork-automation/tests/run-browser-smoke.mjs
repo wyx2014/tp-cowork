@@ -171,6 +171,8 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1080, height: 940 } }); page.setDefaultTimeout(12000);
+  // The profile has finished TP Cowork's first-run guide.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'));
   page.on('pageerror', error => { errors.push(error.message); console.error('Browser:', error.message); });
   const row = name => page.locator('tbody tr').filter({ has: page.getByText(name, { exact: true }) });
   const visit = async (locale = 'en', mode = 'light') => {

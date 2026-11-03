@@ -22,24 +22,8 @@ it('persists a five-day deferral without extending or shortening it on restart',
   expect(importPromptPending(createImportPromptPreferences(now + IMPORT_PROMPT_DEFER_MS).state.getSnapshot(), now + IMPORT_PROMPT_DEFER_MS)).toBe(true)
 })
 
-it('inherits a permanent decline from any old session before the first browser pane opens', () => {
-  localStorage.setItem('tpcowork.browser-tabs.v1.corrupt', '{')
-  localStorage.setItem('tpcowork.browser-tabs.v1.one', JSON.stringify({ byTab: {}, importPrompt: { deferredRun: 'old-run' } }))
-  localStorage.setItem('tpcowork.browser-tabs.v1.two', JSON.stringify({ byTab: {}, importPrompt: { choice: 'imported' } }))
-  localStorage.setItem('tpcowork.browser-tabs.v1.three', JSON.stringify({ byTab: {}, importPrompt: { choice: 'dismissed' } }))
-  expect(createImportPromptPreferences(now).state.getSnapshot()).toEqual({ choice: 'dismissed' })
-})
-
-it('inherits an earlier successful import', () => {
-  localStorage.setItem('tpcowork.browser-tabs.v1', JSON.stringify({ importPrompt: { choice: 'imported' } }))
-  expect(createImportPromptPreferences(now).state.getSnapshot()).toEqual({ choice: 'imported' })
-})
-
-it('gives an old Not now choice five days once, without renewing the delay every restart', () => {
-  localStorage.setItem('tpcowork.browser-tabs.v1.one', JSON.stringify({ importPrompt: { deferredRun: 'old-run' } }))
-  const migrated = createImportPromptPreferences(now).state.getSnapshot()
-  expect(migrated).toEqual({ deferredUntil: now + IMPORT_PROMPT_DEFER_MS })
-  const restarted = createImportPromptPreferences(now + IMPORT_PROMPT_DEFER_MS).state.getSnapshot()
-  expect(restarted).toEqual(migrated)
-  expect(importPromptPending(restarted, now + IMPORT_PROMPT_DEFER_MS)).toBe(true)
+it('does not inherit choices made on the earlier Chrome sign-in offer', () => {
+  localStorage.setItem('tpcowork.browser-import-prompt.v1', JSON.stringify({ choice: 'dismissed' }))
+  localStorage.setItem('tpcowork.browser-tabs.v1', JSON.stringify({ importPrompt: { choice: 'dismissed' } }))
+  expect(importPromptPending(createImportPromptPreferences(now).state.getSnapshot(), now)).toBe(true)
 })

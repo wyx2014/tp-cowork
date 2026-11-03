@@ -25,7 +25,7 @@ function missingDependencies(directory, sections) {
     .some(name => !existsSync(join(directory, 'node_modules', name, 'package.json'))))
 }
 
-const pluginNames = ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'experts']
+const pluginNames = ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts']
 const builtPlugins = pluginNames.filter(name => name !== 'workbench')
 const harnessArtifacts = ['apps/desktop/lib/main.js', 'apps/desktop/lib/types/project-manager.js',
   'apps/desktop-host/lib/index.js', 'apps/cli/lib/bin.js', 'apps/web/dist/index.html']
@@ -38,7 +38,7 @@ function electronReady(harness) {
 
 function pluginsReady(product, harness) {
   const artifacts = ['tpcowork-core/model.js', 'tpcowork-ui/client.js', 'tpcowork-ui/upstream.css',
-    ...['browser', 'toolbox', 'automation', 'experts'].flatMap(name =>
+    ...['browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts'].flatMap(name =>
       [`tpcowork-${name}/lib/host.js`, `tpcowork-${name}/lib/client.js`])]
   return artifacts.every(file => existsSync(join(product, 'plugins', file)))
     && existsSync(join(harness, 'apps/desktop/lib/tpcowork-browser/desktop.js'))

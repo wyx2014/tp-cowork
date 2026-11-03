@@ -154,7 +154,7 @@ assembled('shows the page favicon or the operating indicator in the tab title, a
   expect(pending.getByText('Certificate setting saved. Restart the app to take effect.')).toBeTruthy()
 }, 60000)
 
-it('defers the Chrome import for five days on Not now or Escape, and remembers a permanent decline', async () => {
+it('offers bookmark import, defers it for five days on Not now or Escape, and remembers a permanent decline', async () => {
   const now = Date.now()
   vi.spyOn(Date, 'now').mockReturnValue(now)
   expect(importPromptPending(undefined)).toBe(true)
@@ -166,23 +166,28 @@ it('defers the Chrome import for five days on Not now or Escape, and remembers a
   pane.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} })
   const anchor = { current: pane }
   const onDecide = vi.fn()
-  const failing = render(React.createElement(ImportPrompt, { anchor, t, onDecide, onImport: async () => ({ success: false, error: 'chrome_profile_locked' }) }))
-  const dialog = failing.getByRole('dialog', { name: 'Stay signed in to your sites' })
-  expect(dialog.textContent).toContain('Passwords are never imported.')
-  fireEvent.click(failing.getByRole('button', { name: 'Import cookies' }))
-  expect((await failing.findByRole('alert')).textContent).toMatch(/Chrome profile is in use/)
+  const available = { chrome: true, edge: false }
+  const failing = render(React.createElement(ImportPrompt, { anchor, available, t, onDecide, onImport: async (browser: string) => ({ success: false, browser, error: 'bookmarks_unreadable' }) }))
+  const dialog = failing.getByRole('dialog', { name: 'Bring your bookmarks' })
+  expect(dialog.textContent).toContain('Passwords, cookies and history are never imported.')
+  expect(failing.queryByRole('button', { name: /cookies/i })).toBeNull()
+  // A browser without a profile cannot be chosen.
+  expect((failing.getByRole('button', { name: 'From Edge' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(failing.getByRole('button', { name: 'From Chrome' }))
+  expect((await failing.findByRole('alert')).textContent).toBe('The Chrome bookmarks file could not be read. Try again later.')
   fireEvent.click(failing.getByRole('button', { name: 'Not now' }))
   expect(onDecide).toHaveBeenLastCalledWith({ deferredUntil: now + IMPORT_PROMPT_DEFER_MS })
-  fireEvent.keyDown(failing.getByRole('button', { name: 'Try again' }), { key: 'Escape' })
+  fireEvent.keyDown(failing.getByRole('button', { name: 'From Chrome' }), { key: 'Escape' })
   expect(onDecide).toHaveBeenLastCalledWith({ deferredUntil: now + IMPORT_PROMPT_DEFER_MS })
   fireEvent.click(failing.getByRole('button', { name: "Don't show again" }))
   expect(onDecide).toHaveBeenLastCalledWith({ choice: 'dismissed' })
   failing.unmount()
 
-  const onImport = vi.fn(async () => ({ success: true, cookies: { imported: 3, skipped: 0 }, localStorage: { originsImported: 2, entriesImported: 5 } }))
-  const passing = render(React.createElement(ImportPrompt, { anchor, t, onDecide, onImport }))
-  fireEvent.click(passing.getByRole('button', { name: 'Import cookies' }))
-  expect((await passing.findByRole('status')).textContent).toBe('Imported 3 cookies and 5 LocalStorage entries from 2 sites.')
+  const onImport = vi.fn(async (browser: string) => ({ success: true, browser, count: 12 }))
+  const passing = render(React.createElement(ImportPrompt, { anchor, available: { chrome: true, edge: true }, t, onDecide, onImport }))
+  fireEvent.click(passing.getByRole('button', { name: 'From Edge' }))
+  expect((await passing.findByRole('status')).textContent).toBe('Imported 12 bookmarks from Edge')
+  expect(onImport).toHaveBeenCalledWith('edge')
   expect(passing.queryByRole('button', { name: 'Not now' })).toBeNull()
   fireEvent.click(passing.getByRole('button', { name: 'Done' }))
   expect(onDecide).toHaveBeenLastCalledWith({ choice: 'imported' })
@@ -224,11 +229,60 @@ assembled('shares the import decision across browser panes, conversations and pl
   expect(restarted.queryByRole('dialog', { hidden: true })).toBeNull()
   restarted.unmount()
 
-  // Manual import in Settings also suppresses future offers, even before closing its result card.
+  // A bookmark import from the menu or Settings also suppresses future offers, even before closing its result card.
   const injected = pane().inject!({} as never) as any
   act(() => injected.decideImportPrompt({}))
-  await injected.request('importChrome')
+  await injected.request('importBookmarks', { browser: 'chrome' })
   await c.reload(ID)
   const imported = mountPane('fourth-conversation', 'imported-tab')
   expect(imported.queryByRole('dialog', { hidden: true })).toBeNull()
+}, 60000)
+
+assembled('shows requested URLs while loading, preserves an address draft, and retries the failed target', async ({ start }) => {
+  const request = vi.fn(async (op: string) => op === 'snapshot'
+    ? { enabled: true, tabs: [], downloads: [], permissions: {}, requests: [] }
+    : { sources: {} })
+  vi.stubGlobal('dshDesktop', { browserAutomation: { subscribe: () => () => {}, request } })
+  const c = await start()
+  const entry = c.ctx.slots.entries('sidebar.right.pane.tab').find(row => row.options.key === ID)!
+  let row: Record<string, unknown> = { id: 'native', sessionId: 'one', ready: true, url: 'about:blank#tpcowork-browser-private' }
+  const tab = { id: 'ui', visible: true, navigation: { params: { nativeId: 'native' } }, actions: { bindCommands: () => () => {} } }
+  const props = {
+    t, sessionId: 'one', request, fail: vi.fn(), actions: { bind: vi.fn() },
+    useTabInfo: () => ({ tab }), useStore: (select: any) => select({ byTab: {} }),
+    useBrowser: (select: any) => select({ enabled: true, tabs: [row], bindings: {}, operations: {}, operationUntil: {}, permissions: {} }),
+    useImportPrompt: (select: any) => select({ choice: 'dismissed' }), decideImportPrompt: vi.fn(),
+    mount: async () => () => {}, unmount: () => {},
+  }
+  const view = render(React.createElement(entry.component, props))
+  const address = view.getByRole('combobox', { name: en.address }) as HTMLInputElement
+  expect(address.value).toBe('')
+  expect(address.placeholder).toBe('Enter a URL')
+  expect(view.container.textContent).not.toContain('about:blank')
+
+  row = { ...row, pendingUrl: 'https://example.com/', loading: true }
+  view.rerender(React.createElement(entry.component, props))
+  expect(address.value).toBe('https://example.com/')
+  expect(view.getByRole('status', { name: en.loading })).toBeTruthy()
+  expect(view.getByText(en.loading)).toBeTruthy()
+  expect(view.queryByText(en.empty)).toBeNull()
+
+  fireEvent.focus(address)
+  fireEvent.change(address, { target: { value: 'https://typed.example/' } })
+  row = { ...row, url: 'https://example.com/home', pendingUrl: undefined, loading: false }
+  view.rerender(React.createElement(entry.component, props))
+  expect(address.value).toBe('https://typed.example/')
+  fireEvent.blur(address)
+  expect(address.value).toBe('https://example.com/home')
+  expect(view.queryByRole('status', { name: en.loading })).toBeNull()
+
+  row = { ...row, pendingUrl: 'https://unavailable.example/', error: 'ERR_NAME_NOT_RESOLVED', loadErrorCode: -105 }
+  view.rerender(React.createElement(entry.component, props))
+  expect(address.value).toBe('https://unavailable.example/')
+  expect(view.getByRole('alert').textContent).toContain(en.siteNotFound)
+  expect(view.container.textContent).not.toContain('ERR_NAME_NOT_RESOLVED')
+  fireEvent.click(view.getByRole('button', { name: en.retry }))
+  await vi.waitFor(() => expect(request).toHaveBeenCalledWith('command', {
+    sessionId: 'one', tabId: 'native', command: { method: 'navigate', tabId: 'native', url: 'https://unavailable.example/' },
+  }))
 }, 60000)

@@ -34,10 +34,10 @@ const skills: Record<string, { label: UiKey; description?: UiKey; icon: string; 
   'slack-gif-creator': { label: 'skillGifName', description: 'skillGifDescription', icon: capabilityIcon('animation', 'pink'), aliases: [] },
   'summarize': { label: 'skillSummaryName', description: 'skillSummaryDescription', icon: capabilityIcon('summary', 'teal'), aliases: [] },
   'theme-factory': { label: 'skillThemeName', description: 'skillThemeDescription', icon: capabilityIcon('palette', 'pink'), aliases: [] },
+  'tpcowork-api-auth': { label: 'skillApiAuthName', description: 'skillApiAuthDescription', icon: capabilityIcon('plug', 'green'), aliases: ['登录', '接口', 'whoami'] },
   'translate': { label: 'skillTranslateName', description: 'skillTranslateDescription', icon: capabilityIcon('translate', 'blue'), aliases: [] },
   'web-artifacts-builder': { label: 'skillWebArtifactsName', description: 'skillWebArtifactsDescription', icon: capabilityIcon('web', 'blue'), aliases: [] },
   'webapp-testing': { label: 'skillWebTestingName', description: 'skillWebTestingDescription', icon: capabilityIcon('test', 'green'), aliases: [] },
-  'web-gui-tester': { label: 'skillGuiTestingName', description: 'skillGuiTestingDescription', icon: capabilityIcon('test', 'teal'), aliases: [] },
 }
 export function skillPresentation(name: string, t: T) {
   const value = skills[name]

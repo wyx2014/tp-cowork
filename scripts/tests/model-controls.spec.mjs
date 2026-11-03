@@ -31,6 +31,8 @@ it('replaces the composer model seat with the combined model and effort picker',
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
+  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
   page.setDefaultTimeout(20000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -51,6 +53,57 @@ it('replaces the composer model seat with the combined model and effort picker',
   expect(Math.round(menuBox.width)).toBe(288)
   expect(await model.textContent()).toBe('选择模型')
   expect(await menu.getByTestId('composer-provider-trigger').textContent()).toContain('API')
+  // The provider submenu opens beside the menu (right, or left when the right lacks room), inside the window, so
+  // other providers can be clicked.
+  await menu.getByTestId('composer-provider-trigger').click()
+  const providers = page.locator('[data-composer-provider-list]')
+  await expect.poll(() => providers.evaluate(element => getComputedStyle(element).visibility)).toBe('visible')
+  const providersBox = await providers.boundingBox()
+  expect(providersBox.x >= menuBox.x + menuBox.width || providersBox.x + providersBox.width <= menuBox.x).toBe(true)
+  expect(providersBox.x).toBeGreaterThanOrEqual(0)
+  expect(providersBox.x + providersBox.width).toBeLessThanOrEqual(page.viewportSize().width)
+  expect(providersBox.y).toBeGreaterThanOrEqual(0)
+  const crossProviderGap = async () => {
+    const parent = await menu.boundingBox()
+    const trigger = await menu.getByTestId('composer-provider-trigger').boundingBox()
+    const child = await providers.boundingBox()
+    const leftSide = child.x < parent.x
+    const gapX = leftSide ? (child.x + child.width + parent.x) / 2 : (parent.x + parent.width + child.x) / 2
+    const y = trigger.y + trigger.height / 2
+    await page.mouse.move(trigger.x + trigger.width / 2, y)
+    await page.mouse.move(gapX, y, { steps: 16 })
+    await page.waitForTimeout(400)
+    expect(await providers.isVisible()).toBe(true)
+    const target = await providers.getByRole('menuitemradio').first().boundingBox()
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 16 })
+    await page.waitForTimeout(400)
+    expect(await providers.isVisible()).toBe(true)
+    const alignment = await providers.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => {
+      const icon = row.querySelector('.tpcowork-provider-logo').getBoundingClientRect()
+      const label = row.querySelector('.tpcowork-menu-label').getBoundingClientRect()
+      return Math.abs(icon.y + icon.height / 2 - label.y - label.height / 2)
+    }))
+    expect(alignment.every(delta => delta < 1)).toBe(true)
+  }
+  await crossProviderGap()
+  await page.screenshot({ path: join(artifacts, 'provider-menu-hover.png'), fullPage: true })
+  await page.mouse.move(menuBox.x + menuBox.width / 2, menuBox.y + menuBox.height - 8)
+  await providers.waitFor({ state: 'hidden' })
+  // Pin the parent near the right edge to exercise the real left-opening geometry.
+  await menu.evaluate(node => { node.style.left = `${window.innerWidth - node.offsetWidth - 16}px` })
+  await menu.getByTestId('composer-provider-trigger').hover()
+  await providers.waitFor()
+  await expect.poll(async () => (await providers.boundingBox()).x < (await menu.boundingBox()).x).toBe(true)
+  await crossProviderGap()
+  await page.screenshot({ path: join(artifacts, 'provider-menu-left-hover.png'), fullPage: true })
+  await page.mouse.move(10, 10)
+  await providers.waitFor({ state: 'hidden' })
+  await menu.evaluate((node, left) => { node.style.left = `${left}px` }, menuBox.x)
+  // Escape from the row closes the whole menu; open it again for the model checks.
+  await page.keyboard.press('Escape')
+  await expect.poll(() => menu.count()).toBe(0)
+  await model.click()
+  await menu.waitFor()
   // A model without levels has no effort section; choosing one with levels adds it without closing the menu.
   expect(await page.getByTestId('composer-thought-slider').count()).toBe(0)
   await menu.getByRole('menuitemradio', { name: /Vision-Exp/ }).click()

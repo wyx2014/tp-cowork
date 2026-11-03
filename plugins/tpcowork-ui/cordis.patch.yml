@@ -18,6 +18,28 @@
 - id: ui-settings-models
   config:
     providerCatalog: false
+# Fresh sessions start in Full access; a patch replaces the whole config, so the base fields are restated.
+# DSH_PERMISSION_MODE still overrides, and a user's saved default keeps applying to their new sessions.
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'danger-full-access'
+    workspaceRoot: !!js process.cwd()
+- id: approval
+  config:
+    policy: !!js "(process.env.DSH_PERMISSION_MODE ?? 'danger-full-access') === 'danger-full-access' ? 'never' : 'ask'"
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+    defaultPreset: !!js process.env.DSH_PERMISSION_MODE ?? 'danger-full-access'
 - insert:
     - id: tpcowork-ui
       name: '@tpcowork/dsh-ui'

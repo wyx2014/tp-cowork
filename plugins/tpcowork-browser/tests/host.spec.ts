@@ -86,3 +86,46 @@ it('loads tools through a Cordis profile, observes policy and retracts tools on 
   expect((await context.systemPrompt.assemble()).sections.some(section => section.name === 'tpcowork-browser:usage')).toBe(false)
   expect(messages.at(-1)?.op).toBe('disable')
 })
+
+it('lets the assistant search imported bookmarks and tells it to look there first', async () => {
+  directory = await mkdtemp(join(tmpdir(), 'dsh-browser-bookmarks-'))
+  const sources = { chrome: { roots: [
+    { id: 'bookmark_bar', title: 'Bookmarks bar', children: [
+      { title: 'Team Wiki', url: 'https://wiki.example.com/' },
+      { title: 'Work', children: [{ title: 'Sales dashboard', url: 'https://bi.example.com/sales' }] },
+    ] },
+  ] } }
+  let stored: unknown = {}
+  const messages: {op:string; payload?:{sessionId?:string}}[] = []
+  Object.defineProperty(process, 'connected', {configurable:true,value:true})
+  Object.defineProperty(process, 'send', {configurable:true,value:(message: Record<string, unknown>, callback: (error?:Error)=>void) => {
+    messages.push(message as never)
+    const value = message.op === 'enable' ? {version:1} : message.op === 'bookmarks' ? {sources: stored} : {}
+    queueMicrotask(() => process.emit('message', {...message, kind:'result', value}, undefined))
+    callback()
+  }})
+  context = new Context()
+  await context.plugin(SystemPrompt)
+  await context.plugin(Tools)
+  await context.plugin({apply(ctx:Context) {
+    ctx.provide('workingDirectory', {get:()=>directory} as never)
+    ctx.provide('attachments', {saveImage:()=>{throw new Error('Unexpected image')}} as never)
+  }})
+  await context.plugin(Browser)
+  await vi.waitFor(() => expect(context!.tools.get('browser_bookmarks')).toBeDefined())
+  const agent = {session:Session.create(SessionId('bookmark-reader'))}
+  const search = async (args: Record<string, unknown>) => {
+    const result = await context!.tools.execute({agent:agent as never,signal:new AbortController().signal,callId:ToolCallId('bookmarks'),name:'browser_bookmarks',arguments:args})
+    expect(result.isError).toBe(false)
+    return JSON.parse((result.content[0] as {text:string}).text)
+  }
+  expect(await search({query:'wiki'})).toMatchObject({total:0, bookmarks:[]})
+  stored = sources
+  expect(await search({query:'dashboard'})).toEqual({total:2, query:'dashboard', returned:1,
+    bookmarks:[{title:'Sales dashboard', url:'https://bi.example.com/sales', folder:'Bookmarks bar / Work', browser:'chrome'}]})
+  expect((await search({})).bookmarks.map((row: {title:string}) => row.title)).toEqual(['Team Wiki', 'Sales dashboard'])
+  expect((await search({limit:1})).note).toMatch(/pass a query/)
+  expect(messages.at(-1)).toMatchObject({op:'bookmarks', payload:{sessionId:'bookmark-reader'}})
+  const usage = (await context.systemPrompt.assemble()).sections.find(section => section.name === 'tpcowork-browser:usage')?.text
+  expect(usage).toContain('search the bookmarks first')
+})

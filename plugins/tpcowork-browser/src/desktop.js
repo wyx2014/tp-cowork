@@ -8,6 +8,8 @@ import { BrowserData } from './desktop-data.js';
 import { BookmarkStore } from './bookmarks.js';
 import { resolveConfig } from './config.js';
 import { BrowserError, CHANNEL, VERSION, PARTITION, IPC, envelope, failure, OperationQueue } from './protocol.js';
+import { WindowZoom } from './window-zoom.js';
+import { beginBrowserNavigation, trackBrowserNavigation } from './navigation.js';
 
 const SCOPE = 'dsh-desktop';
 const BROWSER = 'tpcowork-dsh-iab';
@@ -22,8 +24,29 @@ function faviconUrl(candidates) {
   return undefined;
 }
 
-/** Create the Electron adapter; all renderer calls are admitted by the shell's primary-frame check. */
-export function createDesktopBrowser(options) { return new DesktopBrowser(options); }
+/**
+ * Create the Electron adapter; all renderer calls are admitted by the shell's primary-frame check. This payload is the
+ * product's one plugin seam into the desktop main process, so it also owns the window's interface zoom (`windowZoom`).
+ * The browser itself starts on its first own call, so a zoom request does not bring up browser storage.
+ */
+export function createDesktopBrowser(options) {
+  const zoom = new WindowZoom(options.window, join(options.userData, 'tpcowork-zoom.json'));
+  let browser;
+  const live = () => browser ??= new DesktopBrowser(options);
+  return {
+    willAttach: (...args) => live().willAttach(...args),
+    didAttach: (...args) => live().didAttach(...args),
+    handleHost: (...args) => live().handleHost(...args),
+    request: (op, payload) => {
+      if (op === 'windowZoom') return zoom.request(payload);
+      // As DSH answers before this payload loads: no browser has started, so there is nothing to show yet.
+      if (op === 'snapshot' && browser === undefined) return { enabled: false, tabs: [], downloads: [], permissions: {}, requests: [] };
+      return live().request(op, payload);
+    },
+    disable: async () => { await browser?.disable(); },
+    dispose: async () => { await browser?.dispose(); },
+  };
+}
 
 class DesktopBrowser {
   enabled = false;
@@ -34,6 +57,7 @@ class DesktopBrowser {
   restored = new Map();
   downloadItems = new Map();
   automatedRecordings = new Map();
+  navigationTargets = new Map();
   lifecycle = new OperationQueue();
   dataQueue = new OperationQueue();
   queue = new OperationQueue();
@@ -141,8 +165,10 @@ class DesktopBrowser {
     if (current?.guest && !current.guest.isDestroyed()) return current;
     if (current?.lease) this.leases.delete(current.lease);
     const lease = `tpcowork-browser-${randomUUID()}`;
+    const pendingUrl = this.navigationTargets.get(owner.sessionId) ?? current?.pendingUrl ?? (residencyGeneration !== undefined ? current?.url : undefined);
     const row = { ...current, id, sessionId: owner.sessionId, origin: current?.origin ?? 'agent', lease, partition: PARTITION,
       bootstrap: `about:blank#${lease}`, guest: undefined, attaching: false, ready: false, suspended: false, restoring: residencyGeneration !== undefined, residencyGeneration };
+    if (pendingUrl) beginBrowserNavigation(row, pendingUrl);
     this.records.set(id, row); this.leases.set(lease, row);
     this.publish();
     if (reveal) this.emit('activate', { sessionId: owner.sessionId, tabId: id, visible: true });
@@ -171,21 +197,13 @@ class DesktopBrowser {
       const attached = this.manager.attachGuest(row.id, guest.id, { active: true, windowId: this.window().id, workspaceKey: SCOPE, sessionId: row.sessionId, ...(row.residencyGeneration === undefined ? {} : { residencyGeneration: row.residencyGeneration }) });
       if (!attached.ok) { row.error = attached.reason; guest.close(); this.publish(); return; }
       row.ready = true; row.error = undefined;
-      const update = () => {
-        if (guest.isDestroyed()) return;
-        Object.assign(row, { url: guest.getURL(), title: guest.getTitle(), loading: guest.isLoading(), ...(guest.isLoading() ? { error: undefined, loadErrorCode: undefined } : {}), canGoBack: guest.navigationHistory.canGoBack(), canGoForward: guest.navigationHistory.canGoForward() });
-        this.publish();
-      };
-      for (const event of ['did-navigate', 'did-navigate-in-page', 'page-title-updated', 'did-start-loading', 'did-stop-loading']) guest.on(event, update);
+      trackBrowserNavigation(row, guest, url => this.allowedUrl(url), () => this.publish());
       // A new document has not announced its favicon yet; the previous site's icon must not linger.
       guest.on('did-navigate', () => { if (row.favicon) { row.favicon = undefined; this.publish(); } });
       guest.on('page-favicon-updated', (_event, favicons) => { const favicon = faviconUrl(favicons); if (favicon !== row.favicon) { row.favicon = favicon; this.publish(); } });
-      // The Chromium net error code lets the pane explain certificate failures, as the reference does.
-      guest.on('did-fail-load', (_e, code, message, _url, main) => { if (main && code !== -3) { row.error = message; row.loadErrorCode = code; this.publish(); } });
-      guest.on('render-process-gone', () => { row.ready = false; row.error = 'Page process exited. Restoring the tab.'; this.publish(); if (!guest.isDestroyed()) guest.close({ waitForBeforeUnload: false }); });
-      guest.once('destroyed', () => { if (row.guest === guest) { delete row.guest; row.ready = false; row.attaching = false; this.publish(); } });
-      if (row.initialUrl) { const url = row.initialUrl; delete row.initialUrl; void guest.loadURL(url).catch(error => { row.error = error.message; this.publish(); }); }
-      update();
+      guest.on('render-process-gone', () => { row.ready = false; row.loading = false; row.error = 'Page process exited. Restoring the tab.'; this.publish(); if (!guest.isDestroyed()) guest.close({ waitForBeforeUnload: false }); });
+      guest.once('destroyed', () => { if (row.guest === guest) { delete row.guest; row.ready = false; row.loading = false; row.attaching = false; this.publish(); } });
+      if (row.initialUrl) { const url = row.initialUrl; delete row.initialUrl; void guest.loadURL(url).catch(error => { if (error.code !== 'ERR_ABORTED' && !row.error) { row.error = error.message; row.loading = false; this.publish(); } }); }
     });
     guest.setWindowOpenHandler(({ url }) => {
       if (row && this.allowedUrl(url)) void this.humanOpen(row.sessionId, url).catch(error => { row.error = error.message; this.publish(); });
@@ -205,6 +223,7 @@ class DesktopBrowser {
     const id = `browser:${randomUUID()}`;
     const row = this.reserve(id, this.context(sessionId), undefined, false);
     Object.assign(row, { origin: 'user', active: true, initialUrl: url });
+    if (url) beginBrowserNavigation(row, url);
     this.publish();
     if (reveal) this.emit('activate', { sessionId, tabId: id, visible: true });
     return { tabId: id };
@@ -227,8 +246,18 @@ class DesktopBrowser {
       if (this.dataBusy) throw new BrowserError('data_busy', 'Browser data is being updated. Try again when it finishes.');
       if (!human && [...this.records.values()].some(item => item.sessionId === sessionId && item.paused && (!command.tabId || item.id === command.tabId))) throw new BrowserError('human_control', 'The user controls this page. Wait for them to resume automation.');
       this.emit('operation', { sessionId, tabId: command.tabId, active: true, method: command.method });
+      if (command.method === 'navigate') {
+        this.navigationTargets.set(sessionId, command.url);
+        if (row) { beginBrowserNavigation(row, command.url); this.publish(); }
+      }
+      const navigationFailed = error => {
+        if (command.method !== 'navigate') return;
+        const target = row ?? [...this.records.values()].find(item => item.sessionId === sessionId && item.pendingUrl === command.url);
+        if (target?.pendingUrl && !target.error) { target.error = error?.message ?? 'Browser operation failed'; target.loading = false; this.publish(); }
+      };
       try {
         const result = await this.manager.execute(scope, command, signal);
+        if (!result.ok) navigationFailed(result.error);
         if (result.recording && !human && command.method === 'recordingStart') this.automatedRecordings.set(result.recording.id, { sessionId, tabId: result.meta?.tabId ?? command.tabId });
         if (result.recording && result.recording.status !== 'running') this.automatedRecordings.delete(result.recording.id);
         if (result.tab) {
@@ -240,7 +269,11 @@ class DesktopBrowser {
         if (completed && result.ok && !completed.restoring) await this.report(completed);
         this.publish();
         return result;
-      } finally { this.emit('operation', { sessionId, tabId: command.tabId, active: false }); }
+      } catch (error) { navigationFailed(error); throw error; }
+      finally {
+        if (command.method === 'navigate') this.navigationTargets.delete(sessionId);
+        this.emit('operation', { sessionId, tabId: command.tabId, active: false });
+      }
     };
     // Dialog replies must be able to settle a page action waiting for that dialog.
     return ['getDialog', 'handleDialog', 'recordingStatus', 'recordingCancel', 'list', 'listUserTabs'].includes(command.method)
@@ -260,6 +293,8 @@ class DesktopBrowser {
       else if (message.op === 'disable') { await this.disable(); result = {}; }
       else if (message.op === 'command') result = await this.command(message.payload?.sessionId, message.payload?.command, message.id, controller.signal);
       else if (message.op === 'ambient') result = this.ambient(message.payload?.sessionId);
+      // Imported bookmarks, read-only, for the assistant's browser_bookmarks tool.
+      else if (message.op === 'bookmarks') result = { sources: this.bookmarks.sources };
       else throw new BrowserError('invalid_operation', 'Unknown browser bridge operation');
       reply({ type: CHANNEL, version: VERSION, kind: 'result', id: message.id, value: result });
     } catch (error) { reply({ type: CHANNEL, version: VERSION, kind: 'result', id: message.id, error: failure(error) }); }

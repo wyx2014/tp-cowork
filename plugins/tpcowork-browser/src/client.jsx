@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { defineStore } from '@deepseek-ai/dsh-client-store';
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { Button, Modal, Switch } from '@deepseek-ai/dsh-client-ui-primitives';
 import { BrowserClient } from './client-controller.js';
 import { BrowserTool } from './tool-card.jsx';
 import { Guest } from './guest.jsx';
@@ -12,7 +12,8 @@ import { BrowserSurface, BrowserToolbar, DEFAULT_RESPONSIVE_VIEWPORT, MoreMenu, 
 import { Icon } from './icons.jsx';
 import { AddressSuggestions, BookmarkMenu, bookmarkFolderName, bookmarkImportMessage, useBookmarkList } from './bookmarks-ui.jsx';
 import { flattenBookmarks, searchBookmarks } from './bookmark-search.js';
-import { displayBrowserUrl, isCertificateBrowserLoadErrorCode, normalizeBrowserUrl } from '../vendor/tpcowork/packages/ui/src/embeddedBrowserHelpers.ts';
+import { browserAddress } from './navigation.js';
+import { isCertificateBrowserLoadErrorCode, normalizeBrowserUrl } from '../vendor/tpcowork/packages/ui/src/embeddedBrowserHelpers.ts';
 import { zh, en } from './locales.js';
 import styles from './styles.css';
 
@@ -44,6 +45,8 @@ function BrowserBody(props) {
   const importChoice = useImportPrompt(value => value);
   const nativeId = state.bindings[tab.id] ?? savedId ?? tab.navigation.params?.nativeId;
   const row = state.tabs.find(row => row.id === nativeId);
+  const address = browserAddress(row ?? { initialUrl: tab.navigation.params?.url });
+  const loading = row?.loading === true || (!row && Boolean(address));
   const anchor = useRef();
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
@@ -62,6 +65,7 @@ function BrowserBody(props) {
   };
   const command = (method, values = {}) => run('command', { command: { method, ...(nativeId ? { tabId: nativeId } : {}), ...values } });
   const invoke = operation => { void operation.catch(() => {}); };
+  const reload = () => invoke(row?.pendingUrl ? command('navigate', { url: row.pendingUrl }) : command('reload'));
   useLayoutEffect(() => {
     let release;
     let ended = false;
@@ -69,7 +73,7 @@ function BrowserBody(props) {
       element: anchor.current, signal: tab.signal, save: id => actions.bind(tab.id, id) }).then(dispose => { if (ended) dispose?.(); else release = dispose; }).catch(fail);
     return () => { ended = true; release?.(); unmount(tab.id); };
   }, [tab.id, sessionId]);
-  useEffect(() => tab.actions.bindCommands({ refresh: () => invoke(command('reload')) }), [tab.actions, nativeId]);
+  useEffect(() => tab.actions.bindCommands({ refresh: reload }), [tab.actions, nativeId, row?.pendingUrl]);
   useEffect(() => {
     if (!recording || recording.status !== 'running') return;
     const timer = setInterval(() => { void command('recordingStatus', { recordingId: recording.id }).then(result => setRecording(result.recording)).catch(() => {}); }, 1000);
@@ -120,39 +124,36 @@ function BrowserBody(props) {
     ...[10, 30, 60].map(seconds => ({ label: t('recordFor').replace('{seconds}', String(seconds)), disabled: !row?.ready || recording?.status === 'running', onSelect: () => record(seconds) })),
     { separator: true },
     { label: t('newTab'), onSelect: () => invoke(run('humanOpen')) },
-    ...(pages.length > 1 ? pages.filter(item => item.id !== nativeId).map(item => ({ icon: 'Globe', label: item.title || item.url || t('title'), onSelect: () => props.reveal(sessionId, item.id) })) : []),
+    ...(pages.length > 1 ? pages.filter(item => item.id !== nativeId).map(item => ({ icon: 'Globe', label: item.title || browserAddress(item) || t('title'), onSelect: () => props.reveal(sessionId, item.id) })) : []),
   ]} />;
-  const showImport = state.enabled && tab.visible && (importOpen || importPromptPending(importChoice));
-  const importChrome = async () => {
-    setImportOpen(true);
-    const result = await request('importChrome');
-    // Pages already open load the imported sign-ins on their next request.
-    if (result.success && row?.url?.startsWith('http')) invoke(command('reload'));
-    return result;
-  };
+  // The first-use bookmark offer, until bookmarks have been imported from any browser.
+  const hasBookmarks = Object.keys(state.bookmarks?.sources ?? {}).length > 0;
+  const showImport = state.enabled && tab.visible && (importOpen || (importPromptPending(importChoice) && !hasBookmarks));
+  useEffect(() => { if (showImport) bookmarks.want(); }, [showImport]);
+  const importBookmarks = browser => { setImportOpen(true); return request('importBookmarks', { browser }); };
   const decideImport = choice => { setImportOpen(false); decideImportPrompt(choice); };
-  const blank = !row?.url || row.url.startsWith('about:blank');
+  const blank = !browserAddress({ url: row?.url });
   const pageState = !state.enabled ? <PageState kind="unavailable" t={t} />
     : row?.suspended ? <PageState kind="empty" onRetry={() => invoke(run('ensure'))} t={t} />
-    : row?.error && row.loadErrorCode ? <PageState kind="error" message={row.error} certificate={isCertificateBrowserLoadErrorCode(row.loadErrorCode)} onRetry={() => invoke(command('reload'))} t={t} />
-    : row?.error ? <PageState kind="crashed" message={row.error} t={t} />
-    : blank ? <PageState kind={row && !row.ready ? 'starting' : 'empty'} t={t} /> : null;
+    : row?.error && (row.loadErrorCode || row.pendingUrl) ? <PageState kind="error" message={row.error} loadErrorCode={row.loadErrorCode} certificate={isCertificateBrowserLoadErrorCode(row.loadErrorCode)} onRetry={reload} t={t} />
+    : row?.error ? <PageState kind="crashed" message={row.error} onRetry={reload} t={t} />
+    : blank ? <PageState kind={loading || (row && !row.ready) ? 'starting' : 'empty'} t={t} /> : null;
   return <div className="tpcb-browser" ref={surface} data-tpcowork-browser={nativeId ?? ''}>
-    {showImport && <ImportPrompt anchor={surface} onImport={importChrome} onDecide={decideImport} t={t} />}
-    <BrowserToolbar row={row} t={t} editing={editing} address={editing ? draft : displayBrowserUrl(row?.url ?? 'about:blank')}
+    {showImport && <ImportPrompt anchor={surface} available={bookmarks.list?.available} onImport={importBookmarks} onDecide={decideImport} t={t} />}
+    <BrowserToolbar row={row} t={t} editing={editing} address={editing ? draft : address} loading={loading}
       onAddressChange={value => { setDraft(value); setTyped(true); setActive(-1); }}
-      onAddressFocus={() => { setDraft(row?.url?.startsWith('http') ? row.url : ''); setEditing(true); setTyped(false); setActive(-1); bookmarks.want(); }}
+      onAddressFocus={() => { setDraft(address); setEditing(true); setTyped(false); setActive(-1); bookmarks.want(); }}
       onAddressBlur={() => setEditing(false)} onAddressKeyDown={addressKeyDown} addressRef={addressRef}
       suggestion={matches.length > 0 ? (active >= 0 ? `tpcb-suggestion-${active}` : '') : undefined}
       bookmarks={<BookmarkMenu list={bookmarks.list} enabled={state.enabled} onOpen={bookmarks.want} onNavigate={go}
         onImport={browser => request('importBookmarks', { browser })} t={t} />}
-      onSubmit={submit} onBack={() => invoke(command('back'))} onForward={() => invoke(command('forward'))} onReload={() => invoke(command('reload'))}
+      onSubmit={submit} onBack={() => invoke(command('back'))} onForward={() => invoke(command('forward'))} onReload={reload}
       responsive={responsive} onToggleResponsive={toggleResponsive} menu={menu}
       siteControl={origin ? <SiteSettings origin={origin} rules={state.permissions?.[origin]} t={t}
         onChange={(permission, decision) => invoke(run('permissionSet', { origin, permission, decision }))} /> : null} />
     {tab.visible && <AddressSuggestions anchor={addressRef} matches={matches} active={active} onPick={go} t={t} />}
     {responsive && <ViewportToolbar viewport={viewport} zoom={zoom} onViewportChange={resize} onZoomChange={setZoom} t={t} />}
-    {(error || state.error) && <div className="tpcb-error" role="alert">{error || state.error}</div>}
+    {(error || state.error) && !row?.error && <div className="tpcb-error" role="alert">{error || state.error}</div>}
     {recording && <div className="tpcb-recording" role="status">{recording.status === 'completed' ? t('recordReady') : recording.status === 'running' ? t('recording') : recording.error ?? t('cancelled')}{recording.status === 'running' && <button type="button" onClick={() => invoke(command('recordingCancel', { recordingId: recording.id }).then(result => setRecording(result.recording)))}>{t('stopRecord')}</button>}{recording.artifact && <button type="button" onClick={() => invoke(run('saveRecording', { recordingId: recording.id }))}>{t('save')}</button>}</div>}
     <BrowserSurface anchorRef={anchor} responsive={responsive && !pageState} viewport={viewport} zoom={zoom} onResize={resize} warning={resizeWarning} resized={resized} zoomLabel={t('viewportLabel')} t={t}
       overlay={pageState} hidePage={Boolean(pageState)}
@@ -179,30 +180,53 @@ function BrowserTitle({ useTabInfo, useBrowser, useStore, t }) {
 }
 
 
-function Settings({ useBrowser, request, t }) {
-  const state = useBrowser(value => value); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [confirm, setConfirm] = useState(false);
-  const run = async (op, payload) => { setBusy(true); setMessage(''); try { const result = await request(op, payload); setMessage(op === 'importChrome' ? importSummary(result, t) : op === 'importBookmarks' ? bookmarkImportMessage(result, t) : t('done')); } catch (error) { setMessage(`${t('error')}: ${error.message}`); } finally { setBusy(false); } };
-  return <section className="tpcb-settings"><h2>{t('settings')}</h2><p>{t('settingsIntro')}</p>
+export function Settings({ useBrowser, request, t }) {
+  const state = useBrowser(value => value);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const run = async (op, payload) => {
+    setBusy(true); setMessage('');
+    try {
+      const result = await request(op, payload);
+      setMessage(op === 'importChrome' ? importSummary(result, t) : op === 'importBookmarks' ? bookmarkImportMessage(result, t) : t('done'));
+    } catch (error) { setMessage(`${t('error')}: ${error.message}`); }
+    finally { setBusy(false); }
+  };
+  const disabled = busy || !state.enabled;
+  const row = (title, description, control) => <div className="tpcb-settings-row"><div className="tpcb-settings-copy"><strong>{title}</strong><p>{description}</p></div><div className="tpcb-settings-action">{control}</div></div>;
+  return <section className="tpcb-settings">
+    <h2>{t('settings')}</h2>
     {!state.enabled && <p role="alert">{t('unavailable')}</p>}
-    <div className="tpcb-settings-card"><strong>{t('import')}</strong><p>{t('importHelp')}</p><button disabled={busy || !state.enabled} onClick={() => { void run('importChrome'); }}>{t('import')}</button></div>
-    <div className="tpcb-settings-card"><strong>{t('bookmarks')}</strong><p>{t('bookmarksSettingsHelp')}</p>
-      {Object.entries(state.bookmarks?.sources ?? {}).map(([browser, source]) => <p key={browser} className="tpcb-hint">
-        {t('bookmarksSummary').replace('{browser}', browser === 'edge' ? 'Edge' : 'Chrome').replace('{count}', String(source.count))
-          .replace('{time}', new Date(source.importedAt).toLocaleString())}</p>)}
-      {['chrome', 'edge'].map(browser => <button key={browser} disabled={busy || !state.enabled} onClick={() => { void run('importBookmarks', { browser }); }}>
-        {t(state.bookmarks?.sources?.[browser] ? 'bookmarksReimport' : 'bookmarksImportFrom').replace('{browser}', browser === 'edge' ? 'Edge' : 'Chrome')}</button>)}</div>
-    <div className="tpcb-settings-card"><button disabled={busy || !state.enabled} onClick={() => { void run('clearData', { mode: 'cache' }); }}>{t('clearCache')}</button><button disabled={busy || !state.enabled} onClick={() => setConfirm(true)}>{t('clearAll')}</button>
-      <Modal open={confirm} className="tp-confirm-dialog" title={t('clearAll')} description={t('clearConfirm')} closeLabel={t('cancel')} showCloseButton={false} onClose={() => setConfirm(false)}
-        footer={<><Button variant="outline" data-modal-autofocus onClick={() => setConfirm(false)}>{t('cancel')}</Button><Button variant="primary" className="tp-dialog-danger" disabled={busy} onClick={() => { setConfirm(false); void run('clearData', { mode: 'all', confirmed: true }); }}>{t('confirm')}</Button></>} /></div>
-    <h3>{t('security')}</h3>
-    <div className="tpcb-settings-card"><label className="tpcb-permission-rule"><span><strong>{t('insecureCertificates')}</strong><br /><span className="tpcb-hint">{t('insecureCertificatesHelp')}</span></span>
-      <input type="checkbox" role="switch" aria-label={t('insecureCertificates')} checked={state.security?.allowInsecureCertificates === true} disabled={busy || !state.enabled}
-        onChange={event => { void run('security', { allowInsecureCertificates: event.target.checked }); }} /></label>
-      {state.security?.restartRequired && <p role="status" className="tpcb-hint">{t('insecureCertificatesRestart')}</p>}</div>
-    <div role="status">{busy ? t('busy') : message}</div>
-    <h3>{t('permissions')}</h3>{Object.keys(state.permissions).length === 0 && <p>{t('noPermissions')}</p>}
-    {Object.entries(state.permissions).map(([origin, rules]) => <div key={origin} className="tpcb-settings-card"><strong>{origin}</strong>{Object.entries(rules).map(([permission, value]) => <label className="tpcb-permission-rule" key={permission}>{permission}<select aria-label={`${origin} ${permission}`} value={value} disabled={busy} onChange={event => { void run('permissionSet', { origin, permission, decision: event.target.value }); }}>{['ask', 'allow', 'deny'].map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label>)}</div>)}
-    <h3>{t('downloads')}</h3>{!state.downloads.length && <p>{t('noDownloads')}</p>}{state.downloads.map(file => <div key={file.id} className="tpcb-settings-card"><strong>{file.name}</strong><span> {t(file.status in en ? file.status : 'interrupted')}</span>{file.status === 'completed' && <button onClick={() => { void run('revealDownload', { id: file.id }); }}>{t('reveal')}</button>}</div>)}
+    <div className="tpcb-settings-card">
+      {row(t('controlTitle'), t('controlHelp'), <Switch label={t('controlTitle')} checked={state.enabled} disabled onChange={() => {}} />)}
+      {row(t('importTitle'), t('importDescription'), <button className="tpcb-settings-outline" disabled={disabled} onClick={() => { void run('importChrome'); }}>{t('importButton')}</button>)}
+    </div>
+    <div className="tpcb-settings-group"><h3>{t('security')}</h3><div className="tpcb-settings-card">
+      {row(t('insecureCertificates'), t('insecureCertificatesHelp'), <Switch label={t('insecureCertificates')} checked={state.security?.allowInsecureCertificates === true} disabled={disabled}
+        onChange={checked => { void run('security', { allowInsecureCertificates: checked }); }} />)}
+      {state.security?.restartRequired && <p role="status" className="tpcb-settings-notice">{t('insecureCertificatesRestart')}</p>}
+    </div></div>
+    <div className="tpcb-settings-group"><h3>{t('browserData')}</h3><div className="tpcb-settings-card">
+      {row(t('clearCacheTitle'), t('clearCacheHelp'), <button className="tpcb-settings-outline" disabled={disabled} onClick={() => { void run('clearData', { mode: 'cache' }); }}>{t('clearCache')}</button>)}
+      {row(t('clearAllTitle'), t('clearAllHelp'), <button className="tpcb-settings-danger" disabled={disabled} onClick={() => setConfirm(true)}>{t('clearAllButton')}</button>)}
+    </div></div>
+    {(busy || message) && <div role="status" className="tpcb-settings-notice">{busy ? t('busy') : message}</div>}
+    <div className="tpcb-settings-group"><h3>{t('bookmarks')}</h3><div className="tpcb-settings-card">
+      {row(t('bookmarks'), t('bookmarksSettingsHelp'), <div className="tpcb-settings-button-group">{['chrome', 'edge'].map(browser => <button className="tpcb-settings-outline" key={browser} disabled={disabled} onClick={() => { void run('importBookmarks', { browser }); }}>
+        {t(state.bookmarks?.sources?.[browser] ? 'bookmarksReimport' : 'bookmarksImportFrom').replace('{browser}', browser === 'edge' ? 'Edge' : 'Chrome')}</button>)}</div>)}
+      {Object.entries(state.bookmarks?.sources ?? {}).map(([browser, source]) => <p key={browser} className="tpcb-settings-notice">{t('bookmarksSummary').replace('{browser}', browser === 'edge' ? 'Edge' : 'Chrome').replace('{count}', String(source.count)).replace('{time}', new Date(source.importedAt).toLocaleString())}</p>)}
+    </div></div>
+    <div className="tpcb-settings-group"><h3>{t('permissions')}</h3>
+      {Object.keys(state.permissions).length === 0 && <p className="tpcb-settings-notice">{t('noPermissions')}</p>}
+      {Object.entries(state.permissions).map(([origin, rules]) => <div key={origin} className="tpcb-settings-card tpcb-settings-permissions"><strong>{origin}</strong>{Object.entries(rules).map(([permission, value]) => <label className="tpcb-permission-rule" key={permission}>{permission}<select aria-label={`${origin} ${permission}`} value={value} disabled={busy} onChange={event => { void run('permissionSet', { origin, permission, decision: event.target.value }); }}>{['ask', 'allow', 'deny'].map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label>)}</div>)}
+    </div>
+    <div className="tpcb-settings-group"><h3>{t('downloads')}</h3>
+      {!state.downloads.length && <p className="tpcb-settings-notice">{t('noDownloads')}</p>}
+      {state.downloads.map(file => <div key={file.id} className="tpcb-settings-card">{row(file.name, t(file.status in en ? file.status : 'interrupted'), file.status === 'completed' && <button className="tpcb-settings-outline" onClick={() => { void run('revealDownload', { id: file.id }); }}>{t('reveal')}</button>)}</div>)}
+    </div>
+    <Modal open={confirm} className="tp-confirm-dialog" title={t('clearAllTitle')} description={t('clearConfirm')} closeLabel={t('cancel')} showCloseButton={false} onClose={() => setConfirm(false)}
+      footer={<><Button variant="outline" data-modal-autofocus disabled={busy} onClick={() => setConfirm(false)}>{t('cancel')}</Button><Button variant="primary" className="tp-dialog-danger" disabled={busy} onClick={() => { setConfirm(false); void run('clearData', { mode: 'all', confirmed: true }); }}>{t('confirm')}</Button></>} />
   </section>;
 }
 
@@ -217,7 +241,7 @@ export function apply(ctx) {
   const importPrompt = createImportPromptPreferences();
   const request = async (op, payload) => {
     const result = await client.request(op, payload);
-    if (op === 'importChrome' && result.success === true) importPrompt.decide({ choice: 'imported' });
+    if (op === 'importBookmarks' && result.success === true) importPrompt.decide({ choice: 'imported' });
     return result;
   };
   const injected = { hooks: { browser: client.state, importPrompt: importPrompt.state }, decideImportPrompt: importPrompt.decide,
@@ -231,7 +255,7 @@ export function apply(ctx) {
     ['shell.overlay', Runtime, { id: ID }], ['settings.section', Settings, { id: ID, order: 45, label: () => t('settings') }],
   ]) ctx.slots.inject(name, () => ctx.slots.register({ name, ...extra, locale: NS, inject: () => injected }, component));
   ctx.slots.inject('tool.call.toolview', function* () {
-    for (const key of ['browser_tabs', 'browser_navigate', 'browser_snapshot', 'browser_act', 'browser_screenshot', 'browser_dialog', 'browser_download', 'browser_viewport', 'browser_recording']) {
+    for (const key of ['browser_tabs', 'browser_navigate', 'browser_snapshot', 'browser_act', 'browser_screenshot', 'browser_dialog', 'browser_download', 'browser_viewport', 'browser_recording', 'browser_bookmarks']) {
       yield ctx.slots.register({ name: 'tool.call.toolview', key, locale: NS, inject: () => injected }, BrowserTool);
     }
   });

@@ -39,6 +39,8 @@ npm run test:artifact
 
 商店顶部不显示登录状态或上传技能入口；账号登录与退出由首页侧栏管理，业务操作失败仍保留反馈。
 
+**技能以当前登录用户的身份调用内部接口。** Host 在本机 `127.0.0.1` 启动转发服务，并通过 DSH `shellEnv` 为模型执行的每条命令提供 `DSH_TPCOWORK_API_URL`、`DSH_TPCOWORK_API_KEY`（每次启动随机生成的转发口令）和 `DSH_TPCOWORK_PYTHON`（自带 Python）。脚本请求 `$DSH_TPCOWORK_API_URL/<接口名>/<路径>` 并带 `X-TPCowork-Key`，转发服务核对口令，在白名单 `tpcoworkhub.apis`（接口名 → 基础地址；`hub` 始终指向 TP Cowork Hub）中查到接口后，换上 `Authorization: Bearer <登录令牌>` 转发并原样返回响应；令牌不进入脚本环境、对话或日志。未登录或已过期时返回带 `X-TPCowork-Relay-Error` 的 401；不跟随重定向，不转发 Cookie；Hub 返回 401 时登录标记为过期。内置技能「接口登录示例」（`resources/skills/tpcowork-api-auth`，含可复制的 `tpcowork_api.py`）演示查询“我是谁”。编写方法、接口端验证示例和错误代码见[技能调用内部接口指南](../../docs/toolbox/skill-api-auth.md)；实现为 `src/host/tpcoworkhub/relay.ts`，单元测试 `tests/skill-api-relay.spec.ts`，端到端测试 `scripts/tests/skill-api-auth.spec.mjs`。
+
 手动创建技能、新增／编辑 MCP 均使用独立的面包屑编辑页，返回列表时恢复原有焦点和滚动位置。MCP 的表单元素与 nanobot-gui 对齐：新增时切换远程服务、本地程序或导入配置，支持直接填写认证信息、逐项增删参数及环境变量、服务标识自动生成、超时设置、未保存配置测试，以及保存并检查连接。JSON 导入先预览，再对重名服务选择替换、改名或跳过；确认后批量保存。令牌及变量值由 Host 写入 DSH 凭证服务，编辑时只显示字段名，留空保留已保存值。当前原生运行时支持 Streamable HTTP 和 stdio，SSE 选项暂不可用。
 
 安装集成通过现有 DSH profile/bundle 流程应用 `cordis.patch.yml`。`node scripts/desktop-plugin.mjs install toolbox` 增补工具箱，`base` 仍是 core + UI；`all` 包含工具箱。不要直接用 Node import 浏览器入口，它由 DSH ModuleLoader 加载。构建、离线归档、安装和升级步骤见 `../../docs/toolbox/packaging.md`。
