@@ -8,6 +8,7 @@
 | `index.js` | 将产品身份接入 DSH 提示词组装，保留自定义角色与其他插件的贡献 |
 | `cordis.patch.yml` | 注册 core 插件并关闭官方 DeepSeek API-Key 来源，不覆盖用户的 system-prompt 或 preset 配置 |
 | `src/model.ts` → `model.js` | 独立注册内网模型，复用 DSH 的 pi-ai 适配器与配置解析 |
+| `src/model-sync.ts` | 按模型服务实际提供的模型同步模型列表，并为改名后的默认模型选择替代 |
 | `deployment.js`、`build.mjs` | 部署配置校验、一次性导入、构建与首次凭证初始化 |
 | `model.patch.yml` | 内网模型配置与新会话的默认选择，不修改其他模型入口 |
 | `deployment.local.json` | 随内网插件包分发的部署配置，忽略提交，文件权限为 `0600` |
@@ -39,7 +40,7 @@ DSH 对声明 `complete: true` 的完整提示词拥有最终决定权，因此 
 | 推理 | 关闭；不发送 `reasoning_effort` |
 | 设置区 / 凭证引用 | `tpcowork-core-model` / `TPCOWORK_DEEPSEEK_API_KEY` |
 
-内网模型独立注册，bundle 默认关闭官方 DeepSeek API-Key 来源 `llm-deepseek`，保留 `llm-pi-ai`、账号模型和已有凭证。用户保存的默认模型与会话模型选择不被改写；原先选择官方来源的用户需切换到“资产DeepSeek”或重新启用该来源。没有保存默认选择的新安装使用内网模型。移除 core bundle 后恢复上游来源配置。
+内网模型独立注册，bundle 默认关闭官方 DeepSeek API-Key 来源 `llm-deepseek`，保留 `llm-pi-ai`、账号模型和已有凭证。会话模型选择不被改写；默认模型只在属于“资产DeepSeek”且模型服务已不再提供时改写（见下文“模型列表自动同步”）；原先选择官方来源的用户需切换到“资产DeepSeek”或重新启用该来源。没有保存默认选择的新安装使用内网模型。移除 core bundle 后恢复上游来源配置。
 
 首次准备当前项目的内网发行配置，在工作区根目录执行：
 
@@ -48,6 +49,14 @@ node plugins/tpcowork-core/build.mjs --import-tpcowork /Users/wyx/project/nanobo
 ```
 
 此命令一次性读取参考项目的 `config/provider/desktop-deployment.local.json`，将地址和凭证写入 core 的本地部署文件。安装后的插件只读取自己包内的文件，不访问参考项目。`model.patch.yml` 只包含非秘密模型配置；首次启动将内网凭证写入 DSH 凭证服务，已存在的同名凭证优先，不覆盖原来源的凭证。
+
+### 模型列表自动同步
+
+模型服务改名或更换模型时不需要重新构建。与 nanobot-gui 相同，每次启动只请求一次（等待部署凭证写入后，最多 10 秒），插件用部署凭证请求 `GET {apiBase}/models`，以返回的聊天模型作为“资产DeepSeek”的模型列表（忽略 embedding、rerank 等非聊天模型）。仍在列表中的模型沿用构建时的容量；新模型优先使用服务报告的容量，否则沿用 `contextWindow` / `maxTokens`。
+
+新会话的默认模型如果属于“资产DeepSeek”但服务已不再提供，会自动改为：仍提供的构建默认模型；否则名称前缀最接近的模型（如 `deepseek_v4_flash` → `deepseek_v4_flash_api`）；否则服务返回的第一个模型。改写通过 DSH 默认模型服务保存。用户默认选择了其他供应商，或所选模型仍在服务中时不改动。服务不可达、返回错误或没有聊天模型时，本次运行保留构建时的模型列表与当前默认，下次启动再请求。已有会话若使用已下线的模型，需要在会话中手动切换。
+
+`modelId` 因此只是首次启动和离线时的回退值。服务地址或凭证变化仍按下述方式修改。
 
 调整 `deployment.local.json` 的 `apiBase`、`apiKey`、`providerId`、`providerName`、`modelId`、`contextWindow` 或 `maxTokens` 后，重新运行 `node plugins/tpcowork-core/build.mjs`。构建时 `TPCOWORK_DEEPSEEK_BASE_URL` 与 `TPCOWORK_DEEPSEEK_API_KEY` 环境变量优先于本地文件；地址、模型和容量也可以通过 DSH 模型设置页调整，保存后覆盖 bundle 默认值。凭证的后续更换通过 DSH 凭证设置完成。
 

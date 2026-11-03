@@ -28,6 +28,8 @@ function transport(responses: string[][]) {
   const urls: string[] = []
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)
+    // The startup model-list sync; these tests cover requests, so the server has no listing.
+    if (request.method === 'GET') return new Response('not found', { status: 404 })
     urls.push(request.url)
     paths.push(new URL(request.url).pathname)
     headers.push(request.headers)
