@@ -319,7 +319,7 @@ export async function apply(ctx: Context): Promise<void> {
     document.head.appendChild(style)
     return () => style.remove()
   })
-  ctx.inject(['configForms', 'slots', 'locale', 'remote.memoryCatalog'], uiCtx => {
+  ctx.inject(['configForms', 'slots', 'locale', 'remote.memoryCatalog', 'remote.session'], uiCtx => {
     uiCtx.effect(() => uiCtx.locale.register(namespace, { en, zh }))
     const t = uiCtx.locale.bind(namespace) as Translate
     const form = uiCtx.configForms.get<MemorySettings>(entry)
@@ -328,7 +328,8 @@ export async function apply(ctx: Context): Promise<void> {
       if (!result.ok) throw result.error
       return memoryCatalogValue.parse(result.value)
     }
-    const session = () => uiCtx.get('remote')?.session
+    // Declared in the inject list above: reading an undeclared remote namespace throws, which hid every open button.
+    const session = () => uiCtx.remote.session
     const opener: MemoryOpener = {
       available: async () => {
         const result = await session()?.canOpenWorkspacePath()
