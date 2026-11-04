@@ -46,7 +46,7 @@ try {
             New-ItemProperty -LiteralPath $key -Name UninstallString -Value ('"' + $legacyUninstaller + '"') | Out-Null
         }
     }
-    $modes = if ($Diagnostics) { @('feature diagnostics') } else { @('first installation', 'same-directory upgrade') }
+    $modes = if ($Diagnostics) { @('feature diagnostics') } else { @('first installation', 'same-directory upgrade', 'legacy-profile upgrade') }
     foreach ($mode in $modes) {
         Write-Output "Checking $mode at $application"
         # NSIS requires /D last and unquoted, even when the path contains spaces.
@@ -63,13 +63,16 @@ try {
             }
         }
         $uiScript = if ($Diagnostics) { 'smoke-windows-features.mjs' } else { 'smoke-windows-ui.mjs' }
-        & node (Join-Path $PSScriptRoot $uiScript) (Join-Path $application 'TP Cowork.exe') (Join-Path $scratch 'profile') (Join-Path $PSScriptRoot "../test-results/windows-install/$mode")
+        $profileName = if ($mode -eq 'legacy-profile upgrade') { 'legacy-profile' } else { 'profile' }
+        $uiArguments = @((Join-Path $PSScriptRoot $uiScript), (Join-Path $application 'TP Cowork.exe'), (Join-Path $scratch $profileName), (Join-Path $PSScriptRoot "../test-results/windows-install/$mode"))
+        if ($mode -eq 'legacy-profile upgrade') { $uiArguments += '--legacy-profile' }
+        & node @uiArguments
         if ($LASTEXITCODE -ne 0) { throw "Installed product $mode UI verification failed." }
         if (Test-Path -LiteralPath $legacyMarker) { throw 'The DSH installer invoked the nanobot uninstaller.' }
         foreach ($key in $ownedLegacyKeys) {
             if ((Get-ItemPropertyValue -LiteralPath $key -Name InstallLocation) -ne $legacy) { throw 'The DSH installer replaced the nanobot registration.' }
         }
-        $residue = @(Get-ChildItem -LiteralPath $scratch -Directory | Where-Object Name -notin @('TP Cowork', 'nanobot', 'profile'))
+        $residue = @(Get-ChildItem -LiteralPath $scratch -Directory | Where-Object Name -notin @('TP Cowork', 'nanobot', 'profile', 'legacy-profile'))
         if ($residue.Count -ne 0) { throw 'Installer left staging or backup directories after success.' }
         Write-Output "TP Cowork: $mode and installed product verified"
     }

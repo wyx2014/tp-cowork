@@ -11,6 +11,17 @@ export async function inspectInstalledUi(check) {
   const home = resolve(homeArgument), output = resolve(outputArgument)
   await mkdir(home, { recursive: true })
   await mkdir(output, { recursive: true })
+  const legacyProfile = process.argv[5] === '--legacy-profile'
+  const legacyMarker = join(home, 'upgrade-user-data.txt')
+  if (legacyProfile) {
+    const profile = join(home, 'profiles/desktop')
+    await mkdir(profile, { recursive: true })
+    const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app',
+      ...['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'experts'].map(name => `@tpcowork/dsh-${name}`)]
+    await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'dsh-profile-desktop', private: true,
+      description: 'Existing profile retained during product upgrade', dependencies: {}, dsh: { profile: { bundles } } }), { flag: 'wx' })
+    await writeFile(legacyMarker, 'Retain existing user data during product upgrade\n', { flag: 'wx' })
+  }
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)))
   delete env.ELECTRON_RUN_AS_NODE
   const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
@@ -89,6 +100,11 @@ export async function inspectInstalledUi(check) {
     page.setDefaultTimeout(20_000)
     await finishFirstRunGuide(page)
     await check(page, { capture: name => captureWindow(page, join(output, `${name}.png`)) })
+    if (legacyProfile) {
+      const profile = JSON.parse(await readFile(join(home, 'profiles/desktop/package.json'), 'utf8'))
+      assert.equal(profile.description, 'Existing profile retained during product upgrade')
+      assert.equal(await readFile(legacyMarker, 'utf8'), 'Retain existing user data during product upgrade\n')
+    }
     await waitForPageAssets(page)
   } catch (error) {
     failure = error
