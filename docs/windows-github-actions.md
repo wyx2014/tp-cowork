@@ -20,13 +20,15 @@
 4. `build_version` 保持 `auto`；`deployment` 保持 `standalone`，生成独立测试包，无需配置更新策略服务、证书或模型 API Key。
 5. 成功后在运行页面的 **Artifacts** 下载 `TPCowork-windows-x64-…`，解压得到 EXE、SHA-256 文件和 `build-info.json`。后者记录产品、底座两个实际 commit 和打包模式。
 
-工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、七个产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。安装包保留 30 天，失败诊断日志保留 14 天。工作流只上传 Actions Artifact，不自动创建 GitHub Release。
+工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、`desktop-product.json` 中声明的产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。安装包保留 30 天，失败诊断日志保留 14 天。工作流只上传 Actions Artifact，不自动创建 GitHub Release。
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 
 上传前实际运行 EXE，阻断验收包括首次安装、同目录覆盖升级、离线 Python 和插件完整性；每次安装后启动真实桌面程序，要求 TP Cowork 外观已激活、核心客户端插件齐全、控制台零错误。测试同时登记旧 nanobot 版安装信息，确认 DSH 版不会调用其卸载程序或覆盖其登记。测试应用在检查结束后卸载；真实安装检查仅用于一次性 GitHub Actions runner。
 
 应用首次启动出现新手引导时，验收通过「跳过设置」及确认按钮进入工作区，再检查设置中的默认值，并通过「返回工作区」退出设置；覆盖升级复用已保存的引导状态。相同交互的中英文浏览器回归可在项目根目录运行 `node ../deepseek-harness/node_modules/vitest/vitest.mjs run --config scripts/tests/installed-ui.config.mjs --cache=false`。
+
+设置功能是阻断验收项：要求记忆、归档、使用统计的客户端模块和设置入口齐全；实际开启记忆并读取空列表后恢复关闭，打开归档并等待列表加载，打开使用统计并等待累计摘要与当前区间数据返回。仅有模块清单、页面无报错或仍显示加载状态均不能算通过。每次安装的证据目录额外保留 `settings-general.png`、`settings-memory.png`、`settings-archives.png`、`settings-usage.png`，报告记录对应 API 的响应状态。浏览器回归使用完整的八个产品客户端插件，并保持配置热更新开启。
 
 交互安装验收不传 `/S` 或 `/D`，在默认用户安装目录依次操作原生安装、完成按钮，再启动桌面程序检查核心插件。安装器欢迎页和完成页截图保存在 `installed-ui-…` 的 `interactive/` 下；欢迎页必须包含 TP Cowork 彩色图标。安装器的浅色、深色、双倍分辨率及卸载页品牌图由同一个产品图标生成，独立于 Electron 应用图标。
 

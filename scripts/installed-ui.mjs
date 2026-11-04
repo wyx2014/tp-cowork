@@ -14,7 +14,7 @@ export async function inspectInstalledUi(check) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)))
   delete env.ELECTRON_RUN_AS_NODE
   const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
-  const log = [], errors = [], networkFailures = [], observers = [], pendingRequests = new Map()
+  const log = [], errors = [], networkFailures = [], apiResponses = [], observers = [], pendingRequests = new Map()
   let app, page, failure
   async function waitForPageAssets(window) {
     await window.waitForLoadState('load', { timeout: 60_000 })
@@ -56,6 +56,10 @@ export async function inspectInstalledUi(check) {
         errors.push(redact(`${message.text()}${location.url ? ` (${location.url}:${location.lineNumber})` : ''}`))
       }
       const response = response => {
+        const url = new URL(response.url())
+        if (/^\/api\/(settings\/describe|memoryCatalog\/list|archiveManager\/list|usage\/get)$/u.test(url.pathname)) {
+          apiResponses.push({ path: url.pathname, status: response.status() })
+        }
         if (response.status() < 400) return
         networkFailures.push({ kind: 'response', status: response.status(), url: redact(response.url()),
           resourceType: response.request().resourceType(), window: redact(window.url()) })
@@ -84,7 +88,7 @@ export async function inspectInstalledUi(check) {
     await waitForPageAssets(page)
     page.setDefaultTimeout(20_000)
     await finishFirstRunGuide(page)
-    await check(page)
+    await check(page, { capture: name => captureWindow(page, join(output, `${name}.png`)) })
     await waitForPageAssets(page)
   } catch (error) {
     failure = error
@@ -113,8 +117,8 @@ export async function inspectInstalledUi(check) {
       }
       const pendingNetwork = [...pendingRequests.values()]
       try {
-        await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), windows, profile, errors, networkFailures, pendingNetwork, log }, null, 2) + '\n')
-        console.log(JSON.stringify({ windows, profile, errors, networkFailures, pendingNetwork }, null, 2))
+        await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), windows, profile, errors, apiResponses, networkFailures, pendingNetwork, log }, null, 2) + '\n')
+        console.log(JSON.stringify({ windows, profile, errors, apiResponses, networkFailures, pendingNetwork }, null, 2))
       } finally {
         const timer = setTimeout(() => app.process().kill(), 10_000)
         try { await app.close() } finally { clearTimeout(timer) }

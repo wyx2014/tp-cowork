@@ -19,7 +19,7 @@ it('runs the installed-product checks after real setup confirmation and again af
   onTestFinished(() => peers.deregister())
   const scaffold = await launchWebScaffold({
     extraOverlayPath: [join(root, '../deepseek-harness/apps/web/tests/pin-browse-picker.overlay.yml')],
-    profile: { hmr: false, packages: ['ui', 'browser', 'toolbox', 'automation', 'experts']
+    profile: { hmr: true, packages: ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage']
       .map(name => ({ dir: join(root, 'plugins', `tpcowork-${name}`), enabled: true })) },
   })
   onTestFinished(() => scaffold.close())
@@ -40,7 +40,7 @@ it('runs the installed-product checks after real setup confirmation and again af
     expect(await guide.getAttribute('aria-label')).toBe(locale === 'en-US' ? 'Set up TP Cowork' : '设置 TP Cowork')
     await finishFirstRunGuide(page)
     expect(await guide.count()).toBe(0)
-    await checkInstalledProductUi(page)
+    await checkInstalledProductUi(page, { capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })
     await page.screenshot({ path: join(output, `${locale}-first-launch.png`) })
     await page.reload()
     await page.locator('body[data-tpcowork-ui]').waitFor()
