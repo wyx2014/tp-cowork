@@ -63,7 +63,13 @@ html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero
     box-sizing: border-box; width: var(--tpcowork-home-column); max-width: 100%;
   }
 html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_card { --dsw-elevation-stroke-color: var(--tpcowork-home-card-stroke);
-    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); }
+    border-radius: 21px; background: var(--tpcowork-home-card-surface);
+    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); transition: box-shadow 160ms ease; }
+html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_card:focus-within { --dsw-elevation-stroke-color: var(--tpcowork-home-card-focus);
+    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow), 0 0 0 2px #2983ff14; }
+html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_trailing .-vAKla_primary { color: #fff; background: #2983ff; box-shadow: inset 0 1px 0 #ffffff30, 0 3px 9px #2983ff1a; }
+html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_trailing .-vAKla_primary:not(:disabled):hover { background: #1875ee; box-shadow: 0 5px 15px #2983ff35; }
+html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .-vAKla_trailing .-vAKla_primary:disabled { color: #ffffffd9; background: #72a9f6; box-shadow: none; opacity: 1; }
 @keyframes tpcowork-home-enter { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {
     html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero"] .tpcowork-hero-greeting { animation: tpcowork-home-enter 360ms ease-out 0ms both; }
@@ -174,7 +180,7 @@ html body[data-tpcowork-ui] .xdvdfW_title { display: none; }
 html body[data-tpcowork-ui] .Lp_CBa_section { max-width: none; gap: 0; }
 html body[data-tpcowork-ui] .Lp_CBa_title, html body[data-tpcowork-ui] .Lp_CBa_groupHead, html body[data-tpcowork-ui] .Lp_CBa_cardId, html body[data-tpcowork-ui] .Lp_CBa_creatorButton { display: none; }
 html body[data-tpcowork-ui] .Lp_CBa_group:has(.Lp_CBa_creatorButton), html body[data-tpcowork-ui] .Lp_CBa_group:not(:has([data-agent-preset-id='standard'], [data-agent-preset-id='ptc'], [data-agent-preset-id='minimal'], [data-agent-preset-id='cordis'])) { display: none; }
-html body[data-tpcowork-ui] .Lp_CBa_intro { margin: -16px 0 24px; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); }
+html body[data-tpcowork-ui] .Lp_CBa_intro { margin: -16px 0 24px; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle); }
 html body[data-tpcowork-ui] .Lp_CBa_error { margin: 0 0 16px; font-size: 14px; line-height: 20px; }
 html body[data-tpcowork-ui] .Lp_CBa_group + .Lp_CBa_group { margin-top: 0; }
 html body[data-tpcowork-ui] .Lp_CBa_cards { display: flex; flex-direction: column; gap: 0; }
@@ -190,9 +196,9 @@ html body[data-tpcowork-ui] .Lp_CBa_cardMain:not(:disabled):not([aria-disabled='
 html body[data-tpcowork-ui] .Lp_CBa_cardActive > .Lp_CBa_cardMain::before { border: 5px solid var(--dsw-alias-label-primary); }
 html body[data-tpcowork-ui] .Lp_CBa_cardBroken > .Lp_CBa_cardMain::before { border-style: dashed; opacity: .5; }
 html body[data-tpcowork-ui] .Lp_CBa_cardHead { align-items: center; }
-html body[data-tpcowork-ui] .Lp_CBa_cardName { font-size: 14px; line-height: 20px; font-weight: 600; }
+html body[data-tpcowork-ui] .Lp_CBa_cardName { font-size: 14px; line-height: 20px; font-weight: 500; }
 html body[data-tpcowork-ui] .Lp_CBa_card:not(.Lp_CBa_cardActive) .Lp_CBa_cardIdentity > :last-child { display: none; }
-html body[data-tpcowork-ui] .Lp_CBa_cardDesc { margin: 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); -webkit-line-clamp: 2; }
+html body[data-tpcowork-ui] .Lp_CBa_cardDesc { margin: 0; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle); -webkit-line-clamp: 2; }
 html body[data-tpcowork-ui] .Lp_CBa_cardFoot { flex: none; flex-wrap: nowrap; gap: 4px; padding: 0; border-top: none; }
 html body[data-tpcowork-ui] .Lp_CBa_cardHelp { margin-right: 0; gap: 4px; }
 html body[data-tpcowork-ui] .Lp_CBa_helpButton { height: 28px; min-height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--dsw-alias-label-secondary); }

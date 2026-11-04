@@ -112,7 +112,15 @@ export function upstreamStyles(modules) {
     box-sizing: border-box; width: var(--tpcowork-home-column); max-width: 100%;
   }`);
   rules.push(`${home} .${className('input', 'card')} { --dsw-elevation-stroke-color: var(--tpcowork-home-card-stroke);
-    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); }`);
+    border-radius: 21px; background: var(--tpcowork-home-card-surface);
+    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow); transition: box-shadow 160ms ease; }`);
+  rules.push(`${home} .${className('input', 'card')}:focus-within { --dsw-elevation-stroke-color: var(--tpcowork-home-card-focus);
+    box-shadow: var(--dsw-elevation-soft), var(--tpcowork-home-card-glow), 0 0 0 2px #2983ff14; }`);
+  // The home's send button keeps the blue accent; an empty composer only lightens it.
+  const homeSend = `${home} .${className('input', 'trailing')} .${className('input', 'primary')}`;
+  rules.push(`${homeSend} { color: #fff; background: #2983ff; box-shadow: inset 0 1px 0 #ffffff30, 0 3px 9px #2983ff1a; }`);
+  rules.push(`${homeSend}:not(:disabled):hover { background: #1875ee; box-shadow: 0 5px 15px #2983ff35; }`);
+  rules.push(`${homeSend}:disabled { color: #ffffffd9; background: #72a9f6; box-shadow: none; opacity: 1; }`);
   // Entrance whenever the home appears: the greeting fades in, then the workspace row and composer, then the
   // suggestions. Opacity only, so nothing moves while the layout settles. Under the startup cover it waits and starts as
   // the cover fades, continuing from the splash; reduced motion skips it.
@@ -127,7 +135,7 @@ export function upstreamStyles(modules) {
     ${scope}:has(#dsh-startup):not(.dsh-startup-ready) [data-content-phase="hero"] :is(${entering.map(([target]) => target).join(', ')}) { animation-play-state: paused; }
   }`);
   // The skyline covers the whole conversation column, header included: it sits top right and fades out to
-  // the left, and its water continues under the composer. It stays a faded backdrop behind the greeting.
+  // the left, and its water continues under the composer.
   const backdrop = `${selector('conversation', 'root')}[data-phase="hero"]`;
   rules.push(`${backdrop} { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }`);
   rules.push(`${backdrop}::before, ${backdrop}::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }`);
@@ -262,7 +270,7 @@ export function upstreamStyles(modules) {
   rules.push(`${preset('section')} { max-width: none; gap: 0; }`);
   rules.push(`${preset('title')}, ${preset('groupHead')}, ${preset('cardId')}, ${preset('creatorButton')} { display: none; }`);
   rules.push(`${preset('group')}:has(.${className('agentPreset', 'creatorButton')}), ${preset('group')}:not(:has(${builtIn})) { display: none; }`);
-  rules.push(`${preset('intro')} { margin: -16px 0 24px; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); }`);
+  rules.push(`${preset('intro')} { margin: -16px 0 24px; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle); }`);
   rules.push(`${preset('error')} { margin: 0 0 16px; font-size: 14px; line-height: 20px; }`);
   rules.push(`${preset('group')} + .${className('agentPreset', 'group')} { margin-top: 0; }`);
   rules.push(`${preset('cards')} { display: flex; flex-direction: column; gap: 0; }`);
@@ -279,10 +287,10 @@ export function upstreamStyles(modules) {
   rules.push(`${preset('cardActive')} > .${className('agentPreset', 'cardMain')}::before { border: 5px solid var(--dsw-alias-label-primary); }`);
   rules.push(`${preset('cardBroken')} > .${className('agentPreset', 'cardMain')}::before { border-style: dashed; opacity: .5; }`);
   rules.push(`${preset('cardHead')} { align-items: center; }`);
-  rules.push(`${preset('cardName')} { font-size: 14px; line-height: 20px; font-weight: 600; }`);
+  rules.push(`${preset('cardName')} { font-size: 14px; line-height: 20px; font-weight: 500; }`);
   // Only the default keeps its tag; every remaining row is built in, so a 内置 tag on each would say nothing.
   rules.push(`${presetRow}:not(.${className('agentPreset', 'cardActive')}) .${className('agentPreset', 'cardIdentity')} > :last-child { display: none; }`);
-  rules.push(`${preset('cardDesc')} { margin: 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); -webkit-line-clamp: 2; }`);
+  rules.push(`${preset('cardDesc')} { margin: 0; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle); -webkit-line-clamp: 2; }`);
   rules.push(`${preset('cardFoot')} { flex: none; flex-wrap: nowrap; gap: 4px; padding: 0; border-top: none; }`);
   rules.push(`${preset('cardHelp')} { margin-right: 0; gap: 4px; }`);
   rules.push(`${preset('helpButton')} { height: 28px; min-height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--dsw-alias-label-secondary); }`);

@@ -73,7 +73,7 @@ export const css = `
 .tpm-row { display: grid; grid-template-columns: minmax(0, 1fr) 192px; align-items: center; gap: 16px; padding: 12px 16px; }
 .tpm-row-control { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .tpm-label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
-.tpm-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); }
+.tpm-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle, var(--dsw-alias-label-secondary)); }
 .tpm-alert { font-size: 14px; color: var(--dsw-alias-state-error-primary, #d93025); }
 .tpm-notice { padding: 32px 16px; border: 1px dashed var(--dsw-alias-border-l3); border-radius: 12px; text-align: center; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .tpm-notice.tpm-search-empty { padding: 40px 16px; }

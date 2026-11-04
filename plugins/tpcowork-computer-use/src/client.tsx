@@ -99,7 +99,7 @@ const css = `
 .tcu-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 16px; }
 .tcu-row + .tcu-row { border-top: 1px solid color-mix(in oklab, var(--dsw-alias-border-l3) 60%, transparent); }
 .tcu-label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
-.tcu-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.tcu-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle, var(--dsw-alias-label-secondary)); overflow-wrap: anywhere; }
 .tcu-alert { font-size: 14px; color: var(--dsw-alias-state-error-primary, #d93025); }
 .tcu-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500;
   background: color-mix(in oklab, var(--dsw-alias-label-primary) 6%, transparent); color: var(--dsw-alias-label-secondary); white-space: nowrap; }

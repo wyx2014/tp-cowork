@@ -336,16 +336,24 @@
     "dark": "#b0c3e4"
   },
   "--tpcowork-home-art-opacity": {
-    "light": "0.42",
-    "dark": "0.45"
+    "light": "1",
+    "dark": "1"
   },
   "--tpcowork-home-card-stroke": {
-    "light": "rgba(54, 85, 139, 0.2)",
-    "dark": "rgba(176, 195, 228, 0.22)"
+    "light": "#d3e0f4",
+    "dark": "#3b5983"
   },
   "--tpcowork-home-card-glow": {
-    "light": "0 12px 32px rgba(28, 64, 128, 0.08)",
-    "dark": "0 12px 32px rgba(0, 0, 0, 0.3)"
+    "light": "0 7px 26px #4e91e617, 0 1px 4px #4e91e60d",
+    "dark": "0 8px 28px #050d193d"
+  },
+  "--tpcowork-home-card-focus": {
+    "light": "#85b5ff",
+    "dark": "#6a9be0"
+  },
+  "--tpcowork-home-card-surface": {
+    "light": "#ffffff",
+    "dark": "#17263b"
   },
   "--tpcowork-home-wash": {
     "light": "linear-gradient(180deg, #e1efff 0%, #f4f9ff 48%, #f0f7ff 100%)",

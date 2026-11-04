@@ -125,7 +125,7 @@ export const css = `
 .tpa-row-text { min-width: 0; }
 .tpa-row-control { display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
 .tpa-label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
-.tpa-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-secondary); }
+.tpa-description { margin-top: 4px; font-size: 14px; line-height: 24px; color: var(--tpcowork-settings-subtle, var(--dsw-alias-label-secondary)); }
 .tpa-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .tpa-title { margin: 0; font-size: 18px; line-height: 26px; font-weight: 500; color: var(--dsw-alias-label-primary); }
 .tpa-danger { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; cursor: pointer; outline: none;
@@ -172,7 +172,7 @@ export const css = `
 .tpa-task { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; min-height: 70px; box-sizing: border-box; padding: 12px 0; }
 .tpa-task + .tpa-task { border-top: 1px solid var(--dsw-alias-border-l3); }
 .tpa-task-text { display: flex; flex-direction: column; gap: 6px; flex: 1 1 200px; min-width: 0; }
-.tpa-task-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.tpa-task-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
 .tpa-task-time { display: block; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .tpa-task-actions { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 .tpa-secondary { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: color-mix(in oklab, var(--dsw-alias-label-primary) 6%, transparent);

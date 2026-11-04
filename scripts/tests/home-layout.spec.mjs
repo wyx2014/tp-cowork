@@ -80,8 +80,11 @@ it('lays out the home as one centered column: greeting, workspace row, composer 
   await suggestions.evaluate(element => { element.hidden = true })
   expect(Math.abs((await box('[data-composer-input]')).y - card.y)).toBeLessThan(1)
   await suggestions.evaluate(element => { element.hidden = false })
+  await suggestions.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)))
   await page.screenshot({ path: join(artifacts, 'home-light.png') })
   await page.emulateMedia({ colorScheme: 'dark' })
+  // Let theme colour transitions settle before capturing.
+  await page.waitForTimeout(400)
   await page.screenshot({ path: join(artifacts, 'home-dark.png') })
   await page.emulateMedia({ colorScheme: 'light' })
   // The greeting starts on the composer card's edge, and the workspace chip and suggestions keep fixed offsets from

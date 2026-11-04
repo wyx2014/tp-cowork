@@ -37,7 +37,7 @@ export function Suggestions({ sessionId, disabled, preferences, prepare, t }: Su
       </button>
     </div></header>
     <ul>{suggestionBatch(batch).map(item => <li key={item.id}><button type="button" data-suggested-task={item.id} disabled={disabled || !sessionId} aria-busy={pending === item.id} onClick={() => { void choose(item) }}>
-      <span className="tp-suggestion-icon"><img src={item.icon} alt="" width="24" height="24" draggable={false} /></span><span>{t(item.label)}</span>
+      <span className="tp-suggestion-icon"><img src={item.icon} alt="" width="32" height="32" draggable={false} /></span><span className="tp-suggestion-copy"><strong>{t(item.title)}</strong><span title={t(item.label)}>{t(item.label)}</span></span>
     </button></li>)}</ul>
     {error && <p className="tp-suggestion-feedback" role="status">{error}</p>}
     <Modal open={closing} title={t('suggestionsClose')} description={t('suggestionsCloseHint')} closeLabel={t('close')} showCloseButton={false} className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" onClose={() => setClosing(false)}

@@ -136,6 +136,37 @@ it('starts the first-run guide below the Windows caption row', () => {
   expect(css).toContain('html[data-windows-titlebar] .tpcowork-guide { top:var(--dsh-frame-chrome-top, 0px); }')
 })
 
+it('shows the home skyline at full strength with a blue send button', () => {
+  const theme = JSON.parse(readFileSync(resolve(import.meta.dirname, '../theme.json'), 'utf8'))
+  expect(theme['--tpcowork-home-art-opacity']).toEqual({ light: '1', dark: '1' })
+  const css = upstreamStyles(maps)
+  expect(css).toContain(`.${maps.input.trailing} .${maps.input.primary} { color: #fff; background: #2983ff;`)
+  expect(css).toContain(`.${maps.input.trailing} .${maps.input.primary}:disabled { color: #ffffffd9; background: #72a9f6;`)
+})
+
+it('gives Appearance rows the same text styling as General rows', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../styles.css'), 'utf8')
+  expect(css).toContain('.tpcowork-appearance-copy strong { display:block; font-size:14px; line-height:20px; font-weight:500; }')
+  expect(css).toContain('.tpcowork-appearance-copy p { margin:4px 0 0; color:var(--tpcowork-settings-subtle); font-size:14px; line-height:24px; }')
+})
+
+it('keeps row text consistent across every settings page', () => {
+  const plugin = (path: string) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8')
+  const subtle = 'var(--tpcowork-settings-subtle, var(--dsw-alias-label-secondary))'
+  for (const [path, rule] of [
+    ['tpcowork-memory/src/client.tsx', '.tpm-description'],
+    ['tpcowork-archives/src/client.tsx', '.tpa-description'],
+    ['tpcowork-computer-use/src/client.tsx', '.tcu-description'],
+    ['tpcowork-browser/src/styles.css', '.tpcb-settings .tpcb-settings-copy p'],
+  ] as const) {
+    const line = plugin(path).split('\n').find(row => row.startsWith(`${rule} {`))
+    expect(line, rule).toContain(subtle)
+  }
+  expect(plugin('tpcowork-browser/src/styles.css')).toContain('.tpcb-settings .tpcb-settings-copy strong { display:block; font-size:14px; line-height:20px; font-weight:500; }')
+  const css = upstreamStyles(maps)
+  expect(css).toContain(`.${maps.agentPreset.cardName} { font-size: 14px; line-height: 20px; font-weight: 500; }`)
+})
+
 it('counts the Windows caption row in the home layout height', () => {
   expect(upstreamStyles(maps)).toContain(`html[data-windows-titlebar] body[data-tpcowork-ui] .${maps.frame.frame} { --tpcowork-home-chrome: calc(40px + var(--dsh-windows-titlebar-height, 0px)); }`)
 })
