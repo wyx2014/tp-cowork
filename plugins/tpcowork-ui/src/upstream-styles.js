@@ -70,6 +70,8 @@ export function upstreamStyles(modules) {
   rules.push(`${frame} .${className('conversation', 'header')} { min-height: 71px; padding-top: 5px; }`);
   // The home measures from the window top: the panel's 4px inset and border above that 71px header.
   rules.push(`${frame} { --tpcowork-home-chrome: 76px; }`);
+  // Windows keeps its own frame, whose padding puts the caption row above the 40px header; count it the same way.
+  rules.push(`html[data-windows-titlebar] body[data-tpcowork-ui] .${className('frame', 'frame')} { --tpcowork-home-chrome: calc(40px + var(--dsh-windows-titlebar-height, 0px)); }`);
   // ZCode uses compact, regular-weight navigation with neutral selected surfaces.
   rules.push(`${selector('sidebar', 'panelRow', expanded(scope))} { gap: 8px; }`);
   rules.push(`${selector('sidebar', 'panelGlyph', expanded(scope))} svg, ${selector('sidebar', 'newSessionContent', expanded(scope))} svg { width: 16px; height: 16px; }`);
@@ -174,6 +176,11 @@ export function upstreamStyles(modules) {
   rules.push(`${selector('settings', 'close')}:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }`);
   rules.push(`${selector('settings', 'close')} > svg { display: none; }`);
   rules.push(`${scope} [data-tpcowork-settings-chrome] .${className('settings', 'close')} { display: none; }`);
+  // The 64px/112px offsets clear the macOS traffic lights. The Windows overlay already starts below its caption row.
+  const windowsSettings = 'html[data-windows-titlebar] body[data-tpcowork-ui]';
+  rule('settings', 'nav', 'padding-top: 60px;', windowsSettings);
+  rule('settings', 'close', 'top: 12px;', windowsSettings);
+  rules.push(`${windowsSettings} .tpcowork-settings-back-target { top: 12px; }`);
   const arrow = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 19-7-7 7-7'/%3E%3Cpath d='M19 12H5'/%3E%3C/svg%3E") center / contain no-repeat`;
   rules.push(`${selector('settings', 'close')}::before { content: ''; flex: none; width: 16px; height: 16px; background: currentColor; -webkit-mask: ${arrow}; mask: ${arrow}; }`);
   rules.push(`${selector('settings', 'close')} .${className('settings', 'hiddenLabel')} { position: static; width: auto; height: auto; overflow: hidden; clip: auto; text-overflow: ellipsis; }`);

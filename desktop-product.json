@@ -16,6 +16,8 @@
     "@tpcowork/dsh-memory",
     "@tpcowork/dsh-archives",
     "@tpcowork/dsh-usage",
+    "@tpcowork/dsh-diagnostics",
+    "@tpcowork/dsh-computer-use",
     "@tpcowork/dsh-experts"
   ]
 }

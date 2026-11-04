@@ -27,7 +27,7 @@ export const GENERAL_CARDS = [
   ['tpcowork-notifications', 'tpcowork-notification-sound', 'link-opening'],
   ['composer-enter', 'tpcowork-ask-auto-continue', 'tpcowork-show-reasoning', 'tpcowork-show-todos'],
   ['transcript-view', 'performance-usage'],
-  ['current-version', 'tpcowork-first-run-guide'],
+  ['current-version', 'tpcowork-first-run-guide', 'tpcowork-diagnostics'],
 ];
 
 /**

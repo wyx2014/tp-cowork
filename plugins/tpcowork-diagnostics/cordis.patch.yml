@@ -1,0 +1,3 @@
+- insert:
+    - id: tpcowork-diagnostics
+      name: '@tpcowork/dsh-diagnostics'

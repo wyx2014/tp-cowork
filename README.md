@@ -13,6 +13,8 @@
 | [memory](plugins/tpcowork-memory/README.md) | 按工作区保存跨会话记忆，默认关闭 |
 | [archives](plugins/tpcowork-archives/README.md) | 设置 › 归档管理：按工作区查看、取消归档和删除已归档会话 |
 | [usage](plugins/tpcowork-usage/README.md) | 设置 › 使用统计：按本地会话记录统计 Token、活跃度和模型用量 |
+| [computer-use](plugins/tpcowork-computer-use/README.md) | 设置 › 电脑控制：参照 ZCode，让 Agent 按应用授权查看并操作 Windows、macOS 桌面应用（Linux X11 实验） |
+| [diagnostics](plugins/tpcowork-diagnostics/README.md) | 脱敏的 Host 与桌面日志文件；设置 › 通用设置 › 诊断信息导出诊断包（参照 DSH Desktop） |
 | [experts](plugins/tpcowork-experts/README.md) | 专家协作，复用原生任务与子会话 |
 
 ## 本地运行

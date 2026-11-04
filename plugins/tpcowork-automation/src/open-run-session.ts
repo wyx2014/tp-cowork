@@ -24,8 +24,9 @@ export async function openRunSession(sessions: ISessions, navigate: (id: Session
     if (snapshot.openState !== 'open') throw snapshot.openError ?? new Error('Run conversation is unavailable')
     signal.throwIfAborted()
     navigate(id)
+    // Runs are titled on the Host when they start; only older, untitled runs get the title here.
     // Renaming can require a Host Agent resume; that must not prevent reading persisted history.
-    if (sessions.list.getSnapshot().byId[id]?.title !== title) {
+    if (!sessions.list.getSnapshot().byId[id]?.title) {
       void session.rename(title).then(result => {
         if (!result.ok) reportTitleFailure(result.error)
       }, reportTitleFailure)

@@ -28,9 +28,11 @@ await collect(resolve(harness, 'packages')); await collect(resolve(harness, 'ven
 const requireHarness = createRequire(resolve(harness, 'package.json'))
 peers.set('zod', pathToFileURL(requireHarness.resolve('zod')).href)
 const hook = registerHooks({ resolve(specifier, context, next) { return next(peers.get(specifier) ?? specifier, context) } })
-const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, { credentialRef }, skills, hub] = await Promise.all([
+const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, { credentialRef }, skills, hub,
+  { default: RemoteAccess }, { Peer }] = await Promise.all([
   import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'),
   import('@deepseek-ai/dsh-credentials-local'), import('@deepseek-ai/dsh-credentials'), import(pathToFileURL(resolve(root, 'lib/skills.js'))), import(pathToFileURL(resolve(root, 'lib/tpcoworkhub.js'))),
+  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'),
 ])
 const home = await mkdtemp(join(tmpdir(), 'toolbox-hub-built-'))
 const ctx = new Context()
@@ -40,7 +42,7 @@ const meta = { path: 'SKILL.md', size: bytes.length, sha256: hash, contentType: 
 const server = createServer(async (req, res) => {
   for await (const _chunk of req) { /* Drain request without logging credentials. */ }
   const envelope = data => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ code: 200, data })) }
-  if (req.url === '/tpcoworkapi/users/login') { envelope({ token: 'compiled-fixture-token', user: { id: 'fixture', username: 'fixture' } }); return }
+  if (req.url === '/tpcoworkapi/users/login') { envelope({ accessToken: 'compiled-fixture-token', tokenType: 'Bearer', userInfo: { id: 'fixture', username: 'fixture', name: 'Fixture' } }); return }
   if (req.headers.authorization !== 'Bearer compiled-fixture-token') { res.statusCode = 401; res.end(); return }
   if (req.url === '/tpcoworkapi/skills/fixture') { envelope({ skill: { id: 'fixture', slug: 'compiled-hub' }, latestVersion: { id: 'v1', version: '1.0.0' }, files: [meta] }); return }
   if (req.url.startsWith('/tpcoworkapi/skill-versions/files?')) { envelope({ ...meta, content: bytes.toString('utf8') }); return }
@@ -50,14 +52,15 @@ try {
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
   ctx.provide('profileContext', { dir: home, cwd: home, home })
   ctx.provide('settings', { describe: () => [], mutate: async () => {} })
-  await ctx.plugin(Typert); await ctx.plugin(Gateway); await ctx.plugin(Skills)
+  await ctx.plugin(Typert); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway); await ctx.plugin(Skills)
+  const peer = new Peer(ctx, { principal: { kind: 'owner' } })
   await ctx.plugin(Credentials, { path: join(home, '.credentials.yaml'), watch: false })
   await ctx.credentials.set(credentialRef('FIXTURE_PASSWORD'), 'compiled-fixture-password')
   await ctx.plugin(skills, { userRoot: join(home, 'user-skills') })
   const module = await ctx.plugin(hub, { endpoint: `http://127.0.0.1:${server.address().port}` })
-  await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'login', args: { request: { username: 'fixture', passwordRef: 'FIXTURE_PASSWORD' } } })
-  const detail = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'fixture' } } })
-  const result = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: { requestId: 'compiled', source: { kind: 'tpcoworkhub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' } } })
+  await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'login', args: { request: { username: 'fixture', passwordRef: 'FIXTURE_PASSWORD' } } })
+  const detail = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'fixture' } } })
+  const result = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: { requestId: 'compiled', source: { kind: 'tpcoworkhub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' } } })
   assert.equal(result.state, 'installed')
   assert.equal((await ctx.skills.get('compiled-hub')).content, 'Use this skill.')
   assert.equal((await ctx.toolboxSkills.inventory({})).items[0].origin, 'tpcoworkhub')

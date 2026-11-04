@@ -10,6 +10,56 @@ import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
 import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
+  it('accepts accessToken/userInfo with a numeric internal user ID and stores only the access token and public profile', async () => {
+    const { service, state, login, ctx, requests } = await hubFixture()
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/users/login') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 200, message: 'success', data: {
+        sub: 'adminpig', clientId: 'pig', iss: 'https://ispcloud.com', tokenType: 'Bearer', accessToken: secret,
+        refreshToken: 'private-refresh-token', aud: ['pig'], license: 'https://ispcloud.com',
+        nbf: 1.793758198209E9, iat: 1.793758198209E9, exp: 1.793794198209E9, expiresIn: 36000,
+        scope: ['server'], jti: 'fixture-jti', userInfo: { id: 1, username: 'adminpig', name: 'Administrator',
+          password: null, authorities: [], accountNonExpired: null, accountNonLocked: null,
+          credentialsNonExpired: null, enabled: true, deptId: null, phone: '111****1111', attributes: {} },
+      } }))
+      return true
+    }
+    await login()
+    expect(await service.account()).toMatchObject({ state: 'signed_in', user: { id: '1', username: 'adminpig', name: 'Administrator' } })
+    const record = await ctx.credentials.readRecord(sessionKey)
+    expect(record).toMatchObject({ kind: 'grant', payload: { token: secret, user: { id: '1', username: 'adminpig', name: 'Administrator' } } })
+    expect(JSON.stringify(record)).not.toContain('private-refresh-token')
+    expect(JSON.stringify(record)).not.toContain('111****1111')
+    expect((await service.list({})).items).toHaveLength(2)
+    expect(requests.at(-1)?.authorization).toBe(`Bearer ${secret}`)
+  })
+  it('continues to accept legacy token/user responses', async () => {
+    const { service, state, login } = await hubFixture()
+    state.legacyLogin = true
+    await login()
+    expect(await service.account()).toMatchObject({ state: 'signed_in', user: { id: 'user-1', username: 'fixture-user' } })
+    expect((await service.list({})).items).toHaveLength(2)
+  })
+  it.each([
+    { accessToken: '', userInfo: { id: 1, username: 'admin' } },
+    { accessToken: '   ', userInfo: { id: 1, username: 'admin' } },
+    { accessToken: secret, tokenType: 'Basic', userInfo: { id: 1, username: 'admin' } },
+    { accessToken: secret, userInfo: { username: 'admin' } },
+    { accessToken: secret, userInfo: { id: {}, username: 'admin' } },
+  ])('rejects malformed new login responses without replacing the saved session (%#)', async data => {
+    const { service, state, login, ctx } = await hubFixture()
+    await login()
+    const previous = await ctx.credentials.readRecord(sessionKey)
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/users/login') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 200, data }))
+      return true
+    }
+    await expect(login()).rejects.toMatchObject({ code: 'tpcoworkhub/protocol' })
+    expect(await ctx.credentials.readRecord(sessionKey)).toEqual(previous)
+  })
   it('loads website catalog metadata with null optional fields and uses the published version', async () => {
     const { service, state, ctx } = await hubFixture()
     await service.acceptBrowserSession({ token: secret })

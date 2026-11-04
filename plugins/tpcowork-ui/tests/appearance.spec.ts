@@ -124,6 +124,22 @@ it('keeps sidebar rail and hero input rules out of the expanded and docked overr
   inputRoot.remove()
 })
 
+it('starts the Windows settings sidebar directly below the caption row', () => {
+  const css = upstreamStyles(maps)
+  const windows = 'html[data-windows-titlebar] body[data-tpcowork-ui]'
+  expect(css).toContain(`${windows} .tpcowork-settings-back-target { top: 12px; }`)
+  expect(css).toMatch(new RegExp(`${windows.replace(/[[\]]/g, '\\$&')} \\.${maps.settings.nav}\\s*\\{\\s*padding-top: 60px;`))
+})
+
+it('starts the first-run guide below the Windows caption row', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../styles.css'), 'utf8')
+  expect(css).toContain('html[data-windows-titlebar] .tpcowork-guide { top:var(--dsh-frame-chrome-top, 0px); }')
+})
+
+it('counts the Windows caption row in the home layout height', () => {
+  expect(upstreamStyles(maps)).toContain(`html[data-windows-titlebar] body[data-tpcowork-ui] .${maps.frame.frame} { --tpcowork-home-chrome: calc(40px + var(--dsh-windows-titlebar-height, 0px)); }`)
+})
+
 it.each([['input', 'card'], ['input', 'hero'], ['sidebar', 'collapsed']])('fails the plugin build when upstream class %s.%s disappears', (module, local) => {
   const changed = structuredClone(maps)
   delete changed[module][local]

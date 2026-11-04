@@ -1,5 +1,6 @@
 /** Independent DSH Agent lifecycles and read-only, exact-turn recovery. */
 import { randomUUID } from 'node:crypto'
+import { resolve } from 'node:path'
 import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
@@ -16,9 +17,11 @@ import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import { isUserInvocable, renderSkillContent } from '@deepseek-ai/dsh-skill'
-import type {} from '@deepseek-ai/dsh-workspace'
+import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import { AutomationError, AutomationEvidencePendingError } from './errors.ts'
+import { runTitle } from './run-history.ts'
+import type {} from '@deepseek-ai/dsh-session-title'
 import type { AutomationExecution, AutomationExecutor, AutomationRecovery, AutomationRunOutcome,
   AutomationRunId, AutomationTaskId, ScheduledTask, ScheduledTaskRun } from './types.ts'
 
@@ -54,6 +57,17 @@ export function readAutomationOwnership(events: readonly SessionEvent[]): Automa
   const result = ownershipSchema.safeParse(records[0]!.data)
   const firstTurn = events.find(event => event.type === 'turn/start')
   return result.success && (!firstTurn || records[0]!.seq < firstTurn.seq) ? result.data : undefined
+}
+
+/** The system locale for titles written on the Host, which has no UI language. */
+function hostLocale(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().locale } catch { return 'en' }
+}
+
+/** Folder identity for matching a task's saved directory to a registered project (case-insensitive on Windows). */
+function folderKey(path: string): string {
+  const absolute = resolve(path).replace(/[\\/]+$/, '')
+  return process.platform === 'win32' ? absolute.toLowerCase() : absolute
 }
 
 function unavailable(signal: AbortSignal): AutomationRunOutcome {
@@ -118,12 +132,24 @@ export class DshAutomationExecutor implements AutomationExecutor {
     }
   }
 
+  /**
+   * The task's project by id; when that id is gone (the project was removed and added again under a new id), the
+   * registered project at the same folder, so re-adding a project does not break its tasks.
+   */
+  private project(task: ScheduledTask): Workspace | undefined {
+    const registry = this.ctx.workspaceRegistry
+    const exact = registry.get(task.projectId!)
+    if (exact || !task.workspacePath) return exact
+    const key = folderKey(task.workspacePath)
+    return registry.list().find(workspace => folderKey(workspace.path) === key)
+  }
+
   /** @param execution - Already persisted run and its scheduler-owned cancellation/binding operations. */
   async execute({ task, run, signal, bind }: AutomationExecution): Promise<AutomationRunOutcome> {
     signal.throwIfAborted()
     if (run.executionMode === 'reminder') return { status: 'completed', resultType: 'none', conversationAvailable: false }
     const selected = await this.selection(task, signal)
-    const workspace = task.projectId === undefined ? undefined : this.ctx.workspaceRegistry.get(task.projectId)
+    const workspace = task.projectId === undefined ? undefined : this.project(task)
     if (task.projectId !== undefined && !workspace) throw new AutomationError('execution_failed', '任务绑定的项目已不存在。')
     // Unbound editor/template drafts persist an empty optional directory.
     const cwd = workspace?.path ?? (task.workspacePath || this.ctx.workingDirectory.defaultDirectory)
@@ -160,6 +186,8 @@ export class DshAutomationExecutor implements AutomationExecutor {
       cancel = () => agent.cancel({ kind: 'disposed' })
       signal.addEventListener('abort', cancel, { once: true })
       signal.throwIfAborted()
+      // Title the conversation now, as ZCode does: DSH titles only typed messages, so the run would stay untitled.
+      this.ctx.get('sessionTitle')?.rename(agent.session, runTitle({ task, run }, hostLocale()))
       if (task.workspacePath) await this.ctx.workingDirectory.set(agent, task.workspacePath, signal)
       else await this.ctx.workingDirectory.ensure(agent, signal)
       await this.bindSkill(agent, task, signal)

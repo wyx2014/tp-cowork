@@ -17,6 +17,8 @@ const plugins = {
   memory: ['tpcowork-memory', '@tpcowork/dsh-memory'],
   archives: ['tpcowork-archives', '@tpcowork/dsh-archives'],
   usage: ['tpcowork-usage', '@tpcowork/dsh-usage'],
+  diagnostics: ['tpcowork-diagnostics', '@tpcowork/dsh-diagnostics'],
+  'computer-use': ['tpcowork-computer-use', '@tpcowork/dsh-computer-use'],
 };
 const expertsPackage = resolve(workspace, 'plugins/tpcowork-experts/package.json');
 const optionalPlugins = existsSync(expertsPackage)
@@ -26,10 +28,10 @@ if (target === 'experts' && !optionalPlugins.experts) {
 }
 Object.assign(plugins, optionalPlugins);
 if (!Object.hasOwn(plugins, target) && target !== 'base' && target !== 'all') {
-  throw new Error('Plugin must be core, ui, workbench, browser, toolbox, automation, memory, archives, usage, experts (when delivered), base (core + ui), or all');
+  throw new Error('Plugin must be core, ui, workbench, browser, toolbox, automation, memory, archives, usage, diagnostics, computer-use, experts (when delivered), base (core + ui), or all');
 }
 if (!['install', 'remove', 'list'].includes(operation)) {
-  throw new Error('Usage: node scripts/desktop-plugin.mjs install|remove|list [base|core|ui|workbench|browser|toolbox|automation|memory|archives|usage|experts|all] (default: base)');
+  throw new Error('Usage: node scripts/desktop-plugin.mjs install|remove|list [base|core|ui|workbench|browser|toolbox|automation|memory|archives|usage|diagnostics|computer-use|experts|all] (default: base)');
 }
 if (!existsSync(resolve(desktopHome, 'profiles/desktop/package.json'))) {
   throw new Error('Start Desktop once to initialize its profile, then quit it before managing plugins.');
@@ -53,6 +55,14 @@ if (operation === 'install' && selected.some(([directory]) => directory === 'tpc
 if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-usage')
   && !existsSync(resolve(workspace, 'plugins/tpcowork-usage/lib/host.js'))) {
   throw new Error('Build usage stats first: node plugins/tpcowork-usage/build.mjs');
+}
+if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-diagnostics')
+  && !existsSync(resolve(workspace, 'plugins/tpcowork-diagnostics/lib/host.js'))) {
+  throw new Error('Build diagnostics first: node plugins/tpcowork-diagnostics/build.mjs');
+}
+if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-computer-use')
+  && !existsSync(resolve(workspace, 'plugins/tpcowork-computer-use/lib/helper.mjs'))) {
+  throw new Error('Build Computer Use first: node plugins/tpcowork-computer-use/build.mjs');
 }
 if (operation === 'install' && selected.some(([directory]) => directory === 'tpcowork-browser')
   && !existsSync(resolve(harness, 'apps/desktop/lib/tpcowork-browser/desktop.js'))) {

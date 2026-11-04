@@ -22,9 +22,9 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function harness() {
+async function harness(listedTitle?: string) {
   const mock = RemoteMock.create().load(sessionWorld)
-    .unary('session/list', ok({ items: [{ sessionId: id, updatedAt: 1, running: false, blank: false, agentAvailable: false }] }))
+    .unary('session/list', ok({ items: [{ sessionId: id, updatedAt: 1, running: false, blank: false, agentAvailable: false, ...listedTitle ? { title: listedTitle } : {} }] }))
     .stream('session/follow', followScript(history([
       ev.turnStart(SessionSeq(0), 1), ev.user(SessionSeq(1), 'Daily report'),
       ev.assistant(SessionSeq(2), 1, 'Persisted automation result'), ev.turnEnd(SessionSeq(3), 1),
@@ -144,4 +144,11 @@ it('cancels an outstanding history read without navigating or leaking its refere
   opening.resolve(history([]))
   expect(h.navigate).not.toHaveBeenCalled()
   expect(h.sessions.retainInfo(id).getSnapshot().referenceCount).toBe(0)
+})
+
+it('keeps the title a run was given when it started', async () => {
+  const h = await harness('4 Nov 2026, 09:00 - Daily report')
+  await openRunSession(h.sessions, h.navigate, id, title, h.signal)
+  expect(h.navigate).toHaveBeenCalledWith(id)
+  expect(h.mock.remote.session.rename).not.toHaveBeenCalled()
 })

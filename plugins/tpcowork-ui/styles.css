@@ -861,6 +861,8 @@ html body[data-tpcowork-ui] .tpcowork-provider-model-actions .tpcowork-provider-
 .tpcowork-guide { --guide-inset: clamp(40px, 8.333vw, 120px); position:fixed; inset:0; z-index:999; display:flex; flex-direction:column; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary); user-select:none; }
 .tpcowork-guide-progress { display:flex; flex-shrink:0; align-items:center; justify-content:space-between; padding:22px var(--guide-inset); color:var(--dsw-alias-label-secondary); font-size:11px; -webkit-app-region:drag; }
 html[data-platform="darwin"] .tpcowork-guide-progress { padding-top:36px; }
+/* The Windows caption row stays the app's own strip: its menus and window buttons remain outside the guide. */
+html[data-windows-titlebar] .tpcowork-guide { top:var(--dsh-frame-chrome-top, 0px); }
 .tpcowork-guide-progress ol { display:flex; gap:7px; margin:0; padding:0; list-style:none; }
 .tpcowork-guide-progress li { width:6px; height:6px; border-radius:6px; background:var(--dsw-alias-border-l2); transition:width 200ms, background-color 200ms; }
 .tpcowork-guide-progress li[aria-current="step"] { width:22px; background:var(--dsw-alias-label-primary); }

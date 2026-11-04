@@ -9,6 +9,8 @@ import { BookmarkStore } from './bookmarks.js';
 import { resolveConfig } from './config.js';
 import { BrowserError, CHANNEL, VERSION, PARTITION, IPC, envelope, failure, OperationQueue } from './protocol.js';
 import { WindowZoom } from './window-zoom.js';
+// @tpcowork/dsh-diagnostics' main-process half travels in this payload, the product's only plugin seam into the main process.
+import { createDesktopDiagnostics } from '../../tpcowork-diagnostics/src/desktop.ts';
 import { beginBrowserNavigation, trackBrowserNavigation } from './navigation.js';
 
 const SCOPE = 'dsh-desktop';
@@ -26,11 +28,13 @@ function faviconUrl(candidates) {
 
 /**
  * Create the Electron adapter; all renderer calls are admitted by the shell's primary-frame check. This payload is the
- * product's one plugin seam into the desktop main process, so it also owns the window's interface zoom (`windowZoom`).
- * The browser itself starts on its first own call, so a zoom request does not bring up browser storage.
+ * product's one plugin seam into the desktop main process, so it also owns the window's interface zoom (`windowZoom`) and
+ * carries diagnostics export (`diagnostics`, from @tpcowork/dsh-diagnostics). The browser itself starts on its first own
+ * call, so neither request brings up browser storage.
  */
 export function createDesktopBrowser(options) {
   const zoom = new WindowZoom(options.window, join(options.userData, 'tpcowork-zoom.json'));
+  const diagnostics = createDesktopDiagnostics({ window: options.window, userData: options.userData });
   let browser;
   const live = () => browser ??= new DesktopBrowser(options);
   return {
@@ -39,12 +43,13 @@ export function createDesktopBrowser(options) {
     handleHost: (...args) => live().handleHost(...args),
     request: (op, payload) => {
       if (op === 'windowZoom') return zoom.request(payload);
+      if (op === 'diagnostics') return diagnostics.request(payload);
       // As DSH answers before this payload loads: no browser has started, so there is nothing to show yet.
       if (op === 'snapshot' && browser === undefined) return { enabled: false, tabs: [], downloads: [], permissions: {}, requests: [] };
       return live().request(op, payload);
     },
     disable: async () => { await browser?.disable(); },
-    dispose: async () => { await browser?.dispose(); },
+    dispose: async () => { diagnostics.dispose(); await browser?.dispose(); },
   };
 }
 

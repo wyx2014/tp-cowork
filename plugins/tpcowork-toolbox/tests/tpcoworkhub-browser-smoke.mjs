@@ -16,15 +16,18 @@ const browserRequire = createRequire(new URL('../../tpcowork-browser/package.jso
 const { _electron: electron, chromium } = browserRequire('playwright-core')
 const executablePath = createRequire(join(harness, 'apps/desktop/package.json'))('electron')
 const hook = await artifactPeers()
-const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, skills, hub] = await Promise.all([
+const [{ Context }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Credentials }, skills, hub,
+  { default: RemoteAccess }, { Peer }] = await Promise.all([
   import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'),
   import('@deepseek-ai/dsh-credentials-local'), import(new URL('../lib/skills.js', import.meta.url)), import(new URL('../lib/tpcoworkhub.js', import.meta.url)),
+  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'),
 ])
 const home = await mkdtemp(join(tmpdir(), 'tpcoworkhub-system-browser-'))
 const credentialFile = join(home, 'credentials.yaml')
 const secret = 'native-fixture-website-token'
 const user = { _id: 'native-user', username: 'fixture-user', name: 'Browser account', role: 'user' }
 const ctx = new Context()
+const peer = new Peer(ctx, { principal: { kind: 'owner' } })
 let loginCount = 0
 let rejectSession = false
 const server = createServer(async (request, response) => {
@@ -37,7 +40,7 @@ const server = createServer(async (request, response) => {
       assert.match(request.headers.cookie ?? '', /desktop-test=authenticated/)
       const method = request.url.split('/').at(-1)
       try {
-        const value = await ctx.typertGateway.invoke({ namespace: 'toolboxTpcoworkHub', method, args: body.payload.args })
+        const value = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method, args: body.payload.args })
         json({ type: 'server-response', rpcId: body.rpcId, result: { ok: true, value } })
       } catch (_error) { json({ type: 'server-response', rpcId: body.rpcId, result: { ok: false, error: { code: 'fixture/rejected' } } }) }
       return
@@ -47,7 +50,7 @@ const server = createServer(async (request, response) => {
       if (body.username !== 'fixture-user' || body.passwordHash !== 'fixture-password') {
         response.statusCode = 401; json({ code: 401, message: 'Invalid credentials' }); return
       }
-      json({ code: 200, data: { token: secret, user } }); return
+      json({ code: 200, message: 'success', data: { accessToken: secret, tokenType: 'Bearer', userInfo: { id: user._id, username: user.username, name: user.name } } }); return
     }
     if (request.url === '/tpcoworkapi/convex/query') {
       if (request.headers.authorization !== `Bearer ${secret}` || rejectSession) {
@@ -74,7 +77,7 @@ try {
   const endpoint = `http://127.0.0.1:${server.address().port}`
   ctx.provide('profileContext', { dir: home, cwd: home, home })
   ctx.provide('settings', { describe: () => [], mutate: async () => {} })
-  await ctx.plugin(Typert); await ctx.plugin(Gateway); await ctx.plugin(Skills)
+  await ctx.plugin(Typert); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway); await ctx.plugin(Skills)
   await ctx.plugin(Credentials, { path: credentialFile, watch: false })
   await ctx.plugin(skills, { userRoot: join(home, 'user-skills') })
   await ctx.plugin(hub, { endpoint })

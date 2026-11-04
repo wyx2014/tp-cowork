@@ -29,6 +29,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
     publishMode: 'ok' as 'ok' | 'rejected' | 'invalid' | 'disconnect' | 'business-failed',
     hold: undefined as undefined | ReturnType<typeof deferred>, entered: deferred(),
     uploaded: [] as { path: string; bytes: Uint8Array }[], loginHash: '', cursorRequests: 0,
+    legacyLogin: false,
     override: undefined as undefined | ((req: IncomingMessage, res: ServerResponse) => boolean),
   }
   const json = (res: ServerResponse, data: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
@@ -42,7 +43,16 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
       const body = req.headers['content-type']?.includes('application/json') && bytes.length ? JSON.parse(bytes.toString('utf8')) : undefined
       requests.push({ path, body, ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}) })
       if (state.override?.(req, res)) return
-      if (path === '/tpcoworkapi/users/login') { state.loginHash = body.passwordHash; envelope(res, { token: secret, user: { id: 'user-1', username: body.username } }); return }
+      if (path === '/tpcoworkapi/users/login') {
+        state.loginHash = body.passwordHash
+        const user = { id: 'user-1', username: body.username, name: 'Fixture User' }
+        envelope(res, state.legacyLogin ? { token: secret, user } : {
+          sub: body.username, clientId: 'skillhub', iss: 'skillhub', tokenType: 'Bearer',
+          accessToken: secret, refreshToken: 'fixture-refresh-token', aud: ['skillhub'], license: 'skillhub',
+          userInfo: { ...user, password: null, authorities: [], enabled: true, attributes: {} },
+          scope: ['server'], iat: 1793758198.209, nbf: 1793758198.209, exp: 1793794198.209, expiresIn: 36000, jti: 'fixture-jti',
+        }); return
+      }
       if (req.headers.authorization !== `Bearer ${secret}` || state.expired) { res.statusCode = 401; json(res, { code: 401, message: secret }); return }
       if (path === '/tpcoworkapi/convex/query') {
         if (body.path === 'users:me') { json(res, { _id: 'user-1', username: 'fixture-user', name: 'Fixture User' }); return }

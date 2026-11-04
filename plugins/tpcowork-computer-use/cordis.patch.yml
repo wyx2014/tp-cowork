@@ -1,0 +1,6 @@
+- insert:
+    # DSH's exclusive computer-use registry; the base bundles install it without mounting it.
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: tpcowork-computer-use
+      name: '@tpcowork/dsh-computer-use'

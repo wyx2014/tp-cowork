@@ -120,6 +120,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
           h('div', { className: 'tpcowork-setting-description' }, t('guideReopenDescription'))),
         // The guide is a full-window page, so Settings closes first rather than covering it.
         h(primitives.Button, { variant: 'outline', onClick: () => { primitives.closeTopModal(document); guide.show(); } }, t('guideReopen')))));
+      installDiagnosticsSettings(ctx, React, primitives, generalLayout().rows['tpcowork-diagnostics']);
       installAppearanceSettings(ctx, React, primitives);
       // 界面字号: the text size setting moves all interface text, as in the reference product, not only chat content.
       ctx.effect(() => scaleInterfaceText(), 'tpcowork: interface font size');

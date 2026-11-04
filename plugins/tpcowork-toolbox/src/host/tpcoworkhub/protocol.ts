@@ -53,11 +53,17 @@ export function validateMetadata(files: TpcoworkHubFile[], maxBytes: number, max
     }
   } catch { throw new TpcoworkHubError('invalid-package') }
 }
-export const loginResultSchema = z.object({ token: z.string().min(1).max(32768), user: z.object({ id: z.string(), username: z.string() }) })
+const userIdSchema = z.union([z.string().min(1).max(200), z.number().int().nonnegative().safe().transform(String)])
 export const websiteUserSchema = z.object({
-  _id: z.string().min(1).max(200).optional(), id: z.string().min(1).max(200).optional(),
-  username: z.string().min(1).max(200), name: z.string().max(200).optional(),
+  _id: userIdSchema.optional(), id: userIdSchema.optional(),
+  username: z.string().min(1).max(200), name: z.string().max(200).nullish(),
 }).refine(value => !!(value._id || value.id)).transform(value => ({
   id: (value._id || value.id)!, username: value.username, ...(value.name ? { name: value.name } : {}),
 }))
+const accessTokenSchema = z.string().min(1).max(32768).refine(value => value.trim().length > 0)
+export const loginResultSchema = z.union([
+  z.object({ accessToken: accessTokenSchema, tokenType: z.literal('Bearer').optional(), userInfo: websiteUserSchema })
+    .transform(value => ({ token: value.accessToken, user: value.userInfo })),
+  z.object({ token: accessTokenSchema, user: websiteUserSchema }),
+])
 export const fileContentSchema = fileSchema.extend({ content: z.string(), encoding: z.enum(['utf8', 'base64']).optional() })

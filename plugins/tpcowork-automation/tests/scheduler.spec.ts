@@ -6,6 +6,7 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../../deepseek-harness/packages/storage/storage-domain/tests/helpers/memory-backend.ts'
 import Host, { AutomationService, AutomationScheduler } from '../src/host.ts'
+import { AutomationError } from '../src/errors.ts'
 import type { AutomationClock, AutomationExecutor, AutomationRunOutcome, ScheduleConfig, ScheduledTask } from '../src/types.ts'
 
 const contexts: Context[] = []
@@ -190,6 +191,22 @@ describe('Host scheduler', () => {
     h.clock.time += 1000
     await h.scheduler.wake()
     expect(execute).toHaveBeenCalledTimes(2)
+  })
+
+  it('records the executor\'s own explanation of an execution failure, never other error text', async () => {
+    const h = await harness()
+    const execute = vi.fn<AutomationExecutor['execute']>()
+      .mockRejectedValueOnce(new AutomationError('execution_failed', '任务绑定的项目已不存在。'))
+      .mockRejectedValueOnce(new AutomationError('invalid_input', 'internal detail'))
+    await h.service.attachExecutor(executor(execute))
+    const task = await h.create({ frequency: 'manual' })
+    await h.service.runNow({ id: task.id })
+    await vi.waitFor(async () => expect((await h.get(task)).runs[0]?.status).toBe('error'))
+    expect((await h.get(task)).runs[0]).toMatchObject({ errorCode: 'execution_failed', error: '任务绑定的项目已不存在。' })
+    await h.service.runNow({ id: task.id })
+    await vi.waitFor(async () => expect((await h.get(task)).runs).toHaveLength(2))
+    await vi.waitFor(async () => expect((await h.get(task)).runs[0]?.status).toBe('error'))
+    expect((await h.get(task)).runs[0]).toMatchObject({ errorCode: 'execution_failed', error: '自动化执行失败。' })
   })
 
   it('keeps completed once history and never automatically retries failures or skips', async () => {

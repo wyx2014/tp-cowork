@@ -6,6 +6,14 @@ import type { AutomationService } from './host.ts'
 import type { AutomationClock, AutomationExecutor, AutomationRuntime, AutomationTaskId,
   ScheduledTask, ScheduledTaskRun, AutomationRunOutcome } from './types.ts'
 
+/**
+ * The run history's error text: the executor's own explanation of an execution failure (project removed, skill or
+ * connector unavailable, …) when it gave one, otherwise the generic message. Other errors are internal and stay generic.
+ */
+function failureMessage(error: unknown): string {
+  return error instanceof AutomationError && error.code === 'automation/execution_failed' ? error.message : '自动化执行失败。'
+}
+
 export const systemClock: AutomationClock = {
   now: () => Date.now(),
   setTimeout(callback, delayMs) { const timer = setTimeout(callback, delayMs); timer.unref(); return timer },
@@ -154,7 +162,7 @@ export class AutomationScheduler implements AutomationRuntime {
           }
           outcome = { status: 'error', resultType: 'none', conversationAvailable: false,
             errorCode: controller.signal.aborted ? 'run_interrupted' : 'execution_failed',
-            error: controller.signal.aborted ? '运行已中断。' : '自动化执行失败。' }
+            error: controller.signal.aborted ? '运行已中断。' : failureMessage(error) }
         }
         await this.service.finishRun({ ...outcome, taskId: id, runId: run.id })
       }).catch(() => {

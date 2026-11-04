@@ -17,7 +17,7 @@ pnpm start:desktop
 
 构建脚本安装插件开发依赖、生成 Host / Client / Electron 代码，复制原生资产到桌面壳，再编译桌面桥接。正常构建不依赖相邻的 tp-cowork 源码。升级时先退出 DSH，执行相同命令并重新启动；本地网站数据会保留。Electron 安装包构建会包含已有的 `apps/desktop/lib/tpcowork-browser/` 资产，因此构建安装包前也需先构建插件。
 
-桌面载荷也是产品进入桌面主进程的唯一插件入口，因此同时承担外观插件的界面缩放：渲染进程调用 `browserAutomation.request('windowZoom', { action: 'get' | 'in' | 'out' | 'reset' })`，载荷对主窗口应用 1.1 的档位次方（−3 到 +5），调整 macOS 红绿灯或 Windows 标题栏按钮区，并把档位保存到用户数据目录的 `tpcowork-zoom.json`。缩放请求不会启动浏览器本身；浏览器仍在首次使用浏览器功能时启动。
+桌面载荷也是产品进入桌面主进程的唯一插件入口，因此同时承担外观插件的界面缩放：渲染进程调用 `browserAutomation.request('windowZoom', { action: 'get' | 'in' | 'out' | 'reset' })`，载荷对主窗口应用 1.1 的档位次方（−3 到 +5），调整 macOS 红绿灯或 Windows 标题栏按钮区，并把档位保存到用户数据目录的 `tpcowork-zoom.json`。缩放请求不会启动浏览器本身；浏览器仍在首次使用浏览器功能时启动。载荷同样打包 `@tpcowork/dsh-diagnostics` 的主进程部分并转发 `request('diagnostics', { action: 'export', locale })`（隐私确认、打包日志与崩溃报告、在文件管理器中显示），加载时开始记录渲染进程与子进程的异常退出；详见[诊断信息](../tpcowork-diagnostics/README.md)。
 
 ```sh
 node scripts/desktop-plugin.mjs list

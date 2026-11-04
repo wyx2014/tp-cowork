@@ -23,11 +23,13 @@ import Skills from '@deepseek-ai/dsh-skill'
 import Permissions from '@deepseek-ai/dsh-permission-presets'
 import Approval from '@deepseek-ai/dsh-user-approval'
 import Presets from '@deepseek-ai/dsh-agent-preset-registry'
+import SessionTitle from '@deepseek-ai/dsh-session-title'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse, maxTokensResponse } from '../../../../deepseek-harness/packages/core/agent-loop/tests/mock-adapter.ts'
 import { ApiSessionList } from '../../../../deepseek-harness/packages/api/session-controller/src/list.ts'
 import Host from '../src/host.ts'
+import { runTitle } from '../src/run-history.ts'
 import { DshAutomationExecutor, readAutomationOwnership } from '../src/executor.ts'
 import { DshAutomationSessionCleanup } from '../src/cleanup.ts'
 import { AutomationStore } from '../src/storage.ts'
@@ -62,6 +64,7 @@ async function harness(script: ConstructorParameters<typeof MockAdapter>[0] = [t
   ctx.effect(() => async () => { await domains.closeAll(); await backend.close() })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(JsonlPersistence, { root: join(root, 'sessions'), compression: 'none' })
+  await ctx.plugin(SessionTitle, { fallbackMaxWords: 8, fallbackMaxBytes: 96, maxTitleBytes: 120 })
   await ctx.plugin(Query, { path: join(root, 'query.sqlite'), openAt: search ? 'startup' : 'never' })
   await ctx.plugin(Workspaces)
   await ctx.plugin(Skills)
@@ -152,6 +155,10 @@ describe('DSH automation execution', () => {
     expect(run).toMatchObject({ status: 'completed', resultType: 'conversation', conversationAvailable: true })
     const log = await stored(h.ctx, run.sessionId!)
     expect(log.header.cwd).toBe(h.ctx.workingDirectory.defaultDirectory)
+    // Titled before the prompt is sent, not after the run ends.
+    const titled = log.events.findIndex(event => event.type === 'session/title')
+    expect(log.events[titled]?.data).toMatchObject({ title: runTitle({ task, run }, Intl.DateTimeFormat().resolvedOptions().locale) })
+    expect(titled).toBeLessThan(log.events.findIndex(event => event.type === 'user/message'))
     expect(h.adapter.requests).toHaveLength(1)
     expect(h.ctx.agentDefaultModel.currentSelection()).toEqual(selection)
     expect(h.workspaceA.sessionIds).not.toContain(run.sessionId)
@@ -291,8 +298,22 @@ describe('DSH automation execution', () => {
       : binding === 'mcp' ? { mcpPresets: [{ name: 'missing' }] } : {})
     if (binding === 'project') await h.ctx.workspaceRegistry.delete(h.workspaceA.id)
     await h.ctx.automation.runNow({ id: task.id })
-    expect(await h.settled(task)).toMatchObject({ status: 'error', errorCode: 'execution_failed', conversationAvailable: false })
+    expect(await h.settled(task)).toMatchObject({ status: 'error', errorCode: 'execution_failed', conversationAvailable: false,
+      error: { skill: '任务绑定的技能不可用。', mcp: '任务绑定的 MCP 连接器不可用。', project: '任务绑定的项目已不存在。' }[binding] })
     expect(h.adapter.requests).toEqual([])
+  })
+
+  it('follows a project that was removed and added again at the same folder under a new id', async () => {
+    const h = await harness()
+    const task = await h.create({ workspacePath: h.workspaceA.path })
+    await h.ctx.workspaceRegistry.delete(h.workspaceA.id)
+    const readded = await h.ctx.workspaceRegistry.create(h.workspaceA.path)
+    expect(readded.id).not.toBe(task.projectId)
+    await h.ctx.automation.runNow({ id: task.id })
+    const run = await h.settled(task)
+    expect(run).toMatchObject({ status: 'completed', resultType: 'conversation' })
+    expect(readded.sessionIds).toContain(run.sessionId)
+    expect((await stored(h.ctx, run.sessionId!)).header.cwd).toBe(h.workspaceA.path)
   })
 
   it('cancels and drains its owned live Agent on plugin unload, retaining the persisted result', async () => {
