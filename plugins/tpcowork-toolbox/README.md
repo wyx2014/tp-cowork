@@ -47,6 +47,8 @@ npm run test:artifact
 
 Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱：复用底座已校验的独立 Python 3.12 x64，按带 hash 的 wheel 锁补充 PyYAML，并准备 Playwright Chromium 归档。Windows 的默认解释器是随包的 `runtime/python/python.exe`；Electron 安装后使用完整解包目录中的实际路径，不要求用户安装 Python。macOS 开发环境继续使用原有 Python launcher。完整打包流程和 GitHub 操作见 [Windows 打包](../../docs/windows-github-actions.md)。
 
+打包前的启动冒烟测试使用真实的 DSH 本地凭证服务和临时 profile，验证默认 Hub 的未登录状态、默认资源初始化及重启和升级；凭证文件位于测试临时目录，检查不连接内网 Hub。
+
 `src/composition.ts` 将技能、统一安装器和 MCP 管理接在同一 Loader entry 下。首次启动安装随包技能目录和三个默认 MCP 引用；之后只增补新默认项或更新未修改的产品资源，保留禁用、移除、同名自定义项和覆盖。配置/版本决定保存在 DSH settings；内置技能副本安装在当前 profile 的 `skills/`，个人技能直接复用旧 GUI 的系统应用数据目录，没有另建执行或安装注册表。聚源和财汇缺凭证时显示 needs_configuration；Playwright 只使用已准备的本地固定 launcher，不在启动时执行 npx 或下载浏览器，也不注册全局 MCP。
 
 技能和专家团队的「详情」在工具箱内打开面包屑页面，与技能编辑器共用页面布局。点击面包屑或「返回列表」回到原清单，保留搜索与技能来源筛选，并恢复列表位置和入口焦点。技能展示正文、资源文件和实际路径；团队展示封面、介绍、任务示例、可展开的报告结构案例、成员职责及协作阶段。任务示例、案例及「使用团队」均只准备独立聊天草稿，保留此前的草稿，由用户确认后发送。

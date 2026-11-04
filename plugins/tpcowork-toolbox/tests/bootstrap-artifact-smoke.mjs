@@ -9,10 +9,10 @@ const root = process.env.TOOLBOX_PACKAGE_ROOT ?? fileURLToPath(new URL('../', im
 const expertsRoot = process.env.EXPERTS_PACKAGE_ROOT ?? fileURLToPath(new URL('../../tpcowork-experts/', import.meta.url))
 const hook = await artifactPeers()
 const [{ boot, initProfile, readProfilePatches }, { default: Editor }, { default: Settings }, { default: Typert }, { default: Gateway }, { default: Skills }, { default: Tools }, { default: Prompt }, toolbox,
-  { default: RemoteAccess }, { Peer }] = await Promise.all([
+  { default: RemoteAccess }, { Peer }, { default: Credentials }] = await Promise.all([
   import('@deepseek-ai/dsh-app-boot'), import('@deepseek-ai/dsh-config-editor'), import('@deepseek-ai/dsh-settings'), import('@deepseek-ai/dsh-typert-registry'),
   import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-skill'), import('@deepseek-ai/dsh-tools'), import('@deepseek-ai/dsh-system-prompt'), import(pathToFileURL(resolve(root, 'lib/host.js'))),
-  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'),
+  import('@deepseek-ai/dsh-api-remote-access'), import('@deepseek-ai/dsh-client-connection'), import('@deepseek-ai/dsh-credentials-local'),
 ])
 const home = await realpath(await mkdtemp(join(tmpdir(), 'toolbox-release-')))
 const [Sessions, Agents, Projections, Fs, Directory, experts] = await Promise.all([
@@ -36,7 +36,7 @@ try {
     { id: 'prompt', name: 'cordis:prompt' }, { id: 'credentials', name: 'cordis:credentials' },
     { id: 'sessions', name: 'cordis:sessions' }, { id: 'agents', name: 'cordis:agents' }, { id: 'projections', name: 'cordis:projections' },
     { id: 'fs', name: 'cordis:fs' }, { id: 'directory', name: 'cordis:directory' },
-    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills'), bundledRoot: resources }, tpcoworkhub: { endpoint: '' } } },
+    { id: 'experts', name: 'cordis:experts' }, { id: 'tpcowork-toolbox', name: 'cordis:toolbox', config: { skills: { userRoot: join(dir, 'skills'), bundledRoot: resources } } },
   ] }]))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
   const profile = { name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined }
@@ -45,13 +45,8 @@ try {
       ctx.provide('profileContext', profile)
       Object.assign(ctx.loader.builtins, { editor: Editor, settings: Settings, typert: Typert, remoteAccess: RemoteAccess, gateway: Gateway, skills: Skills, tools: Tools, prompt: Prompt, toolbox,
         sessions: Sessions.default, agents: Agents.default, projections: Projections.default, fs: Fs.default, directory: Directory.default, experts,
-        credentials: { apply(inner) {
-          const credentials = new Map()
-          inner.provide('credentials', {
-            describe: async ref => ({ configured: credentials.has(ref), writable: true }),
-            resolve: async ref => credentials.has(ref) ? { value: credentials.get(ref), source: 'test' } : undefined,
-            set: async (ref, value) => { credentials.set(ref, value) },
-          })
+        credentials: { async apply(inner) {
+          await inner.plugin(Credentials, { path: join(home, '.credentials.yaml'), watch: false })
           // Discovery only; the native workflow/AgentLoop execution is exercised by experts tests.
           inner.provide('sessionController', { inspect: async () => ({ events: [] }) })
           inner.provide('sessionQuery', { observeSession: async () => ({ header: { cwd: home }, [Symbol.dispose]() {} }) })
@@ -65,13 +60,14 @@ try {
     ctx.inject(['typertGateway', 'toolboxMcp', 'toolboxTpcoworkHub', 'toolboxTasks', 'toolboxInitialization'], () => { ready.resolve() })
     const timeout = setTimeout(() => ready.reject(new Error('toolbox/default-initialization-timeout')), 30000)
     try { await ready.promise } finally { clearTimeout(timeout) }
-    assert.equal((await ctx.toolbox.retryInitialization()).initialization.state, expectedState)
+    const initialization = (await ctx.toolbox.retryInitialization()).initialization
+    assert.equal(initialization.state, expectedState, JSON.stringify(initialization))
     return ctx
   }
   const ctx = await start()
   const peer = new Peer(ctx, { principal: { kind: 'owner' } })
   assert.deepEqual((await ctx.toolbox.describe()).modules, { skills: true, installer: true, mcp: true, teams: true, tpcoworkhub: true })
-  assert.equal((await ctx.toolboxTpcoworkHub.account()).state, 'unconfigured')
+  assert.deepEqual(await ctx.toolboxTpcoworkHub.account(), { configured: false, writable: true, state: 'signed_out' })
   const teams = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTeams', method: 'inventory', args: {} })
   assert.deepEqual(teams.items.map(item => item.id), ['asset-research-team', 'supply-chain-bottleneck-team'])
   assert.ok(teams.items.every(item => item.readiness.state === 'blocked'))
