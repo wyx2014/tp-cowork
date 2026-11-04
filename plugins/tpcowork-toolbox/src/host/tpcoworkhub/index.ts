@@ -27,19 +27,10 @@ export interface Config {
   /** Internal APIs skills may call with the user's login through the relay: name → base URL. `hub` is always the Hub. */
   apis: Record<string, string>
 }
-/** Release Hub address. */
-export const RELEASE_HUB_ENDPOINT = 'http://10.17.12.229:20255'
-/** Local Hub used when debugging the desktop app (`npm run dev:desktop`). */
-export const DEV_HUB_ENDPOINT = 'http://localhost:8080'
-/**
- * Hub address when the profile sets none: `DSH_TPCOWORKHUB_URL` when set, otherwise the local Hub in the desktop
- * development app and the release Hub everywhere else.
- */
-export function defaultHubEndpoint(env: NodeJS.ProcessEnv = process.env): string {
-  return env.DSH_TPCOWORKHUB_URL || (env.DSH_DESKTOP_DEV_APP === '1' ? DEV_HUB_ENDPOINT : RELEASE_HUB_ENDPOINT)
-}
+/** The TP Cowork Hub address. */
+export const HUB_ENDPOINT = 'http://10.17.12.229:20255'
 export const Config = z.object({
-  endpoint: z.string().default(defaultHubEndpoint()), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
+  endpoint: z.string().default(HUB_ENDPOINT), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
   requestTimeoutMs: z.number().min(1).default(30000), pageSize: z.number().min(1).max(100).default(30),
   maxCatalogItems: z.number().min(1).default(10000), maxResponseBytes: z.number().min(1).default(96 * 1024 * 1024),
   browserAuthTimeoutMs: z.number().min(1000).max(900000).default(300000),
@@ -126,9 +117,9 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private changed(): void { this.ctx.emit('toolbox/changed', { domain: 'tpcoworkhub', revision: ++this.revision }) }
   private endpoint(): string {
     try {
-      const input = this.config.endpoint || process.env.DSH_TPCOWORKHUB_URL
-      if (!input) throw new Error()
-      const url = new URL(input)
+      const url = new URL(this.config.endpoint || HUB_ENDPOINT)
+      // Builds before 2026-11-03 defaulted to a local Hub; a profile may still carry that address.
+      if (url.hostname === 'localhost') return HUB_ENDPOINT
       if (url.search || url.hash || !allowedHubUrl(url)) throw new Error()
       return url.href.replace(/\/+$/, '')
     } catch { throw new TpcoworkHubError('not-configured') }

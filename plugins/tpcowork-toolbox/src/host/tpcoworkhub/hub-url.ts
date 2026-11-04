@@ -6,7 +6,7 @@ export function allowedHubUrl(url: URL): boolean {
   if (url.protocol === 'https:') return true
   if (url.protocol !== 'http:') return false
   const host = url.hostname
-  if (['localhost', '127.0.0.1', '[::1]'].includes(host)) return true
+  if (['127.0.0.1', '[::1]'].includes(host)) return true
   const octets = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/u.exec(host)
   if (!octets) return false
   const [a, b] = [Number(octets[1]), Number(octets[2])]

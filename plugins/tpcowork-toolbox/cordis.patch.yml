@@ -3,5 +3,4 @@
       name: '@tpcowork/dsh-toolbox'
       config:
         tpcoworkhub:
-          endpoint: !!js >-
-            process.env.DSH_TPCOWORKHUB_URL || (process.env.DSH_DESKTOP_DEV_APP === '1' ? 'http://localhost:8080' : 'http://10.17.12.229:20255')
+          endpoint: http://10.17.12.229:20255

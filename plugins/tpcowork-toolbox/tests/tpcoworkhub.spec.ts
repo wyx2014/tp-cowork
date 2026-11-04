@@ -135,6 +135,18 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(await service.detail({ id: 'pending', preview: true })).toMatchObject({ skill: { approvalStatus: 'pending', versionId: '' }, files: [] })
     await expect(service.detail({ id: 'pending' })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-package' })
   })
+  it('ignores environment overrides of the Hub address', async () => {
+    const previous = { ...process.env }
+    Object.assign(process.env, { DSH_DESKTOP_DEV_APP: '1', DSH_TPCOWORKHUB_URL: 'http://localhost:8080' })
+    try {
+      const { service } = await hubFixture({ endpoint: '' })
+      expect((await service.browserAuth()).loginUrl).toBe('http://10.17.12.229:20255/desktop/authorize')
+    } finally { process.env = previous }
+  })
+  it('replaces a local Hub address left in an older profile', async () => {
+    const { service } = await hubFixture({ endpoint: 'http://localhost:8080' })
+    expect((await service.browserAuth()).loginUrl).toBe('http://10.17.12.229:20255/desktop/authorize')
+  })
   it('validates the website session, restores the shared desktop account and clears it on sign-out', async () => {
     const { ctx, endpoint, requests, service, start, attach } = await hubFixture()
     expect(await service.browserAuth()).toEqual({ loginUrl: endpoint + '/desktop/authorize', timeoutMs: 300000 })
