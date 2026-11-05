@@ -77,7 +77,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
       compatibility: 'Kylin Desktop x86_64 requires installation and UI verification on the actual OS' }, null, 2))
     return
   }
-  if (process.platform !== 'linux' || process.arch !== 'x64') throw new Error('TP Cowork: Linux 打包需要 Linux x64；请运行 GitHub Actions 的 Build Kylin Linux Packages。')
+  if (process.platform !== 'linux' || process.arch !== 'x64') throw new Error('TP Cowork: Linux 打包需要 Linux x64；请运行 GitHub Actions 的 Build Linux Packages。')
   if ((process.env.PACKAGE_DEPLOYMENT ?? 'standalone') !== 'standalone') throw new Error('TP Cowork: Linux currently supports standalone packaging only')
   const env = { ...process.env, TPCOWORK_NPM_CLI: npmCli(), DSH_TELEMETRY_DISABLED: '1',
     DSH_DESKTOP_PRODUCT_NAME: product.productName, DSH_DESKTOP_ARTIFACT_PREFIX: product.artifactPrefix,
