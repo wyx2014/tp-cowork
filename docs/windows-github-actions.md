@@ -18,9 +18,12 @@
 2. 打开产品仓库的 **Actions → Build Windows Installer → Run workflow**。
 3. `harness_repository` 保持 `wyx2014/deepseek-harness`；`harness_ref` 填已推送的分支、标签或完整 commit。需要复现某个版本时填写完整 commit。
 4. `build_version` 保持 `auto`；`deployment` 保持 `standalone`，生成独立测试包，无需配置更新策略服务、证书或模型 API Key。
-5. 成功后在运行页面的 **Artifacts** 下载 `TPCowork-windows-x64-…`，解压得到 EXE、SHA-256 文件和 `build-info.json`。后者记录产品、底座两个实际 commit 和打包模式。
+5. `publish_release` 默认勾选，构建和安装验证成功后发布 `windows-packages-<version>` 预发行版。只需要 Actions 下载时取消勾选；手动填写 `build_version` 时使用尚未发布的新版本。
+6. 成功后从仓库 **Releases** 或运行页面的 **Artifacts → TPCowork-windows-x64-…** 下载 EXE、SHA-256 文件和 `build-info.json`。后者记录版本、产品和底座两个实际 commit，以及打包模式。
 
-工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、`desktop-product.json` 中声明的产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。安装包保留 30 天，失败诊断日志保留 14 天。工作流只上传 Actions Artifact，不自动创建 GitHub Release。
+工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、`desktop-product.json` 中声明的产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。上传及发布前再次核验 EXE 的 SHA-256；安装、启动或校验和检查失败会阻止预发行版发布。Actions 安装包保留 30 天，失败诊断日志保留 14 天。
+
+预发行版使用流水线自带的 `GITHUB_TOKEN` 和 `contents: write` 权限，不需要额外的个人令牌。发布说明包含版本、打包模式及两个仓库的实际 commit；预发行版不会设为 Latest。Windows 与 Linux 使用不同的标签前缀，可以分别下载各平台的安装包。
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。
 

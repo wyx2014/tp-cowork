@@ -18,6 +18,11 @@ on:
         type: string
         default: auto
         required: true
+      publish_release:
+        description: '构建成功后发布 GitHub 预发行版，取消则只保留 Actions Artifacts'
+        type: boolean
+        default: true
+        required: true
       deployment:
         description: 'standalone 为独立测试包；test/production 需要更新策略服务'
         type: choice
@@ -34,7 +39,7 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: windows-installer-${{ github.ref }}
@@ -165,9 +170,38 @@ jobs:
         env:
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
         run: ./scripts/smoke-windows-installer-ui.ps1 -InstallerDirectory dist/installers
-      - name: Record packaged sources
+      - name: Read installer metadata and verify checksums
+        id: package
         run: |
-          Get-Content -LiteralPath dist/installers/build-info.json | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          @'
+          import { createHash } from 'node:crypto'
+          import { appendFileSync, createReadStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+          import { basename, join } from 'node:path'
+          const directory = 'dist/installers'
+          const info = JSON.parse(readFileSync(join(directory, 'build-info.json'), 'utf8'))
+          const { version, installers } = info
+          if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/u.test(version)) throw new Error('Missing or invalid Windows package version')
+          if (!Array.isArray(installers) || installers.length !== 1 || typeof installers[0] !== 'string' || basename(installers[0]) !== installers[0] || !installers[0].endsWith('.exe')) throw new Error('Expected one Windows installer in build-info.json')
+          for (const name of installers) {
+            const hash = createHash('sha256')
+            for await (const bytes of createReadStream(join(directory, name))) hash.update(bytes)
+            const expected = `${hash.digest('hex')}  ${name}`
+            if (readFileSync(join(directory, `${name}.sha256`), 'utf8').trimEnd() !== expected) throw new Error(`Windows installer checksum mismatch: ${name}`)
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nrelease_tag=windows-packages-${version}\n`)
+          const notes = [
+            `TP Cowork ${version} Windows x64`, '',
+            '- Built and installation-tested on Windows Server 2022 x64.',
+            `- Product commit: ${info.productCommit}`,
+            `- Harness commit: ${info.harnessCommit}`,
+            `- Deployment: ${info.deployment}; unsigned NSIS installer.`, '',
+            'The EXE, its SHA-256 checksum, and build-info.json are attached.', '',
+          ].join('\n')
+          mkdirSync('.desktop-build', { recursive: true })
+          writeFileSync('.desktop-build/windows-release-notes.md', notes)
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${notes}\n\`\`\`json\n${JSON.stringify(info, null, 2)}\n\`\`\`\n`)
+          '@ | node --input-type=module
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
@@ -178,6 +212,24 @@ jobs:
             tp-cowork/dist/installers/build-info.json
           if-no-files-found: error
           retention-days: 30
+      - name: Publish Windows installer prerelease
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          BUILD_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          $assets = @(Get-ChildItem -LiteralPath dist/installers -File |
+            Where-Object { $_.Extension -in @('.exe', '.sha256') -or $_.Name -eq 'build-info.json' } |
+            ForEach-Object { $_.FullName })
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG) + $assets + @(
+            '--repo', $env:GITHUB_REPOSITORY, '--target', $env:GITHUB_SHA,
+            '--title', "TP Cowork $env:BUILD_VERSION Windows x64", '--prerelease', '--latest=false',
+            '--notes-file', '.desktop-build/windows-release-notes.md'
+          )
+          $releaseUrl = & gh @releaseArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "Release: $releaseUrl" >> $env:GITHUB_STEP_SUMMARY
       - name: Retain packaging diagnostics
         if: always() && steps.harness.outcome == 'success'
         uses: actions/upload-artifact@v4

@@ -33,7 +33,7 @@ npm run dev
 
 ## Windows 安装包
 
-进入本仓库 **Actions → Build Windows Installer → Run workflow**，使用默认 `standalone` 模式即可构建 Windows x64 独立测试包。构建成功后在该次运行的 **Artifacts** 下载安装包、校验文件和构建记录。
+进入本仓库 **Actions → Build Windows Installer → Run workflow**，使用默认 `standalone` 模式即可构建 Windows x64 独立测试包。构建及安装验证成功后，默认同时上传 Actions Artifacts 并发布 GitHub 预发行版，可下载安装包、SHA-256 和构建记录；取消 `publish_release` 则只上传 Artifacts。
 
 详细设置、构建模式及本地命令见 [Windows 云端打包操作](docs/windows-github-actions.md)。
 

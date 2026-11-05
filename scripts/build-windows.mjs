@@ -10,7 +10,7 @@ import { withStagedWindowsApplication } from './stage-windows-smoke.mjs'
 import { prepareDesktopBranding } from './desktop-branding.mjs'
 import { desktopBuildVersionPrefix, validateDesktopBuildVersion } from '../../deepseek-harness/apps/desktop/scripts/desktop-build-version.mjs'
 
-/** Number an unpublished CI artifact without an update server or signing credentials. */
+/** Number an unsigned CI build without an update server or signing credentials. */
 export function standaloneBuildVersion(environment, productVersion, now = new Date()) {
   const requested = environment.PACKAGE_BUILD_VERSION?.trim() || productVersion
   if (requested !== 'auto') return validateDesktopBuildVersion(requested, productVersion)
@@ -94,7 +94,7 @@ export async function buildWindows(argv = process.argv.slice(2)) {
     await withStagedWindowsApplication(application, staged => runCommand(join(staged, `${product.productName}.exe`),
       ['--expose-internals', join(productRoot, 'scripts/smoke-windows-product.mjs'), join(staged, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }))
     const revision = async cwd => (await runCommand('git', ['rev-parse', 'HEAD'], { cwd, env, capture: true })).trim()
-    const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), deployment, unsigned: true }
+    const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), version, deployment, unsigned: true }
     const names = await collectWindowsInstallers(join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'), output, revisions)
     console.log(`TP Cowork: ${join(output, names[0])}`)
   } finally {
