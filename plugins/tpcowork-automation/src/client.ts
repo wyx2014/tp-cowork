@@ -45,7 +45,7 @@ export function createClient(remote: AutomationRemoteApi): AutomationServiceApi 
     update: request => mutate(() => remote.update(request)), delete: request => mutate(() => remote.delete(request)),
     pause: request => mutate(() => remote.pause(request)), resume: request => mutate(() => remote.resume(request)),
     runNow: request => mutate(() => remote.runNow(request)), markRunViewed: request => mutate(() => remote.markRunViewed(request)),
-    deleteRun: request => mutate(() => remote.deleteRun(request)),
+    stopRun: request => mutate(() => remote.stopRun(request)), deleteRun: request => mutate(() => remote.deleteRun(request)),
   }
 }
 

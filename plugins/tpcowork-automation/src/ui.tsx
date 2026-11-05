@@ -57,6 +57,7 @@ export function registerAutomationUi(ctx: Context, remote?: Pick<ClientRemote, '
     update: request => ctx.automation.update(request), delete: request => ctx.automation.delete(request),
     pause: request => ctx.automation.pause(request), resume: request => ctx.automation.resume(request),
     runNow: request => ctx.automation.runNow(request), markRunViewed: request => ctx.automation.markRunViewed(request),
+    stopRun: request => ctx.automation.stopRun(request),
     deleteRun: async request => {
       const result = await ctx.automation.deleteRun(request)
       // Repair the sidebar baseline even when a removal event was missed during reconnect.

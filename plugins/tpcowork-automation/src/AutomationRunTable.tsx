@@ -84,6 +84,7 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
           ...(!showTask ? [{ id: 'open', label: t('jumpToSession'), icon: <AutomationIcon name="external" />, disabled: !canOpenResult(run) || opening || state.pending }] : []),
           ...(showTask && run.resultType !== 'none' && !canOpenResult(run) ? [{ id: 'viewed', label: t('viewed'), disabled: !isUnread(run) || opening || state.pending }] : []),
           ...(!showTask || run.resultType !== 'none' && !canOpenResult(run) ? [{ type: 'separator' as const, id: 'separator' }] : []),
+          ...(run.status === 'running' ? [{ id: 'stop', label: t('stopRun'), icon: <AutomationIcon name="stop" />, danger: true, disabled: state.pending }] : []),
           { id: 'delete', label: t('deleteRecord'), icon: <AutomationIcon name="trash" />, danger: true, disabled: state.pending || opening || run.status === 'running' },
         ]
         return <tr key={run.id} data-task-id={entry.task.id} data-run-id={run.id} data-target={showTask && state.target?.runId === run.id && state.target.taskId === entry.task.id}>
@@ -98,6 +99,7 @@ export function AutomationRunTable({ tasks, showTask = false, catalog, state, se
             setMenu(undefined)
             if (id === 'open') void open(entry)
             else if (id === 'confirm' || id === 'viewed') confirm(entry)
+            else if (id === 'stop') void catalog.mutate(() => services.automation.stopRun({ taskId: entry.task.id, runId: run.id }))
             else if (id === 'delete' && run.status !== 'running') setDeleting(run.id)
           }} anchor={<button type="button" className="tp-auto-icon-button tp-auto-history-more" title={t('runActions')} aria-label={t('runActions')} aria-haspopup="menu" aria-expanded={menu === run.id} onClick={() => setMenu(menu === run.id ? undefined : run.id)}><AutomationIcon name="more" /></button>} /></div></td>
         </tr>

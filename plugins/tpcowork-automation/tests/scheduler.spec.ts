@@ -93,6 +93,54 @@ describe('Host scheduler', () => {
     expect(execute).toHaveBeenCalledTimes(22)
   })
 
+  it('stops a run whose Agent never returns, unlocks the task, and ignores its late settlement', async () => {
+    const h = await harness()
+    const hung = deferred<AutomationRunOutcome>()
+    const next = deferred<AutomationRunOutcome>()
+    const execute = vi.fn<AutomationExecutor['execute']>().mockImplementationOnce(() => hung.promise).mockImplementationOnce(() => next.promise)
+    await h.service.attachExecutor(executor(execute))
+    const task = await h.create()
+    await h.service.runNow({ id: task.id })
+    const stuck = (await h.get(task)).runs[0]!
+    expect(stuck.status).toBe('running')
+    await expect(h.service.delete({ id: task.id })).rejects.toMatchObject({ code: 'automation/task_running' })
+
+    await h.service.stopRun({ taskId: task.id, runId: stuck.id })
+    expect((await h.get(task)).runs[0]).toMatchObject({ id: stuck.id, status: 'error', errorCode: 'run_interrupted', error: '运行已手动停止。' })
+    expect(execute.mock.calls[0]![0].signal.aborted).toBe(true)
+    // Stopping twice, or a finished run, changes nothing.
+    await h.service.stopRun({ taskId: task.id, runId: stuck.id })
+
+    await h.service.runNow({ id: task.id })
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    const second = (await h.get(task)).runs[0]!
+    expect(second.id).not.toBe(stuck.id)
+    // The hung Agent finally returns: it must not rewrite its record or release the new run's execution.
+    hung.resolve(completed)
+    await vi.waitFor(async () => expect((await h.get(task)).runs.find(run => run.id === stuck.id)).toMatchObject({ status: 'error', errorCode: 'run_interrupted' }))
+    await h.service.stopRun({ taskId: task.id, runId: second.id })
+    expect(execute.mock.calls[1]![0].signal.aborted).toBe(true)
+    await h.service.deleteRun({ taskId: task.id, runId: stuck.id })
+    await h.service.delete({ id: task.id })
+  })
+
+  it('lets other due tasks run once a hung scheduled run is stopped', async () => {
+    const h = await harness()
+    const order: string[] = []
+    await h.service.attachExecutor(executor(async ({ task }) => {
+      order.push(task.name)
+      return task.name === 'hung' ? new Promise<AutomationRunOutcome>(() => {}) : completed
+    }))
+    const hung = await h.create({ frequency: 'custom', everyMs: 1000 }, 'hung')
+    await h.create({ frequency: 'custom', everyMs: 2000 }, 'other')
+    h.clock.time += 5000
+    const wake = h.scheduler.wake()
+    await vi.waitFor(() => expect(order).toEqual(['hung']))
+    await h.service.stopRun({ taskId: hung.id, runId: (await h.get(hung)).runs[0]!.id })
+    await wake
+    expect(order).toEqual(['hung', 'other'])
+  })
+
   it('processes current due tasks in time order, awaits each run, and rechecks paused/deleted/edited tasks', async () => {
     const h = await harness()
     const terminal = deferred<AutomationRunOutcome>()

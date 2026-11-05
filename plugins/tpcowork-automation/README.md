@@ -21,7 +21,7 @@ node scripts/desktop-plugin.mjs install automation
 
 ## 状态同步与结果通知（子任务08）
 
-`src/changes.ts` 定义只读 `automationChanges/watch(signal)`，经既有 Typert Gateway 流载体输出 `{type:'ready'}` 和 `{type:'changed',change:{revision,taskId,runId?,reason}}`。订阅在 ready 前建立；多次失效可以合并，客户端每次重新读取 Host 目录，不把事件或 revision 当作运行结果。revision 仅属于一次 Host 激活，重启归零仍能重新读取。`src/remote.ts` 同时注册 Host 和 Client 描述符与取消参数；九个 automation 管理方法、bindings、任务数据及持久化版本不变。接收者由 Host 插件自身 Context 持有，Client 断开或 Host 停用均结束订阅。
+`src/changes.ts` 定义只读 `automationChanges/watch(signal)`，经既有 Typert Gateway 流载体输出 `{type:'ready'}` 和 `{type:'changed',change:{revision,taskId,runId?,reason}}`。订阅在 ready 前建立；多次失效可以合并，客户端每次重新读取 Host 目录，不把事件或 revision 当作运行结果。revision 仅属于一次 Host 激活，重启归零仍能重新读取。`src/remote.ts` 同时注册 Host 和 Client 描述符与取消参数，包含十个 automation 管理方法；bindings、任务数据及持久化版本不变。接收者由 Host 插件自身 Context 持有，Client 断开或 Host 停用均结束订阅。
 
 `src/run-monitor.ts` 与 `src/ui.tsx` 在插件生命周期内共用一个 `AutomationCatalog`，不依赖任务页挂载。Host 推送、Connection reset 和两秒刷新共同同步状态；异常结束的只读流会重新建立。刷新期间的失效会丢弃旧响应并补读，写入期间的失效等待写入后补读，已知 viewedAt 只取较大值，不恢复 Host 已移除的行。编辑器草稿保持独立。
 
@@ -75,6 +75,7 @@ Host 和 Client 都提供 `AutomationServiceApi`。所有成功调用返回 `{ t
 | `resume({ id })` | 任务 ID | `resumeScheduleTask`，Host 重新计算下一时间；manual 无自动目标，过去的 once 不补跑 |
 | `runNow({ id })` | 任务 ID | `runScheduleTaskNow`，允许手动执行暂停任务；返回准入后目录，不等完整执行结束 |
 | `markRunViewed({ taskId, runId })` | 精确运行 ID | `markScheduleRunViewed`，终态记录的已读时间只设置一次；一次性纯提醒确认后删除整个任务，与源网关一致 |
+| `stopRun({ taskId, runId })` | 精确运行 ID | 将运行记录结算为 `run_interrupted`，再请求取消并释放调度；即使 Agent 忽略取消，任务仍可重新执行或删除，晚到结果不改写已结算记录 |
 | `deleteRun({ taskId, runId })` | 精确运行 ID | `deleteScheduleRun`，运行中拒绝；先清理显式专属 Session，再删历史；清理失败保留记录供重试 |
 
 两个客户端字段 `runId` 与 `id` 对新运行始终相同。不导入 nanobot-gui 的旧任务、会话或设置，也不隐式读取原生 Schedule 的历史。`totalRuns` 与源 API 相同，是当前保留的记录数，最多 20，删除记录后递减。
@@ -209,7 +210,7 @@ MCP 绑定使用已有 DSH serverName 命名空间，不迁移旧工程连接器
 
 `src/automation-templates.ts` 直接迁移参考提交 0873ca240ac72ed7678341e360cc96855227f646 的六个中英文模板及真实提示词；选择模板只填草稿，取消不写 Host，保存才创建。“让助手创建”调用宿主 `uiWorkspace.startSession(undefined,{prompt,clearPreviousDraft:false})`，保留已有聊天草稿，通过现有聊天工具完成创建。
 
-新增只读接口为独立 namespace `automationBindings/list({workspacePath?})`，返回 `{skills:[{name,description}],connectors:[{name}],skillsAvailable}`，不改变原九个管理方法、任务 schema 或持久化版本。`src/bindings.ts` 在默认 preset 的临时 scope 中读取宿主公开技能注册表和工具 schema，不创建 Agent/Session，不加载技能正文，不读配置或凭证。只列出可人工调用的技能，MCP 按现有工具的无歧义 `mcp__server__tool` 命名提取；有额外 `__` 的名称无法可靠还原 server identity，目录不猜测，已有绑定由任务草稿保留。简化编辑器不请求此接口，工具创建的任务仍可使用这些执行绑定。
+新增只读接口为独立 namespace `automationBindings/list({workspacePath?})`，返回 `{skills:[{name,description}],connectors:[{name}],skillsAvailable}`，不改变 automation 管理方法、任务 schema 或持久化版本。`src/bindings.ts` 在默认 preset 的临时 scope 中读取宿主公开技能注册表和工具 schema，不创建 Agent/Session，不加载技能正文，不读配置或凭证。只列出可人工调用的技能，MCP 按现有工具的无歧义 `mcp__server__tool` 命名提取；有额外 `__` 的名称无法可靠还原 server identity，目录不猜测，已有绑定由任务草稿保留。简化编辑器不请求此接口，工具创建的任务仍可使用这些执行绑定。
 
 验证：`tests/ui.spec.tsx` 使用渲染控件和真实 AutomationService/storage-domain，覆盖双语六模板、保存/重载往返、不可用绑定、原生项目菜单/目录分离、JSON 项目清空、隐藏配置保留、未保存草稿、失败重试、旧响应/卸载、归档、结果可用性、无效时区/规则和 DST；`tests/bindings.spec.ts` 使用真实技能/工具注册表和 Gateway，验证只读目录及卸载撤销。当前完整回归包含13个文件、528个用例；构建包含 Host/Client 类型检查，产物 smoke 验证既有执行/恢复/删除链路。
 

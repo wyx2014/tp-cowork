@@ -16,7 +16,7 @@ const payload = (status: 'running' | 'completed' | 'error' = 'running', viewedAt
 })
 const empty = (): ScheduleTasksPayload => ({ tasks: [], status: { enabled: true, jobs: 0, next_wake_at_ms: null } })
 function service(list: () => Promise<ScheduleTasksPayload>): AutomationServiceApi {
-  return { list, create: list, update: list, delete: list, pause: list, resume: list, runNow: list, markRunViewed: list, deleteRun: list }
+  return { list, create: list, update: list, delete: list, pause: list, resume: list, runNow: list, markRunViewed: list, stopRun: list, deleteRun: list }
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { resolve, promise } }
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })

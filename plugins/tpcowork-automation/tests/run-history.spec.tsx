@@ -234,3 +234,15 @@ it('leaving history cancels an outstanding open attempt', async () => {
   expect(openSignal.aborted).toBe(true)
   expect(screen.queryByRole('alert')).toBeNull()
 })
+
+it('stops a running record from its menu, which unlocks deleting it', async () => {
+  const h = await harness()
+  const { task, run } = await h.create('live', 'running')
+  await h.show()
+  menuAction('live', en.stopRun)
+  await waitFor(async () => expect((await h.read(task))?.runs[0]).toMatchObject({ id: run.id, status: 'error', errorCode: 'run_interrupted' }))
+  await waitFor(() => expect(within(row('live')).queryByText(en.running)).toBeNull())
+  fireEvent.click(button('live', en.runActions))
+  expect(screen.getByRole('menuitem', { name: en.deleteRecord, exact: true }).hasAttribute('disabled')).toBe(false)
+  expect(screen.queryByRole('menuitem', { name: en.stopRun, exact: true })).toBeNull()
+})

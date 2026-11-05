@@ -36,7 +36,7 @@ export class AutomationScheduler implements AutomationRuntime {
   private disposal: Promise<void> | undefined
   private readonly lifetime = new AbortController()
   private connection: AbortController | undefined
-  private readonly executions = new Map<AutomationTaskId, { controller: AbortController; done: Promise<void> }>()
+  private readonly executions = new Map<AutomationTaskId, { controller: AbortController; runId: string; release(): void; done: Promise<void> }>()
   private readonly admissions = new Set<Promise<unknown>>()
 
   constructor(private readonly ctx: Context, private readonly service: AutomationService, private readonly clock: AutomationClock = systemClock,
@@ -140,6 +140,14 @@ export class AutomationScheduler implements AutomationRuntime {
     return pending
   }
   async runNow(id: AutomationTaskId): Promise<void> { await this.admit(id) }
+  /** A stopped run is already settled; a hung Agent must not hold its task or the dispatch of other tasks. */
+  releaseRun(id: AutomationTaskId, runId: string): void {
+    const execution = this.executions.get(id)
+    if (execution?.runId !== runId) return
+    this.executions.delete(id)
+    execution.controller.abort()
+    execution.release()
+  }
   private async admit(id: AutomationTaskId, scheduledAt?: number): Promise<void> {
     const executor = this.executor
     if (!executor || !this.isReady()) throw new AutomationError('runtime_unavailable', '自动化执行器尚未就绪。')
@@ -168,8 +176,10 @@ export class AutomationScheduler implements AutomationRuntime {
       }).catch(() => {
         // A failed terminal write remains running for Session/Turn recovery, never replay.
         this.ctx.logger.warn('自动化运行结算失败；保留 running 记录等待恢复。')
-      }).finally(() => { this.executions.delete(id); this.arm() })
-      this.executions.set(id, { controller, done })
+      }).finally(() => { if (this.executions.get(id)?.controller === controller) this.executions.delete(id); this.arm() })
+      let release = () => {}
+      const released = new Promise<void>(resolve => { release = resolve })
+      this.executions.set(id, { controller, runId: run.id, release, done: Promise.race([done, released]) })
     })()
     this.admissions.add(admission)
     try { await admission } finally { this.admissions.delete(admission) }

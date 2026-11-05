@@ -274,6 +274,18 @@ export class AutomationService extends TypertRemoteService implements Automation
       return this.save(task, 'run_viewed', runId)
     })
   }
+  async stopRun(request: AutomationRunRequest): Promise<ScheduleTasksPayload> {
+    const { taskId, runId } = parseInput(runRequestSchema, request)
+    await this.ready()
+    const run = this.findRun(this.store.get(taskId), runId)
+    if (run.status === 'running') {
+      // Settle first: the record must unlock even when the Agent ignores cancellation.
+      await this.finishRun({ taskId, runId, status: 'error', resultType: run.conversationAvailable ? 'conversation' : 'none',
+        conversationAvailable: run.conversationAvailable, errorCode: 'run_interrupted', error: '运行已手动停止。' })
+      this.runtime?.releaseRun?.(taskId, runId)
+    }
+    return this.catalog()
+  }
   async deleteRun(request: AutomationRunRequest): Promise<ScheduleTasksPayload> {
     const { taskId, runId } = parseInput(runRequestSchema, request)
     return this.serialize(async () => {

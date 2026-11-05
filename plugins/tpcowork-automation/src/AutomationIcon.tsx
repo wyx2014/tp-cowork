@@ -9,6 +9,7 @@ const paths = {
   edit: <><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" /></>,
   play: <path d="m8 5 11 7-11 7z" />,
   pause: <><path d="M8 5v14M16 5v14" /></>,
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
   more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
   external: <><path d="M14 3h7v7m0-7L10 14M10 5H4v16h16v-6" /></>,
   trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></>,

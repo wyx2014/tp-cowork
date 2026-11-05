@@ -153,6 +153,8 @@ export interface AutomationServiceApi {
   /** Resolves after admission/start persistence, before the full run ends; paused tasks may run manually. */
   runNow(request: AutomationTaskRequest): Promise<ScheduleTasksPayload>
   markRunViewed(request: AutomationRunRequest): Promise<ScheduleTasksPayload>
+  /** Settle a running record at once, then cancel its work; a hung Agent can never keep the task locked. */
+  stopRun(request: AutomationRunRequest): Promise<ScheduleTasksPayload>
   deleteRun(request: AutomationRunRequest): Promise<ScheduleTasksPayload>
 }
 
@@ -171,6 +173,8 @@ export interface AutomationRuntime {
   nextRunAt(schedule: ScheduleConfig, now: number): number | undefined
   /** Must persist start through beginRun before resolving; no automatic retry or full-run wait. */
   runNow(id: AutomationTaskId): Promise<void>
+  /** Cancel a settled run's work and stop waiting for it, even if it never returns. */
+  releaseRun?(id: AutomationTaskId, runId: string): void
   /** Stop timers, abort owned work, remove listeners and await quiescence. Never delete stored data. */
   dispose(): Promise<void>
 }

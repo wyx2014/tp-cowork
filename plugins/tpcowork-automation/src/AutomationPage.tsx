@@ -118,7 +118,9 @@ export function AutomationPage({ services, t, locale }: AutomationPageProps) {
             </div>
             <div className="tp-auto-task-controls"><div className="tp-auto-actions">
               <button type="button" className="tp-auto-icon-button" aria-label={t('edit')} title={t('edit')} disabled={state.pending || running} onClick={() => edit(task)}><AutomationIcon name="edit" /></button>
-              <button type="button" className="tp-auto-icon-button" aria-label={t('run')} title={t('run')} disabled={state.pending || running || !state.catalog?.status.enabled} onClick={() => mutate(() => services.automation.runNow({ id: task.id }))}><AutomationIcon name="play" /></button>
+              {running
+                ? <button type="button" className="tp-auto-icon-button tp-auto-danger" aria-label={t('stopRun')} title={t('stopRun')} disabled={state.pending} onClick={() => mutate(() => services.automation.stopRun({ taskId: task.id, runId: task.runs.find(run => run.status === 'running')!.id }))}><AutomationIcon name="stop" /></button>
+                : <button type="button" className="tp-auto-icon-button" aria-label={t('run')} title={t('run')} disabled={state.pending || !state.catalog?.status.enabled} onClick={() => mutate(() => services.automation.runNow({ id: task.id }))}><AutomationIcon name="play" /></button>}
               <button type="button" className="tp-auto-icon-button tp-auto-danger" aria-label={t('delete')} title={t('delete')} disabled={state.pending || running} onClick={() => setDeleting(task.id)}><AutomationIcon name="trash" /></button>
             </div>
               {task.status === 'completed' ? <span className="tp-auto-badge">{t('completed')}</span> : <button type="button" className="tp-auto-toggle" data-active={task.status === 'active'} aria-pressed={task.status === 'active'} aria-label={t(task.status === 'paused' ? 'resume' : 'pause')} title={t(task.status === 'paused' ? 'resume' : 'pause')} disabled={state.pending} onClick={() => mutate(() => task.status === 'paused' ? services.automation.resume({ id: task.id }) : services.automation.pause({ id: task.id }))}><span /></button>}

@@ -17,9 +17,9 @@ function codec(name: string, schema: ZodType, input = false): TypertCodec {
 const methods: Array<[keyof AutomationServiceApi, ZodType | undefined]> = [
   ['list', undefined], ['create', createSchema], ['update', updateSchema], ['delete', taskRequestSchema],
   ['pause', taskRequestSchema], ['resume', taskRequestSchema], ['runNow', taskRequestSchema],
-  ['markRunViewed', runRequestSchema], ['deleteRun', runRequestSchema],
+  ['markRunViewed', runRequestSchema], ['stopRun', runRequestSchema], ['deleteRun', runRequestSchema],
 ]
-/** Both Host and Client mount these nine validated endpoints on the existing Gateway carrier. */
+/** Both Host and Client mount these ten validated endpoints on the existing Gateway carrier. */
 export const descriptors: readonly InvocationDescriptor[] = methods.map(([method, schema]) => ({
   id: `${packageName}#automation/${method}`, service: 'automation', namespace: 'automation', method,
   invocation: { kind: 'direct' },
