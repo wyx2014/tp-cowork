@@ -46,7 +46,9 @@ bash diagnose-linux-basic.sh
 
 ### 恢复插件的 Linux 标准版
 
-选择 `variant=standard`，应用名为 **TP Cowork Linux**，DEB 包名和命令为 `tpcowork-linux`，产品配置为 `desktop-product.linux.json`。保留 core、UI、workbench、toolbox、automation、memory、archives、usage、diagnostics 和 experts 共 10 个产品插件；不构建或打包 `@tpcowork/dsh-browser`、`@tpcowork/dsh-computer-use`，也不携带浏览器桌面适配器。工具箱自身的 Chromium、TP Cowork Hub 适配器和离线 Python 仍随工具箱交付。
+选择 `variant=standard`，应用名为 **TP Cowork Linux**，DEB 包名和命令为 `tpcowork-linux`，产品配置为 `desktop-product.linux.json`。保留 core、UI、workbench、toolbox、automation、memory、archives、usage、diagnostics 和 experts 共 10 个产品插件；不构建或打包 `@tpcowork/dsh-browser`、`@tpcowork/dsh-computer-use` 或浏览器自动化原生实现。工具箱自身的 Chromium、TP Cowork Hub 适配器和离线 Python 仍随工具箱交付。
+
+界面缩放和诊断导出此前共用浏览器的桌面通信入口；标准版在该兼容入口下只安装独立的通用工具实现，不接受浏览器或客体视图操作。`utilities.json` 记录编译输入，构建及安装包检查均禁止引入浏览器、Computer Use 源码或额外浏览器资源；真实 GUI 还验证缩放可用、浏览器关闭及诊断导出的取消流程。
 
 标准版使用自己的应用数据目录；显式 `DSH_HOME` 仍优先。两种安装包均验证实际产品包清单和运行时解析，随后在开启 Chromium 沙箱的真实图形窗口内完成首次启动，并检查产品界面、记忆、归档、统计和工具箱页面。截图与报告位于 `linux-standard-startup-<run_id>` Artifact。发布附带 `diagnose-linux.sh`，默认启动 `/opt/TP Cowork Linux/tpcowork-linux`。
 

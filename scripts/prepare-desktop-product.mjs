@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { harnessRoot, productRoot, runCommand } from './package-command.mjs'
 import { stageCoreBundle } from './stage-core-bundle.mjs'
+import { prepareLinuxDesktopUtilities } from './prepare-linux-desktop-utilities.mjs'
 import { resolveDesktopTargetBuildPaths } from '../../deepseek-harness/apps/desktop/scripts/desktop-build-paths.mjs'
 
 const product = JSON.parse(await readFile(process.env.DSH_DESKTOP_PRODUCT_CONFIG ?? join(productRoot, 'desktop-product.json'), 'utf8'))
@@ -14,10 +15,8 @@ const staging = dirname(packages)
 await rm(staging, { recursive: true, force: true })
 await mkdir(packages, { recursive: true })
 const env = { ...process.env, TPCOWORK_PACKAGED_PYTHON_SOURCE: join(resolveDesktopTargetBuildPaths().runtime, 'primary-runtime/dependencies/python') }
-// A cached Desktop build must not retain an adapter excluded by this product selection.
-if (!product.bundles.includes('@tpcowork/dsh-browser')) {
-  await rm(join(harnessRoot, 'apps/desktop/lib/tpcowork-browser'), { recursive: true, force: true })
-}
+// Recreate the selected native payload so a cached build cannot mix browser and utility variants.
+await rm(join(harnessRoot, 'apps/desktop/lib/tpcowork-browser'), { recursive: true, force: true })
 for (const [directory, buildArgs] of [
   ['tpcowork-ui', ['build.mjs']], ['tpcowork-browser', ['build.mjs', '--install-native']],
   ['tpcowork-toolbox', ['build.mjs', '--install-native']], ['tpcowork-automation', ['build.mjs']], ['tpcowork-memory', ['build.mjs']], ['tpcowork-archives', ['build.mjs']], ['tpcowork-usage', ['build.mjs']], ['tpcowork-diagnostics', ['build.mjs']], ['tpcowork-computer-use', ['build.mjs']], ['tpcowork-experts', ['build.mjs']],
@@ -26,6 +25,9 @@ for (const [directory, buildArgs] of [
   const cwd = join(productRoot, 'plugins', directory)
   if (directory === 'tpcowork-browser') await runCommand('npm', ['ci', '--legacy-peer-deps', '--no-audit', '--no-fund'], { cwd, env })
   await runCommand(process.execPath, buildArgs, { cwd, env })
+}
+if (!product.bundles.includes('@tpcowork/dsh-browser') && product.bundles.includes('@tpcowork/dsh-diagnostics')) {
+  await prepareLinuxDesktopUtilities()
 }
 await runCommand(process.execPath, [join(productRoot, 'scripts/prepare-toolbox-runtime.mjs'), '--download'], { env })
 // Exercise the compiled services with fresh and existing profiles before creating the installer.

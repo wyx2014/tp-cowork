@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +20,16 @@ const product = JSON.parse(readFileSync(join(runtime, 'desktop-product.json'), '
 assert.deepEqual(product.bundles, expected.bundles)
 assert.deepEqual(readdirSync(join(runtime, 'node_modules/@tpcowork')).sort(),
   expected.bundles.map(name => name.split('/')[1]).sort(), 'Installed product package set must match its descriptor exactly')
-if (!hasBrowser) assert.equal(existsSync(join(resources, 'app.asar/lib/tpcowork-browser')), false, 'Excluded browser adapter must not ship')
+if (!hasBrowser) {
+  const utilities = join(resources, 'app.asar/lib/tpcowork-browser')
+  assert.deepEqual(readdirSync(utilities).sort(), ['desktop.js', 'utilities.json'], 'Only the shared utility bridge may use the legacy transport path')
+  const metadata = JSON.parse(readFileSync(join(utilities, 'utilities.json'), 'utf8'))
+  assert.equal(metadata.browserEnabled, false)
+  assert.deepEqual(metadata.operations, ['windowZoom', 'diagnostics'])
+  assert.ok(metadata.inputs.length > 0)
+  assert.equal(metadata.inputs.some(path => /plugins[\\/]tpcowork-(browser|computer-use)[\\/]/u.test(path)), false,
+    'Shared utility bridge must not contain excluded plugin code')
+}
 for (const name of product.bundles) {
   const directory = join(runtime, 'node_modules', name)
   const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))

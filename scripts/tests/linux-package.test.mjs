@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { buildLinux, collectLinuxInstallers, linuxInstallerNames } from '../build-linux.mjs'
 import { prepareDesktopBasic } from '../prepare-desktop-basic.mjs'
+import { prepareLinuxDesktopUtilities } from '../prepare-linux-desktop-utilities.mjs'
 
 test('collects both Linux formats with their exact bytes, checksums and source revisions', async t => {
   const root = await mkdtemp(join(tmpdir(), 'TP Linux packages '))
@@ -108,4 +109,17 @@ test('Linux startup diagnostics preserve failures and keep sandboxing enabled', 
   assert.doesNotMatch(failure.stdout, /--no-sandbox/u)
   const log = /Startup log: (.+)/u.exec(failure.stdout)[1]
   assert.match(await readFile(log, 'utf8'), /Exit code: 7/u)
+})
+
+test('Linux utilities compile without any excluded plugin input or browser assets', async t => {
+  const output = await mkdtemp(join(tmpdir(), 'tp-linux-utilities-'))
+  t.after(() => rm(output, { recursive: true, force: true }))
+  await prepareLinuxDesktopUtilities({ output })
+  assert.deepEqual((await readdir(output)).sort(), ['desktop.js', 'utilities.json'])
+  const metadata = JSON.parse(await readFile(join(output, 'utilities.json'), 'utf8'))
+  assert.equal(metadata.browserEnabled, false)
+  assert.deepEqual(metadata.operations, ['windowZoom', 'diagnostics'])
+  assert.ok(metadata.inputs.some(path => path.includes('tpcowork-diagnostics/')))
+  assert.ok(metadata.inputs.some(path => path.includes('tpcowork-ui/')))
+  assert.equal(metadata.inputs.some(path => /tpcowork-(browser|computer-use)\//u.test(path)), false)
 })

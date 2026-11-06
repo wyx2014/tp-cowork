@@ -165,7 +165,7 @@ jobs:
             `${productName} ${version} Linux x64`, '',
             '- Built and runtime-tested on Ubuntu 22.04 x64.',
             basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.'
-              : standard ? '- Standard: all 10 remaining product plugins; browser and Computer Use excluded, including the browser desktop adapter.' : '- Full product plugin set.',
+              : standard ? '- Standard: all 10 remaining product plugins; browser and Computer Use automation excluded; shared interface zoom and diagnostics retained.' : '- Full product plugin set.',
             ...(info.guiSmokeVerified ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
             ...(standard ? ['- Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
             `- Included product bundles: ${info.bundles.join(', ') || '(none)'}`,

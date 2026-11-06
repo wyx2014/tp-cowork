@@ -116,6 +116,19 @@ try {
     await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 30_000 })
     page.setDefaultTimeout(30_000)
     await finishFirstRunGuide(page)
+    const zoom = await page.evaluate(() => window.dshDesktop.browserAutomation.request('windowZoom', { action: 'get' }))
+    assert.equal(zoom.level, 0, 'Interface zoom must work without the browser plugin')
+    const browser = await page.evaluate(() => window.dshDesktop.browserAutomation.request('snapshot'))
+    assert.equal(browser.enabled, false, 'Browser automation must remain disabled')
+    const originalDialog = await app.evaluateHandle(({ dialog }) => dialog.showMessageBox)
+    try {
+      await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false }) })
+      const diagnostics = await page.evaluate(() => window.dshDesktop.browserAutomation.request('diagnostics', { action: 'export', locale: 'en' }))
+      assert.equal(diagnostics.status, 'cancelled', 'Diagnostics must retain its privacy confirmation without the browser plugin')
+    } finally {
+      await app.evaluate(({ dialog }, original) => { dialog.showMessageBox = original }, originalDialog)
+      await originalDialog.dispose()
+    }
     await checkInstalledProductUi(page, { clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
       capture: name => capture(`${name}.png`) })
     await page.getByTestId('toolbox-navigation').click()
