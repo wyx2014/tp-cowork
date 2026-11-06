@@ -43,6 +43,8 @@ npm run dev
 
 麒麟上排查启动问题时，选择 `variant=basic` 构建 **TP Cowork Basic**：排除全部 TP Cowork 产品插件，保留底座默认界面，使用独立的应用数据目录，并验证 AppImage 和 DEB 的真实图形窗口启动。基础版发布在 `linux-basic-packages-<version>`，附带启动诊断脚本。
 
+Linux 默认选择 `variant=standard` 构建 **TP Cowork Linux**：在已验证基础版上恢复其余 10 个产品插件，排除浏览器和 Computer Use，以及浏览器原生适配器。工具箱保留自己的 Chromium 和离线 Python 依赖。该版本使用独立数据目录，发布在 `linux-standard-packages-<version>`，并验证真实窗口、产品界面、记忆、归档、统计和工具箱页面；`full` 仍可构建全部 12 个插件。
+
 安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建和本地启动自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
 
 Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命令”。

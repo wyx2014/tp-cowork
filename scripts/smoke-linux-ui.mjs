@@ -1,11 +1,18 @@
-/** Open the packaged Basic GUI with the Chromium sandbox enabled and retain startup evidence. */
+/** Open the selected Linux installer GUI, verify its product surfaces, and retain startup evidence. */
 import assert from 'node:assert/strict'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
+import { finishFirstRunGuide, checkInstalledProductUi } from './installed-ui-checks.mjs'
 
-const [executable, homeArgument, outputArgument] = process.argv.slice(2)
-if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Basic executable, private home and evidence directory')
+const [executable, homeArgument, outputArgument, configArgument] = process.argv.slice(2)
+if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Linux executable, private home and evidence directory')
+const config = JSON.parse(await readFile(configArgument ?? new URL('../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
+const expectedClients = []
+for (const name of config.bundles) {
+  const manifest = JSON.parse(await readFile(new URL(`../plugins/${name.replace('@tpcowork/dsh-', 'tpcowork-')}/package.json`, import.meta.url), 'utf8'))
+  if (manifest.dsh?.client) expectedClients.push(name)
+}
 const home = resolve(homeArgument), output = resolve(outputArgument)
 await mkdir(home, { recursive: true })
 await mkdir(output, { recursive: true })
@@ -40,10 +47,10 @@ async function capture(filename, show = false) {
         if (show) window.show()
         window.focus()
         const image = await window.capturePage(undefined, { stayAwake: true })
-        if (image.isEmpty()) throw new Error('Basic window capture is empty')
+        if (image.isEmpty()) throw new Error('Linux window capture is empty')
         return image.toPNG().toString('base64')
       }, show),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Basic window capture timed out')), 20_000) }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Linux window capture timed out')), 20_000) }),
     ])
     await writeFile(join(output, filename), Buffer.from(png, 'base64'))
   } finally { clearTimeout(timer); await native.dispose() }
@@ -66,7 +73,7 @@ try {
     if (page) break
     await new Promise(done => setTimeout(done, 200))
   }
-  assert.ok(page, 'Basic did not open its main window')
+  assert.ok(page, `${config.productName} did not open its main window`)
   state = { native: await nativeState() }
   // A fresh profile displays Welcome while the already loaded workspace remains hidden.
   // Follow its public no-credentials flow before checking that the workspace is usable.
@@ -74,28 +81,42 @@ try {
   while (Date.now() < deadline) {
     welcome = app.windows().find(window => window.url().endsWith('/renderer/welcome.html'))
     if (welcome) break
+    const current = await nativeState()
+    if (current.windows.some(window => window.url.startsWith('dsh-app://app') && window.visible)) break
     await new Promise(done => setTimeout(done, 200))
   }
-  assert.ok(welcome, 'A fresh Basic profile must display Welcome')
-  await welcome.locator('#api-key').click({ timeout: 30_000 })
-  await welcome.locator('#skip-key').click({ timeout: 30_000 })
+  if (config.bundles.length === 0) assert.ok(welcome, 'A fresh Basic profile must display Welcome')
+  if (welcome) {
+    await welcome.locator('#api-key').click({ timeout: 30_000 })
+    await welcome.locator('#skip-key').click({ timeout: 30_000 })
+  }
   await page.waitForFunction(() => !document.getElementById('dsh-startup')
     && window.__DSH_BOOT__?.entries?.length > 0 && document.querySelector('#root')?.childElementCount > 0,
   null, { timeout: 90_000, polling: 250 })
   await page.getByRole('button').first().waitFor({ state: 'visible', timeout: 30_000 })
   const native = await nativeState()
-  assert.equal(native.name, 'TP Cowork Basic')
-  assert.equal(native.home, join(native.userData, 'harness'), 'Basic must isolate its default Harness profile')
+  assert.equal(native.name, config.productName)
+  assert.equal(native.home, join(native.userData, 'harness'), 'Linux variants must isolate their Harness profile')
   assert.equal(native.argv.includes('--no-sandbox'), false, 'GUI check must exercise the normal Chromium sandbox')
-  assert.ok(native.visibleWindows > 0, 'Basic must show a real window')
+  assert.ok(native.visibleWindows > 0, 'Linux package must show a real window')
   assert.ok(native.windows.some(window => window.url.startsWith('dsh-app://app') && window.visible),
-    'Basic must reveal its workspace after Set up later')
+    'Linux package must reveal its workspace after first-run setup')
   const renderer = await rendererState()
-  assert.deepEqual(renderer.productModules, [], 'Basic renderer must not load product plugins')
-  await capture('basic-window.png')
-  assert.deepEqual(errors, [], 'Basic renderer must start without errors')
+  assert.deepEqual([...renderer.productModules].sort(), expectedClients.sort(), 'Renderer must load exactly the selected product Client modules')
+  if (config.bundles.length > 0) {
+    await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 30_000 })
+    page.setDefaultTimeout(30_000)
+    await finishFirstRunGuide(page)
+    await checkInstalledProductUi(page, { clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
+      capture: name => capture(`${name}.png`) })
+    await page.getByTestId('toolbox-navigation').click()
+    await page.getByTestId('toolbox-page').waitFor({ state: 'visible' })
+    await capture('toolbox.png')
+  }
+  await capture(config.bundles.length === 0 ? 'basic-window.png' : 'linux-window.png')
+  assert.deepEqual(errors, [], 'Linux renderer must start without errors')
   state = { native, renderer }
-  console.log('TP Cowork Basic: real GUI displayed, sandbox enabled, isolated home, zero product Client modules')
+  console.log(`${config.productName}: real GUI displayed, sandbox enabled, isolated home, ${expectedClients.length} selected product Client modules`)
 } catch (error) { failure = error }
 finally {
   if (page && !page.isClosed() && failure) {

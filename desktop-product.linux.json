@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "productName": "TP Cowork Linux",
+  "artifactPrefix": "tpcowork-linux",
+  "appId": "com.tparuyi.tpcowork.dsh.linux",
+  "icon": "branding/icon.png",
+  "prepare": "scripts/prepare-desktop-product.mjs",
+  "packages": ".desktop-build/linux/packages",
+  "bundles": [
+    "@tpcowork/dsh-core",
+    "@tpcowork/dsh-ui",
+    "@tpcowork/dsh-workbench",
+    "@tpcowork/dsh-toolbox",
+    "@tpcowork/dsh-automation",
+    "@tpcowork/dsh-memory",
+    "@tpcowork/dsh-archives",
+    "@tpcowork/dsh-usage",
+    "@tpcowork/dsh-diagnostics",
+    "@tpcowork/dsh-experts"
+  ]
+}

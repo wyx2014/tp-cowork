@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,12 +11,16 @@ import { pathToFileURL } from 'node:url'
 const resources = process.argv[2]
 if (!resources) throw new Error('TP Cowork: packaged resources directory is required')
 const runtime = join(resources, 'app.asar/dsh')
-for (const entry of ['tpcowork-browser/desktop.js', 'tpcoworkhub/desktop.js']) {
+const expected = JSON.parse(readFileSync(process.argv[3] ?? new URL('../desktop-product.json', import.meta.url), 'utf8'))
+const hasBrowser = expected.bundles.includes('@tpcowork/dsh-browser')
+for (const entry of [...(hasBrowser ? ['tpcowork-browser/desktop.js'] : []), 'tpcoworkhub/desktop.js']) {
   assert.ok(readFileSync(join(resources, 'app.asar/lib', entry)).byteLength > 0, `Packaged desktop adapter is empty: ${entry}`)
 }
 const product = JSON.parse(readFileSync(join(runtime, 'desktop-product.json'), 'utf8'))
-const expected = JSON.parse(readFileSync(new URL('../desktop-product.json', import.meta.url), 'utf8'))
 assert.deepEqual(product.bundles, expected.bundles)
+assert.deepEqual(readdirSync(join(runtime, 'node_modules/@tpcowork')).sort(),
+  expected.bundles.map(name => name.split('/')[1]).sort(), 'Installed product package set must match its descriptor exactly')
+if (!hasBrowser) assert.equal(existsSync(join(resources, 'app.asar/lib/tpcowork-browser')), false, 'Excluded browser adapter must not ship')
 for (const name of product.bundles) {
   const directory = join(runtime, 'node_modules', name)
   const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))

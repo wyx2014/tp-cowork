@@ -15,9 +15,10 @@ export async function finishFirstRunGuide(page) {
 }
 
 /** Require the shipped Client modules and developer defaults, then return to the workspace. */
-export async function checkInstalledProductUi(page, { capture = async () => {} } = {}) {
+export async function checkInstalledProductUi(page, { capture = async () => {},
+  clientPlugins = ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage'] } = {}) {
   const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
-  for (const name of ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage']) {
+  for (const name of clientPlugins) {
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
   console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))

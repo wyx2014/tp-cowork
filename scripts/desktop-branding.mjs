@@ -171,9 +171,9 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
         const isolateHome = "if (process.env.DSH_HOME === undefined) process.env.DSH_HOME = join(app.getPath('userData'), 'harness')"
         if (!text.includes(anchor)) throw new Error('Linux Basic: missing Desktop startup anchor')
         text = text.replaceAll(`${isolateHome}\n`, '')
-        if (config.bundles.length === 0) text = text.replace(anchor, `${isolateHome}\n${anchor}`)
+        if (config.bundles.length === 0 || config.appId === 'com.tparuyi.tpcowork.dsh.linux') text = text.replace(anchor, `${isolateHome}\n${anchor}`)
       }
-      text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork', 'DeepSeek Harness')
+      text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork Linux', 'DeepSeek Harness').replaceAll('TP Cowork', 'DeepSeek Harness')
       return productText(file.endsWith('development-app.ts') ? developmentBrand(text)
       : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, name)
       .replaceAll('com.deepseek.harness.dev.', `${config.appId}.dev.`)

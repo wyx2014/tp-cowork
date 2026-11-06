@@ -40,13 +40,15 @@ async function verifyLinuxInstallers(source, product, env, variant) {
   const scratch = await mkdtemp(join(tmpdir(), 'TP Cowork Linux '))
   const smoke = async (application, format) => {
     await runCommand(join(application, product.artifactPrefix), ['--expose-internals',
-      join(productRoot, variant === 'basic' ? 'scripts/smoke-linux-basic-product.mjs' : 'scripts/smoke-windows-product.mjs'), join(application, 'resources')], {
+      join(productRoot, variant === 'basic' ? 'scripts/smoke-linux-basic-product.mjs' : 'scripts/smoke-windows-product.mjs'), join(application, 'resources'),
+      join(productRoot, variant === 'standard' ? 'desktop-product.linux.json' : 'desktop-product.json')], {
       env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
     })
-    if (variant === 'basic') {
-      await runCommand(process.execPath, [join(productRoot, 'scripts/smoke-linux-basic-ui.mjs'),
+    if (variant !== 'full') {
+      await runCommand(process.execPath, [join(productRoot, 'scripts/smoke-linux-ui.mjs'),
         join(application, product.artifactPrefix), join(scratch, `${format}-home`),
-        join(productRoot, '.desktop-build/linux-ui', format)], { env })
+        join(productRoot, '.desktop-build/linux-ui', format),
+        join(productRoot, variant === 'basic' ? 'desktop-product.linux-basic.json' : 'desktop-product.linux.json')], { env })
     }
   }
   try {
@@ -63,7 +65,7 @@ async function verifyLinuxInstallers(source, product, env, variant) {
       .map(name => join(extracted, 'opt', name))
       .filter(path => existsSync(join(path, product.artifactPrefix)) && existsSync(join(path, 'resources/app.asar')))
     if (applications.length !== 1) throw new Error('TP Cowork: DEB must contain exactly one application')
-    if (variant === 'basic') {
+    if (variant !== 'full') {
       const menuDirectory = join(extracted, 'usr/share/applications')
       const entries = await Promise.all((await readdir(menuDirectory)).filter(name => name.endsWith('.desktop'))
         .map(name => readFile(join(menuDirectory, name), 'utf8')))
@@ -72,7 +74,7 @@ async function verifyLinuxInstallers(source, product, env, variant) {
       const executable = command?.[1] ?? command?.[2]
       const expected = `/opt/${basename(applications[0])}/${product.artifactPrefix}`
       if (executable !== expected && executable !== product.artifactPrefix) {
-        throw new Error(`TP Cowork Basic: desktop menu does not point to ${expected}`)
+        throw new Error(`${product.productName}: desktop menu does not point to ${expected}`)
       }
     }
     await smoke(applications[0], 'deb')
@@ -86,16 +88,17 @@ export async function buildLinux(argv = process.argv.slice(2)) {
     check: { type: 'boolean', default: false }, plan: { type: 'boolean', default: false }, 'build-version': { type: 'string' },
     variant: { type: 'string' },
   } })
-  const variant = values.variant ?? process.env.PACKAGE_VARIANT ?? 'full'
-  if (!['full', 'basic'].includes(variant)) throw new Error('TP Cowork: Linux variant must be full or basic')
-  const config = join(productRoot, variant === 'basic' ? 'desktop-product.linux-basic.json' : 'desktop-product.json')
+  const variant = values.variant ?? process.env.PACKAGE_VARIANT ?? 'standard'
+  const configs = { full: 'desktop-product.json', basic: 'desktop-product.linux-basic.json', standard: 'desktop-product.linux.json' }
+  if (!Object.hasOwn(configs, variant)) throw new Error('TP Cowork: Linux variant must be standard, full or basic')
+  const config = join(productRoot, configs[variant])
   const product = JSON.parse(await readFile(config, 'utf8'))
   if (values.plan) {
     console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, appId: product.appId,
       target: 'linux-x64', runner: 'ubuntu-22.04',
       formats: ['AppImage', 'deb'], output: 'dist/installers', deployment: 'standalone',
-      verification: variant === 'basic'
-        ? 'Extract both packages, require zero product plugins, launch the real GUI with Chromium sandbox enabled and capture screenshots'
+      verification: variant !== 'full'
+        ? 'Extract both packages, verify the exact selected plugins, launch the real GUI with Chromium sandbox enabled and capture screenshots'
         : 'Extract both packages and execute bundled Electron, product bundles and offline Python',
       compatibility: 'Kylin Desktop x86_64 requires installation and UI verification on the actual OS' }, null, 2))
     return
@@ -126,11 +129,14 @@ export async function buildLinux(argv = process.argv.slice(2)) {
     productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), version,
     platform: 'linux', arch: 'x64', variant, productName: product.productName, bundles: product.bundles,
     deployment: 'standalone', unsigned: true,
-    buildHost: { platform: process.platform, arch: process.arch }, guiSmokeVerified: variant === 'basic', kylinMachineVerified: false,
+    buildHost: { platform: process.platform, arch: process.arch }, guiSmokeVerified: variant !== 'full', kylinMachineVerified: false,
+    excludedBundles: variant === 'standard' ? ['@tpcowork/dsh-browser', '@tpcowork/dsh-computer-use'] : [],
   })
-  if (variant === 'basic') {
-    const name = 'diagnose-linux-basic.sh'
-    const bytes = await readFile(join(productRoot, 'scripts', name))
+  if (variant !== 'full') {
+    const name = variant === 'basic' ? 'diagnose-linux-basic.sh' : 'diagnose-linux.sh'
+    const template = await readFile(join(productRoot, 'scripts/diagnose-linux-basic.sh'), 'utf8')
+    const bytes = Buffer.from(template.replaceAll('diagnose-linux-basic.sh', name)
+      .replaceAll('TP Cowork Basic', product.productName).replaceAll('tpcowork-basic', product.artifactPrefix))
     await writeFile(join(output, name), bytes, { mode: 0o755 })
     await writeFile(join(output, `${name}.sha256`), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`)
   }

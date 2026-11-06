@@ -19,10 +19,10 @@ on:
         default: auto
         required: true
       variant:
-        description: 'basic 仅底座默认界面，排除全部产品插件；full 为完整功能版'
+        description: 'standard 排除浏览器和 Computer Use、保留其余插件；basic 仅底座；full 全部插件'
         type: choice
-        options: [full, basic]
-        default: full
+        options: [standard, basic, full]
+        default: standard
         required: true
       publish_release:
         description: '构建成功后发布 GitHub 预发行版，取消则只保留 Actions Artifacts'
@@ -157,14 +157,19 @@ jobs:
           const { version } = info
           if (typeof version !== 'string' || !version || /[\r\n]/u.test(version)) throw new Error('Missing or invalid Linux package version')
           const basic = info.variant === 'basic'
-          const productName = basic ? 'TP Cowork Basic' : 'TP Cowork'
-          const tagPrefix = basic ? 'linux-basic-packages' : 'linux-packages'
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nrelease_tag=${tagPrefix}-${version}\nproduct_name=${productName}\nartifact_suffix=${basic ? '-basic' : ''}\n`)
+          const standard = info.variant === 'standard'
+          const productName = info.productName
+          const tagPrefix = basic ? 'linux-basic-packages' : standard ? 'linux-standard-packages' : 'linux-packages'
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nrelease_tag=${tagPrefix}-${version}\nproduct_name=${productName}\nartifact_suffix=${basic ? '-basic' : standard ? '-standard' : ''}\n`)
           const notes = [
             `${productName} ${version} Linux x64`, '',
             '- Built and runtime-tested on Ubuntu 22.04 x64.',
-            basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.' : '- Full product plugin set.',
-            ...(basic ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent Basic application data; startup diagnostic script attached.'] : []),
+            basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.'
+              : standard ? '- Standard: all 10 remaining product plugins; browser and Computer Use excluded, including the browser desktop adapter.' : '- Full product plugin set.',
+            ...(info.guiSmokeVerified ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
+            ...(standard ? ['- Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
+            `- Included product bundles: ${info.bundles.join(', ') || '(none)'}`,
+            `- Excluded product bundles: ${(info.excludedBundles ?? []).join(', ') || '(none)'}`,
             `- Product commit: ${info.productCommit}`,
             `- Harness commit: ${info.harnessCommit}`,
             '- AppImage and DEB (amd64), standalone and unsigned.',
@@ -198,7 +203,9 @@ jobs:
         run: |
           set -euo pipefail
           assets=(dist/installers/*.AppImage dist/installers/*.deb dist/installers/*.sha256 dist/installers/build-info.json)
-          if [ -f dist/installers/diagnose-linux-basic.sh ]; then assets+=(dist/installers/diagnose-linux-basic.sh); fi
+          for helper in dist/installers/*.sh; do
+            if [ -f "$helper" ]; then assets+=("$helper"); fi
+          done
           release_url=$(gh release create "$RELEASE_TAG" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
@@ -207,10 +214,10 @@ jobs:
             --notes-file .desktop-build/linux-release-notes.md)
           echo "Release: $release_url" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain Linux GUI startup evidence
-        if: always() && inputs.variant == 'basic'
+        if: always() && inputs.variant != 'full'
         uses: actions/upload-artifact@v4
         with:
-          name: linux-basic-startup-${{ github.run_id }}
+          name: linux-${{ inputs.variant }}-startup-${{ github.run_id }}
           include-hidden-files: true
           path: tp-cowork/.desktop-build/linux-ui/
           if-no-files-found: warn

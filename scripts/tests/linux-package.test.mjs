@@ -59,7 +59,23 @@ test('Basic plan selects an independent identity and no product plugins', async 
   const full = JSON.parse(fullOutput)
   assert.ok(full.bundles.length > 0)
   assert.notEqual(full.appId, basic.appId)
-  await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be full or basic/u)
+  await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be standard, full or basic/u)
+})
+
+test('default Linux product restores every full-product bundle except browser and Computer Use', async () => {
+  const { stdout } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--plan'], {
+    env: { ...process.env, PACKAGE_VARIANT: 'standard' },
+  })
+  const standard = JSON.parse(stdout)
+  const full = JSON.parse(await readFile(new URL('../../desktop-product.json', import.meta.url), 'utf8'))
+  const basic = JSON.parse(await readFile(new URL('../../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
+  assert.equal(standard.product, 'TP Cowork Linux')
+  assert.equal(standard.variant, 'standard')
+  assert.deepEqual(standard.bundles, full.bundles.filter(name => !['@tpcowork/dsh-browser', '@tpcowork/dsh-computer-use'].includes(name)))
+  assert.equal(standard.bundles.length, 10)
+  assert.notEqual(standard.appId, full.appId)
+  assert.notEqual(standard.appId, basic.appId)
+  assert.match(standard.verification, /real GUI/u)
 })
 
 test('Basic preparation clears old package tarballs without running product plugin builds', async t => {
