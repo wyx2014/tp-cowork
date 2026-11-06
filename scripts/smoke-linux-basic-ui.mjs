@@ -20,6 +20,34 @@ const observe = window => {
   window.on('pageerror', error => errors.push(redact(error.message)))
   window.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())) })
 }
+const nativeState = () => app.evaluate(({ app, BrowserWindow }) => ({
+  name: app.name, userData: app.getPath('userData'), home: process.env.DSH_HOME, argv: process.argv,
+  visibleWindows: BrowserWindow.getAllWindows().filter(window => window.isVisible()).length,
+  windows: BrowserWindow.getAllWindows().map(window => ({ url: window.webContents.getURL(), visible: window.isVisible() })),
+  versions: process.versions,
+}))
+const rendererState = () => page.evaluate(() => ({ title: document.title, text: document.body.innerText.slice(0, 4000),
+  bodyClass: document.body.className, readyState: document.readyState, visibility: document.visibilityState,
+  rootChildren: document.querySelector('#root')?.childElementCount,
+  bootEntries: window.__DSH_BOOT__?.entries?.length,
+  productModules: window.__DSH_BOOT__?.entries?.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) }))
+async function capture(filename, show = false) {
+  const native = await app.browserWindow(page)
+  let timer
+  try {
+    const png = await Promise.race([
+      native.evaluate(async (window, show) => {
+        if (show) window.show()
+        window.focus()
+        const image = await window.capturePage(undefined, { stayAwake: true })
+        if (image.isEmpty()) throw new Error('Basic window capture is empty')
+        return image.toPNG().toString('base64')
+      }, show),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Basic window capture timed out')), 20_000) }),
+    ])
+    await writeFile(join(output, filename), Buffer.from(png, 'base64'))
+  } finally { clearTimeout(timer); await native.dispose() }
+}
 try {
   app = await _electron.launch({ executablePath: resolve(executable), chromiumSandbox: true,
     args: [`--user-data-dir=${join(home, 'electron')}`],
@@ -39,30 +67,41 @@ try {
     await new Promise(done => setTimeout(done, 200))
   }
   assert.ok(page, 'Basic did not open its main window')
-  await page.waitForFunction(() => document.body.classList.contains('dsh-startup-ready')
+  state = { native: await nativeState() }
+  // A fresh profile displays Welcome while the already loaded workspace remains hidden.
+  // Follow its public no-credentials flow before checking that the workspace is usable.
+  let welcome
+  while (Date.now() < deadline) {
+    welcome = app.windows().find(window => window.url().endsWith('/renderer/welcome.html'))
+    if (welcome) break
+    await new Promise(done => setTimeout(done, 200))
+  }
+  assert.ok(welcome, 'A fresh Basic profile must display Welcome')
+  await welcome.locator('#api-key').click({ timeout: 30_000 })
+  await welcome.locator('#skip-key').click({ timeout: 30_000 })
+  await page.waitForFunction(() => !document.getElementById('dsh-startup')
     && window.__DSH_BOOT__?.entries?.length > 0 && document.querySelector('#root')?.childElementCount > 0,
-  null, { timeout: 90_000 })
+  null, { timeout: 90_000, polling: 250 })
   await page.getByRole('button').first().waitFor({ state: 'visible', timeout: 30_000 })
-  const native = await app.evaluate(({ app, BrowserWindow }) => ({
-    name: app.name, userData: app.getPath('userData'), home: process.env.DSH_HOME, argv: process.argv,
-    visibleWindows: BrowserWindow.getAllWindows().filter(window => window.isVisible()).length,
-    versions: process.versions,
-  }))
+  const native = await nativeState()
   assert.equal(native.name, 'TP Cowork Basic')
   assert.equal(native.home, join(native.userData, 'harness'), 'Basic must isolate its default Harness profile')
   assert.equal(native.argv.includes('--no-sandbox'), false, 'GUI check must exercise the normal Chromium sandbox')
   assert.ok(native.visibleWindows > 0, 'Basic must show a real window')
-  const renderer = await page.evaluate(() => ({ title: document.title, text: document.body.innerText.slice(0, 4000),
-    productModules: window.__DSH_BOOT__.entries.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) }))
+  assert.ok(native.windows.some(window => window.url.startsWith('dsh-app://app') && window.visible),
+    'Basic must reveal its workspace after Set up later')
+  const renderer = await rendererState()
   assert.deepEqual(renderer.productModules, [], 'Basic renderer must not load product plugins')
-  await page.screenshot({ path: join(output, 'basic-window.png') })
+  await capture('basic-window.png')
   assert.deepEqual(errors, [], 'Basic renderer must start without errors')
   state = { native, renderer }
   console.log('TP Cowork Basic: real GUI displayed, sandbox enabled, isolated home, zero product Client modules')
 } catch (error) { failure = error }
 finally {
   if (page && !page.isClosed() && failure) {
-    await page.screenshot({ path: join(output, 'failed-window.png'), timeout: 10_000 }).catch(error => logs.push(redact(error)))
+    state = { ...state, native: await nativeState().catch(error => ({ error: redact(error) })),
+      renderer: await rendererState().catch(error => ({ error: redact(error) })) }
+    await capture('failed-window.png', true).catch(error => logs.push(redact(error)))
   }
   try {
     await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), state, errors, logs }, null, 2) + '\n')

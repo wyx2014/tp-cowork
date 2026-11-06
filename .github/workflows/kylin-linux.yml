@@ -81,7 +81,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config dpkg-dev fakeroot libfuse2 xvfb xauth \
+            build-essential pkg-config dpkg-dev fakeroot libfuse2 dbus-x11 xvfb xauth \
             libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxshmfence1 \
             libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
             libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
@@ -137,7 +137,7 @@ jobs:
           TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
           TPCOWORK_IMAGE_EXTRACT_MODEL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_MODEL }}
           TPCOWORK_IMAGE_EXTRACT_API_KEY: ${{ secrets.TPCOWORK_IMAGE_EXTRACT_API_KEY }}
-        run: xvfb-run -a npm run build:linux
+        run: dbus-run-session -- xvfb-run -a npm run build:linux
       - name: Save harness build
         if: >-
           always() && hashFiles('deepseek-harness/apps/desktop/.desktop-build/build-cache/*.json') != '' &&
