@@ -4,7 +4,10 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { buildLinux, collectLinuxInstallers, linuxInstallerNames } from '../build-linux.mjs'
+import { prepareDesktopBasic } from '../prepare-desktop-basic.mjs'
 
 test('collects both Linux formats with their exact bytes, checksums and source revisions', async t => {
   const root = await mkdtemp(join(tmpdir(), 'TP Linux packages '))
@@ -43,4 +46,50 @@ test('rejects missing and ambiguous Linux formats before writing deliverables', 
 
 test('Linux packaging rejects incompatible hosts before installing dependencies', { skip: process.platform === 'linux' && process.arch === 'x64' }, async () => {
   await assert.rejects(buildLinux([]), /Linux x64/u)
+})
+
+test('Basic plan selects an independent identity and no product plugins', async () => {
+  const { stdout } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--variant', 'basic', '--plan'])
+  const basic = JSON.parse(stdout)
+  assert.equal(basic.product, 'TP Cowork Basic')
+  assert.equal(basic.variant, 'basic')
+  assert.deepEqual(basic.bundles, [])
+  assert.equal(basic.appId, 'com.tparuyi.tpcowork.dsh.basic')
+  const { stdout: fullOutput } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--variant', 'full', '--plan'])
+  const full = JSON.parse(fullOutput)
+  assert.ok(full.bundles.length > 0)
+  assert.notEqual(full.appId, basic.appId)
+  await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be full or basic/u)
+})
+
+test('Basic preparation clears old package tarballs without running product plugin builds', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'tp-basic-product-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const config = JSON.parse(await readFile(new URL('../../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
+  await writeFile(join(root, 'desktop-product.linux-basic.json'), JSON.stringify(config))
+  const packages = join(root, '.desktop-build/basic/packages')
+  await mkdir(packages, { recursive: true })
+  await writeFile(join(packages, 'old-product.tgz'), 'stale')
+  assert.equal(await prepareDesktopBasic(root), packages)
+  assert.deepEqual(await readdir(packages), [])
+  await writeFile(join(root, 'desktop-product.linux-basic.json'), JSON.stringify({ ...config, bundles: ['@tpcowork/dsh-toolbox'] }))
+  await assert.rejects(prepareDesktopBasic(root), /must not include product plugins/u)
+})
+
+test('Linux startup diagnostics preserve failures and keep sandboxing enabled', {
+  skip: process.platform === 'win32' && 'Requires POSIX executable permissions and Bash',
+}, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'TP Basic diagnostic '))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const executable = join(root, 'fake basic')
+  await writeFile(executable, '#!/bin/sh\nprintf "run-as-node:%s\\n" "${ELECTRON_RUN_AS_NODE-unset}"\nprintf "%s\\n" "$@"\nexit 7\n', { mode: 0o755 })
+  const failure = await promisify(execFile)('bash', ['scripts/diagnose-linux-basic.sh', '--executable', executable, '--software-rendering'], {
+    env: { ...process.env, TMPDIR: root, ELECTRON_RUN_AS_NODE: '1' },
+  }).catch(error => error)
+  assert.equal(failure.code, 7)
+  assert.match(failure.stdout, /run-as-node:unset/u)
+  assert.match(failure.stdout, /--disable-gpu/u)
+  assert.doesNotMatch(failure.stdout, /--no-sandbox/u)
+  const log = /Startup log: (.+)/u.exec(failure.stdout)[1]
+  assert.match(await readFile(log, 'utf8'), /Exit code: 7/u)
 })

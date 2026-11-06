@@ -41,6 +41,8 @@ npm run dev
 
 进入 **Actions → Build Linux Packages → Run workflow**，由 Ubuntu 22.04 x64 Runner 构建并校验 AppImage 和 DEB，生成 SHA-256 和构建来源记录。默认同时上传 Actions Artifacts 并发布 GitHub 预发行版；取消 `publish_release` 则只上传 Artifacts。操作、参数和麒麟实机验证范围见 [Linux 云端打包](docs/kylin-linux-github-actions.md)。
 
+麒麟上排查启动问题时，选择 `variant=basic` 构建 **TP Cowork Basic**：排除全部 TP Cowork 产品插件，保留底座默认界面，使用独立的应用数据目录，并验证 AppImage 和 DEB 的真实图形窗口启动。基础版发布在 `linux-basic-packages-<version>`，附带启动诊断脚本。
+
 安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建和本地启动自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
 
 Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命令”。

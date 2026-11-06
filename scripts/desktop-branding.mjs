@@ -148,8 +148,8 @@ function windowsApplicationMenu(text) {
 }
 
 /** Product builds run this before the framework compiler and runtime inventories. */
-export async function prepareDesktopBranding({ harness = harnessRoot, product = productRoot, imageProcessor } = {}) {
-  const config = JSON.parse(await readFile(join(product, 'desktop-product.json'), 'utf8'))
+export async function prepareDesktopBranding({ harness = harnessRoot, product = productRoot, configFile = 'desktop-product.json', imageProcessor } = {}) {
+  const config = JSON.parse(await readFile(resolve(product, configFile), 'utf8'))
   const name = config.productName
   const icon = await readFile(resolve(product, config.icon))
   const desktop = join(harness, 'apps/desktop')
@@ -165,10 +165,20 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     'packages/client/locale/src/locales/en.ts', 'packages/client/locale/src/locales/zh.ts',
   ]
   for (const file of textFiles) {
-    await transform(join(harness, file), text => productText(file.endsWith('development-app.ts') ? developmentBrand(text)
+    await transform(join(harness, file), text => {
+      if (file === 'apps/desktop/src/main.ts') {
+        const anchor = 'app.setAppLogsPath()'
+        const isolateHome = "if (process.env.DSH_HOME === undefined) process.env.DSH_HOME = join(app.getPath('userData'), 'harness')"
+        if (!text.includes(anchor)) throw new Error('Linux Basic: missing Desktop startup anchor')
+        text = text.replaceAll(`${isolateHome}\n`, '')
+        if (config.bundles.length === 0) text = text.replace(anchor, `${isolateHome}\n${anchor}`)
+      }
+      text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork', 'DeepSeek Harness')
+      return productText(file.endsWith('development-app.ts') ? developmentBrand(text)
       : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, name)
       .replaceAll('com.deepseek.harness.dev.', `${config.appId}.dev.`)
-      .replace(/label:(\s*)darwin \? app\.name/g, 'label:$1darwin ? currentDesktopLocale().messages.aboutProduct'))
+      .replace(/label:(\s*)darwin \? app\.name/g, 'label:$1darwin ? currentDesktopLocale().messages.aboutProduct')
+    })
   }
   const manifestPath = join(desktop, 'package.json')
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))

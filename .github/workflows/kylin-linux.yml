@@ -18,6 +18,12 @@ on:
         type: string
         default: auto
         required: true
+      variant:
+        description: 'basic 仅底座默认界面，排除全部产品插件；full 为完整功能版'
+        type: choice
+        options: [full, basic]
+        default: full
+        required: true
       publish_release:
         description: '构建成功后发布 GitHub 预发行版，取消则只保留 Actions Artifacts'
         type: boolean
@@ -99,11 +105,13 @@ jobs:
           path: deepseek-harness/apps/desktop/.desktop-build/downloads
           key: primary-runtime-downloads-linux-x64-${{ hashFiles('deepseek-harness/scripts/primary-runtime/lock.json') }}
       - name: Cache toolbox Chromium
+        if: ${{ inputs.variant != 'basic' }}
         uses: actions/cache@v4
         with:
           path: tp-cowork/plugins/tpcowork-toolbox/runtime/browsers
           key: toolbox-playwright-chromium-linux-x64-${{ hashFiles('tp-cowork/plugins/tpcowork-toolbox/package-lock.json') }}
       - name: Cache toolbox Linux Python wheels
+        if: ${{ inputs.variant != 'basic' }}
         uses: actions/cache@v4
         with:
           path: tp-cowork/.cache/toolbox-linux-wheels
@@ -123,6 +131,7 @@ jobs:
         env:
           DSH_DESKTOP_BUILD_CACHE_DIR: ${{ github.workspace }}/deepseek-harness/apps/desktop/.desktop-build/build-cache
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+          PACKAGE_VARIANT: ${{ inputs.variant }}
           TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
           TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
@@ -147,10 +156,15 @@ jobs:
           const info = JSON.parse(readFileSync('dist/installers/build-info.json', 'utf8'))
           const { version } = info
           if (typeof version !== 'string' || !version || /[\r\n]/u.test(version)) throw new Error('Missing or invalid Linux package version')
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nrelease_tag=linux-packages-${version}\n`)
+          const basic = info.variant === 'basic'
+          const productName = basic ? 'TP Cowork Basic' : 'TP Cowork'
+          const tagPrefix = basic ? 'linux-basic-packages' : 'linux-packages'
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nrelease_tag=${tagPrefix}-${version}\nproduct_name=${productName}\nartifact_suffix=${basic ? '-basic' : ''}\n`)
           const notes = [
-            `TP Cowork ${version} Linux x64`, '',
+            `${productName} ${version} Linux x64`, '',
             '- Built and runtime-tested on Ubuntu 22.04 x64.',
+            basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.' : '- Full product plugin set.',
+            ...(basic ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent Basic application data; startup diagnostic script attached.'] : []),
             `- Product commit: ${info.productCommit}`,
             `- Harness commit: ${info.harnessCommit}`,
             '- AppImage and DEB (amd64), standalone and unsigned.',
@@ -164,12 +178,13 @@ jobs:
       - name: Upload Linux packages
         uses: actions/upload-artifact@v4
         with:
-          name: TPCowork-${{ steps.package.outputs.version }}-linux-x64
+          name: TPCowork${{ steps.package.outputs.artifact_suffix }}-${{ steps.package.outputs.version }}-linux-x64
           path: |
             tp-cowork/dist/installers/*.AppImage
             tp-cowork/dist/installers/*.deb
             tp-cowork/dist/installers/*.sha256
             tp-cowork/dist/installers/build-info.json
+            tp-cowork/dist/installers/*.sh
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -179,20 +194,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
           BUILD_VERSION: ${{ steps.package.outputs.version }}
+          PRODUCT_NAME: ${{ steps.package.outputs.product_name }}
         run: |
           set -euo pipefail
-          release_url=$(gh release create "$RELEASE_TAG" \
-            dist/installers/*.AppImage \
-            dist/installers/*.AppImage.sha256 \
-            dist/installers/*.deb \
-            dist/installers/*.deb.sha256 \
-            dist/installers/build-info.json \
+          assets=(dist/installers/*.AppImage dist/installers/*.deb dist/installers/*.sha256 dist/installers/build-info.json)
+          if [ -f dist/installers/diagnose-linux-basic.sh ]; then assets+=(dist/installers/diagnose-linux-basic.sh); fi
+          release_url=$(gh release create "$RELEASE_TAG" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "TP Cowork $BUILD_VERSION Linux x64" \
+            --title "$PRODUCT_NAME $BUILD_VERSION Linux x64" \
             --prerelease --latest=false \
             --notes-file .desktop-build/linux-release-notes.md)
           echo "Release: $release_url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain Linux GUI startup evidence
+        if: always() && inputs.variant == 'basic'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-basic-startup-${{ github.run_id }}
+          include-hidden-files: true
+          path: tp-cowork/.desktop-build/linux-ui/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Retain packaging diagnostics
         if: always() && steps.harness.outcome == 'success'
         uses: actions/upload-artifact@v4

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { harnessRoot, npmCli, productRoot, runCommand } from './package-command.mjs'
@@ -35,19 +35,24 @@ export async function collectLinuxInstallers(source, output, revisions) {
 }
 
 /** Extract both deliverables and execute their own bundled runtime before collecting them. */
-async function verifyLinuxInstallers(source, product, env) {
+async function verifyLinuxInstallers(source, product, env, variant) {
   const [appimage, deb] = await linuxInstallerNames(source)
   const scratch = await mkdtemp(join(tmpdir(), 'TP Cowork Linux '))
-  const smoke = async application => {
+  const smoke = async (application, format) => {
     await runCommand(join(application, product.artifactPrefix), ['--expose-internals',
-      join(productRoot, 'scripts/smoke-windows-product.mjs'), join(application, 'resources')], {
+      join(productRoot, variant === 'basic' ? 'scripts/smoke-linux-basic-product.mjs' : 'scripts/smoke-windows-product.mjs'), join(application, 'resources')], {
       env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
     })
+    if (variant === 'basic') {
+      await runCommand(process.execPath, [join(productRoot, 'scripts/smoke-linux-basic-ui.mjs'),
+        join(application, product.artifactPrefix), join(scratch, `${format}-home`),
+        join(productRoot, '.desktop-build/linux-ui', format)], { env })
+    }
   }
   try {
     // Extraction avoids a FUSE requirement on the hosted runner.
     await runCommand(join(source, appimage), ['--appimage-extract'], { cwd: scratch, env, capture: true })
-    await smoke(join(scratch, 'squashfs-root'))
+    await smoke(join(scratch, 'squashfs-root'), 'appimage')
     const architecture = (await runCommand('dpkg-deb', ['--field', join(source, deb), 'Architecture'], { env, capture: true })).trim()
     if (architecture !== 'amd64') throw new Error(`TP Cowork: unexpected DEB architecture ${architecture}`)
     const packageName = (await runCommand('dpkg-deb', ['--field', join(source, deb), 'Package'], { env, capture: true })).trim()
@@ -58,7 +63,19 @@ async function verifyLinuxInstallers(source, product, env) {
       .map(name => join(extracted, 'opt', name))
       .filter(path => existsSync(join(path, product.artifactPrefix)) && existsSync(join(path, 'resources/app.asar')))
     if (applications.length !== 1) throw new Error('TP Cowork: DEB must contain exactly one application')
-    await smoke(applications[0])
+    if (variant === 'basic') {
+      const menuDirectory = join(extracted, 'usr/share/applications')
+      const entries = await Promise.all((await readdir(menuDirectory)).filter(name => name.endsWith('.desktop'))
+        .map(name => readFile(join(menuDirectory, name), 'utf8')))
+      const entry = entries.find(text => text.includes(`Name=${product.productName}\n`))
+      const command = entry?.match(/^Exec=(?:"([^"]+)"|(\S+))/mu)
+      const executable = command?.[1] ?? command?.[2]
+      const expected = `/opt/${basename(applications[0])}/${product.artifactPrefix}`
+      if (executable !== expected && executable !== product.artifactPrefix) {
+        throw new Error(`TP Cowork Basic: desktop menu does not point to ${expected}`)
+      }
+    }
+    await smoke(applications[0], 'deb')
   } finally {
     await rm(scratch, { recursive: true, force: true })
   }
@@ -67,13 +84,19 @@ async function verifyLinuxInstallers(source, product, env) {
 export async function buildLinux(argv = process.argv.slice(2)) {
   const { values } = parseArgs({ args: argv.filter(value => value !== '--'), options: {
     check: { type: 'boolean', default: false }, plan: { type: 'boolean', default: false }, 'build-version': { type: 'string' },
+    variant: { type: 'string' },
   } })
-  const config = join(productRoot, 'desktop-product.json')
+  const variant = values.variant ?? process.env.PACKAGE_VARIANT ?? 'full'
+  if (!['full', 'basic'].includes(variant)) throw new Error('TP Cowork: Linux variant must be full or basic')
+  const config = join(productRoot, variant === 'basic' ? 'desktop-product.linux-basic.json' : 'desktop-product.json')
   const product = JSON.parse(await readFile(config, 'utf8'))
   if (values.plan) {
-    console.log(JSON.stringify({ product: product.productName, target: 'linux-x64', runner: 'ubuntu-22.04',
+    console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, appId: product.appId,
+      target: 'linux-x64', runner: 'ubuntu-22.04',
       formats: ['AppImage', 'deb'], output: 'dist/installers', deployment: 'standalone',
-      verification: 'Extract both packages and execute bundled Electron, product bundles and offline Python',
+      verification: variant === 'basic'
+        ? 'Extract both packages, require zero product plugins, launch the real GUI with Chromium sandbox enabled and capture screenshots'
+        : 'Extract both packages and execute bundled Electron, product bundles and offline Python',
       compatibility: 'Kylin Desktop x86_64 requires installation and UI verification on the actual OS' }, null, 2))
     return
   }
@@ -87,7 +110,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   const version = standaloneBuildVersion({ ...env, PACKAGE_BUILD_VERSION: values['build-version'] ?? env.PACKAGE_BUILD_VERSION
     ?? (env.GITHUB_RUN_NUMBER ? 'auto' : native.version) }, native.version)
   await runCommand('pnpm', ['install', '--frozen-lockfile'], { cwd: harnessRoot, env })
-  if (!values.check) await prepareDesktopBranding()
+  if (!values.check) await prepareDesktopBranding({ configFile: config })
   const artifacts = join(harnessRoot, 'apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts')
   const output = join(productRoot, 'dist/installers')
   if (!values.check) {
@@ -97,13 +120,20 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   await runCommand('pnpm', ['run', 'package:desktop:linux:x64:unsigned', '--product', config, '--standalone',
     '--build-version', version, ...(values.check ? ['--check'] : [])], { cwd: harnessRoot, env })
   if (values.check) return
-  await verifyLinuxInstallers(artifacts, product, env)
+  await verifyLinuxInstallers(artifacts, product, env, variant)
   const revision = async cwd => (await runCommand('git', ['rev-parse', 'HEAD'], { cwd, env, capture: true })).trim()
   const names = await collectLinuxInstallers(artifacts, output, {
     productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), version,
-    platform: 'linux', arch: 'x64', deployment: 'standalone', unsigned: true,
-    buildHost: { platform: process.platform, arch: process.arch }, kylinMachineVerified: false,
+    platform: 'linux', arch: 'x64', variant, productName: product.productName, bundles: product.bundles,
+    deployment: 'standalone', unsigned: true,
+    buildHost: { platform: process.platform, arch: process.arch }, guiSmokeVerified: variant === 'basic', kylinMachineVerified: false,
   })
+  if (variant === 'basic') {
+    const name = 'diagnose-linux-basic.sh'
+    const bytes = await readFile(join(productRoot, 'scripts', name))
+    await writeFile(join(output, name), bytes, { mode: 0o755 })
+    await writeFile(join(output, `${name}.sha256`), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`)
+  }
   console.log(`TP Cowork: verified Linux packages: ${names.join(', ')}`)
 }
 

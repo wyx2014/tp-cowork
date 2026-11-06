@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "productName": "TP Cowork Basic",
+  "artifactPrefix": "tpcowork-basic",
+  "appId": "com.tparuyi.tpcowork.dsh.basic",
+  "icon": "branding/icon.png",
+  "prepare": "scripts/prepare-desktop-basic.mjs",
+  "packages": ".desktop-build/basic/packages",
+  "bundles": []
+}

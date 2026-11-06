@@ -7,6 +7,7 @@
 1. 打开产品仓库 **Actions → Build Linux Packages → Run workflow**。工作流文件保持为 `.github/workflows/kylin-linux.yml`。
 2. `harness_repository` 默认 `wyx2014/deepseek-harness`，`harness_ref` 默认 `feat/tpcowork-workbench-ui`；复现构建时填写含 Linux 支持的完整 commit。
 3. `build_version` 保持 `auto`，按日期、运行编号和重试次数生成版本。
+   `variant` 可选 `full`（默认完整功能版）或 `basic`（仅底座默认界面，不包含任何 TP Cowork 产品插件）。排查麒麟“安装后打不开”时先选择 `basic`。
 4. `publish_release` 默认勾选，成功后会发布 `linux-packages-<version>` 预发行版。只需要 Actions 下载时取消勾选。手动填写 `build_version` 时使用尚未发布的新版本。
 5. 成功后从 **Artifacts → TPCowork-<version>-linux-x64** 或仓库 **Releases** 下载 `.AppImage`、`.deb`、各自的 `.sha256` 和 `build-info.json`。Artifacts 保留 30 天，打包日志保留 14 天；失败时另外保留未验证的安装包供排查，保留 7 天。
 
@@ -24,6 +25,20 @@ gh workflow run kylin-linux.yml --ref main \
   -f harness_ref=feat/tpcowork-workbench-ui \
   -f build_version=auto -F publish_release=false
 ```
+
+## 麒麟基础试用版
+
+选择 `variant=basic` 后，应用名为 **TP Cowork Basic**，DEB 包名与命令为 `tpcowork-basic`，发布标签为 `linux-basic-packages-<version>`。它不打包 TP Cowork 的外观、浏览器、工具箱、自动化、记忆、归档、统计、诊断、Computer Use 或专家插件，也不构建它们的原生适配器、Chromium 和额外 Python 依赖；聊天、模型设置和桌面运行时使用底座默认实现。基础版默认将 Harness 数据放在自己的应用数据目录，首次启动需要自行配置模型；显式设置 `DSH_HOME` 时遵循该路径。
+
+基础版继续生成 AppImage 和 DEB，并分别从解压后的应用目录启动真实图形窗口，要求加载完成、无渲染错误、无产品客户端模块且 Chromium 沙箱开启。截图和报告保存在 `linux-basic-startup-<run_id>` Artifact，`build-info.json` 记录 `variant=basic`、空产品插件列表和 GUI 检查结果。这些检查在 Ubuntu 22.04 执行，麒麟 V10 SP1 仍由目标机器试装确认。
+
+建议先安装名称以 `tpcowork-basic-` 开头的 DEB。若点击后仍打不开，从同一 Release 下载 `diagnose-linux-basic.sh`，在图形桌面的终端运行：
+
+```sh
+bash diagnose-linux-basic.sh
+```
+
+脚本记录架构、麒麟版本、glibc、缺失的动态库、`chrome-sandbox` 权限及 Electron 启动输出，并打印日志位置。不要用 `sudo` 启动桌面应用。怀疑显卡驱动时可运行 `bash diagnose-linux-basic.sh --software-rendering`，以软件渲染和 X11 方式再试；该选项保留 Chromium 沙箱。AppImage 解压后可传入 `--executable "$PWD/squashfs-root/tpcowork-basic"`，无需 FUSE 挂载。
 
 ## 在麒麟机器验证
 
