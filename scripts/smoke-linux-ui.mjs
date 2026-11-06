@@ -74,15 +74,22 @@ try {
     await new Promise(done => setTimeout(done, 200))
   }
   assert.ok(page, `${config.productName} did not open its main window`)
-  state = { native: await nativeState() }
+  state = { productName: config.productName, expectedClients }
   // A fresh profile displays Welcome while the already loaded workspace remains hidden.
   // Follow its public no-credentials flow before checking that the workspace is usable.
-  let welcome
+  let welcome, workspaceShown = false, shownFailure
+  // Chromium reruns this wait across startup navigation. Repeated main-process evaluations
+  // can instead lose Electron's inspector context while its first windows are being created.
+  const shown = page.waitForFunction(() => document.body.classList.contains('dsh-startup-visible'),
+    null, { timeout: 90_000, polling: 250 }).then(async handle => {
+    workspaceShown = true
+    await handle.dispose()
+  }).catch(error => { shownFailure = error })
   while (Date.now() < deadline) {
     welcome = app.windows().find(window => window.url().endsWith('/renderer/welcome.html'))
     if (welcome) break
-    const current = await nativeState()
-    if (current.windows.some(window => window.url.startsWith('dsh-app://app') && window.visible)) break
+    if (shownFailure) throw shownFailure
+    if (workspaceShown) break
     await new Promise(done => setTimeout(done, 200))
   }
   if (config.bundles.length === 0) assert.ok(welcome, 'A fresh Basic profile must display Welcome')
@@ -90,6 +97,8 @@ try {
     await welcome.locator('#api-key').click({ timeout: 30_000 })
     await welcome.locator('#skip-key').click({ timeout: 30_000 })
   }
+  await shown
+  if (shownFailure) throw shownFailure
   await page.waitForFunction(() => !document.getElementById('dsh-startup')
     && window.__DSH_BOOT__?.entries?.length > 0 && document.querySelector('#root')?.childElementCount > 0,
   null, { timeout: 90_000, polling: 250 })
