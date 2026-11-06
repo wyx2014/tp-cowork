@@ -152,6 +152,8 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const config = JSON.parse(await readFile(resolve(product, configFile), 'utf8'))
   const name = config.productName
   const icon = await readFile(resolve(product, config.icon))
+  // macOS does not mask app icons, so its source carries the Dock's standard margin.
+  const macSource = config.macIcon ? await readFile(resolve(product, config.macIcon)) : icon
   const desktop = join(harness, 'apps/desktop')
   const sharp = imageProcessor ?? createRequire(join(harnessRoot, 'apps/desktop/package.json'))('sharp')
   // The source is high resolution for the Dock and Linux; embedded and window icons use smaller renditions.
@@ -191,8 +193,8 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const images = [
     ['apps/desktop/resources/icon.png', icon512],
     ['apps/desktop/resources/icon-windows.png', icon512],
-    ['apps/desktop/resources/icon-macos.png', await sharp(icon).resize(1024, 1024).png().toBuffer()],
-    ['apps/desktop/resources/icon.icns', await macIcon(icon, sharp)],
+    ['apps/desktop/resources/icon-macos.png', await sharp(macSource).resize(1024, 1024).png().toBuffer()],
+    ['apps/desktop/resources/icon.icns', await macIcon(macSource, sharp)],
     ['apps/desktop/resources/tray-windows.ico', await windowsIcon(icon, sharp)],
     ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, name, true)],
     ['apps/web/public/favicon.svg', productSvg(icon256, name)],
@@ -238,13 +240,14 @@ export async function stageBrandedDesktop(destination = join(productRoot, '.desk
     }
   }
   const icon = await readFile(resolve(productRoot, config.icon))
+  const macSource = config.macIcon ? await readFile(resolve(productRoot, config.macIcon)) : icon
   const sharp = createRequire(join(desktop, 'package.json'))('sharp')
   await writeFile(join(destination, 'renderer/assets/welcome-brand.svg'), productSvg(await sharp(icon).resize(256, 256).png().toBuffer(), config.productName, true))
   const icon512 = await sharp(icon).resize(512, 512).png().toBuffer()
   for (const file of ['icon.png', 'icon-windows.png']) await writeFile(join(destination, 'resources', file), icon512)
-  await writeFile(join(destination, 'resources/icon-macos.png'), await sharp(icon).resize(1024, 1024).png().toBuffer())
+  await writeFile(join(destination, 'resources/icon-macos.png'), await sharp(macSource).resize(1024, 1024).png().toBuffer())
   await writeFile(join(destination, 'resources/tray-windows.ico'), await windowsIcon(icon, sharp))
-  await writeFile(join(destination, 'resources/icon.icns'), await macIcon(icon, sharp))
+  await writeFile(join(destination, 'resources/icon.icns'), await macIcon(macSource, sharp))
   return destination
 }
 

@@ -25,6 +25,8 @@ Host 使用该 token 请求 `users:me`，验证用户资料后才写入 `credent
 
 目录首请求与参考相同，`args: {}`；明确返回 Convex `continueCursor/isDone` 时才按 `paginationOpts` 继续读取。技能可选元数据允许服务返回 `null`，列表版本优先读取 `latestVersion.version`；缺失 ID 或字段类型错误仍拒绝。Host 对完整已读结果搜索与分页，游标绑定查询、短期快照及五分钟有效期。超限/循环游标/不完整形状报错，不呈现成功的空目录；界面分别提示数据格式不兼容、网络失败与超时。实际部署若改变分页响应，需以服务协议调整适配，不能猜测成功。
 
+已部署服务可能把 Java Long 序列化为字符串，Host 接受十进制数字字符串形式的文件 `size` 和发布 `fileCount`，其他形式仍拒绝。文件 `contentType` 在服务端可为空，Host 按 `application/octet-stream` 处理；`protocol` 错误的 `details.field` 只给出被拒绝的字段位置，不含远端值。
+
 下载固定详情中的 versionId 和按 T2 算法计算的包指纹，安装前再读详情拒绝版本漂移。每项检查路径、重复/大小写/NFC 冲突、总大小、文件数、响应 size/hash、实际字节 hash 和必需资源。参考协议的 content 按 UTF-8 解码；仅在响应显式声明 `encoding: 'base64'` 时解码二进制。旧服务若不能无损返回二进制，校验会拒绝而不会安装损坏资源。全部文件交 T2 原子发布；权限、来源所有权、重名和用户修改保护继续由同一个 installer 决定。取消 install 使用 requestId 作为 operationId，等待 T2 清理；失败后重试使用新 requestId。
 
 上传只发生在用户选择本地技能、检查资源并点击上传后。Host 从实际 DSH provider inventory 按 skillId 读取目录，不接受页面路径；保持全部脚本、模板、引用与二进制字节，不修改磁盘源文件。跳过安装 marker、VCS/依赖/缓存、凭证文件、个人画像/会话/日志和本地配置；排除后再次验证入口、声明资源与个人文件引用。正文出现私钥、令牌、明显秘密赋值或个人绝对路径会拒绝。扫描是规则检查，不能识别一切个人信息或压缩包内部秘密，用户资源确认仍必需。

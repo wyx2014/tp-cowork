@@ -123,6 +123,49 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     state.corrupt = true
     await expect(service.detail({ id: 'store-1', preview: true })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-package' })
   })
+  it('previews skills whose files have no stored content type, which the Hub schema allows', async () => {
+    const { service, login, ctx, state } = await hubFixture()
+    await login()
+    state.nullContentType = true
+    const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'store-1', preview: true } } }) as Awaited<ReturnType<typeof service.detail>>
+    expect(result.content).toBe(Buffer.from(state.files[0]!.bytes).toString('utf8'))
+    expect(result.files[0]!.contentType).toBe('application/octet-stream')
+  })
+  it('previews and installs when the Hub serializes file sizes as numeric strings', async () => {
+    const { service, login, ctx, state, installRequest, dir } = await hubFixture()
+    await login()
+    state.stringSizes = true
+    const preview = await service.detail({ id: 'store-1', preview: true })
+    expect(preview.files[0]!.size).toBe(state.files[0]!.bytes.byteLength)
+    expect(preview.content).toBe(Buffer.from(state.files[0]!.bytes).toString('utf8'))
+    const result = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: installRequest('string-sizes') } }) as Awaited<ReturnType<typeof service.install>>
+    expect(result.state).toBe('installed')
+    expect(await readFile(join(dir, 'skills/hub-sample/SKILL.md'))).toEqual(Buffer.from(state.files[0]!.bytes))
+  })
+  it.each(['', '-1', '1.5', 'abc', '99999999999999999'])('rejects the malformed file size %j', async size => {
+    const { service, login, state } = await hubFixture()
+    await login()
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/skills/store-1') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 200, data: { skill: { id: 'store-1' }, latestVersion: { id: 'v', version: '1.0.0' }, files: [{ path: 'SKILL.md', size, sha256: 'a'.repeat(64), contentType: 'text/plain' }] } }))
+      return true
+    }
+    await expect(service.detail({ id: 'store-1' })).rejects.toMatchObject({ code: 'tpcoworkhub/protocol', details: { field: 'files.0.size' } })
+  })
+  it('names the rejected field, never its value, when a detail response breaks the protocol', async () => {
+    const { service, login, state } = await hubFixture()
+    await login()
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/skills/store-1') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 200, data: { skill: { id: 'store-1' }, latestVersion: { id: 'v', version: '1.0.0' }, files: [{ path: 'SKILL.md', size: 1, sha256: secret, contentType: 'text/plain' }] } }))
+      return true
+    }
+    const error = await service.detail({ id: 'store-1' }).catch(value => value)
+    expect(error).toMatchObject({ code: 'tpcoworkhub/protocol', details: { field: 'files.0.sha256' } })
+    expect(JSON.stringify(error.details)).not.toContain(secret)
+  })
   it('allows read-only details for submissions without a version while rejecting them as install packages', async () => {
     const { service, login, state } = await hubFixture()
     await login()

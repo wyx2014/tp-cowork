@@ -9,9 +9,13 @@ const rawSkill = z.object({
   description: z.string().nullish(), summary: z.string().nullish(), version: z.string().nullish(), latestVersionId: z.string().nullish(),
   tags: z.union([z.string(), z.array(z.string())]).nullish(), visibility: z.string().nullish(), approvalStatus: z.string().nullish(),
 })
+// Deployed Hubs serialize Java Long values as strings so browsers keep their precision.
+export const remoteCount = z.union([z.number(), z.string().regex(/^\d{1,16}$/).transform(Number)]).pipe(z.number().int().nonnegative().safe())
+// The Hub stores content_type as nullable and nothing here depends on it; path, size and sha256 stay mandatory.
+const remoteFile = fileSchema.extend({ size: remoteCount, contentType: z.string().max(200).nullish().transform(value => value || 'application/octet-stream') })
 export function decode<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value)
-  if (!parsed.success) throw new TpcoworkHubError('protocol')
+  if (!parsed.success) throw new TpcoworkHubError('protocol', { field: parsed.error.issues[0]?.path.join('.') || 'response' })
   return parsed.data
 }
 function skill(value: unknown): TpcoworkHubSkill {
@@ -32,9 +36,9 @@ export function page(value: unknown) {
   return { items: (raw.page ?? raw.items!).map(row => skill({ ...row.skill, version: row.latestVersion?.version ?? row.skill.version })), next: raw.isDone === true ? null : raw.continueCursor || null }
 }
 export function detail(value: unknown, id: string, maxBytes: number, maxFiles: number, allowUnversioned = false) {
-  const raw = decode(z.object({ skill: rawSkill, latestVersion: z.object({ id: z.string().min(1).max(200), version: z.string() }).nullish(), files: z.array(fileSchema) }), value)
+  const raw = decode(z.object({ skill: rawSkill, latestVersion: z.object({ id: z.string().min(1).max(200), version: z.string() }).nullish(), files: z.array(remoteFile) }), value)
   const item = { ...skill(raw.skill), versionId: raw.latestVersion?.id ?? '', version: raw.latestVersion?.version ?? '' }
-  if (item.id !== id) throw new TpcoworkHubError('protocol')
+  if (item.id !== id) throw new TpcoworkHubError('protocol', { field: 'skill.id' })
   if (raw.latestVersion) validateMetadata(raw.files, maxBytes, maxFiles)
   else if (!allowUnversioned || raw.files.length) throw new TpcoworkHubError('invalid-package')
   return { skill: item, files: raw.files, fingerprint: fingerprint(raw.files.map(file => ({ ...file, bytes: new Uint8Array() }))) }
@@ -66,4 +70,4 @@ export const loginResultSchema = z.union([
     .transform(value => ({ token: value.accessToken, user: value.userInfo })),
   z.object({ token: accessTokenSchema, user: websiteUserSchema }),
 ])
-export const fileContentSchema = fileSchema.extend({ content: z.string(), encoding: z.enum(['utf8', 'base64']).optional() })
+export const fileContentSchema = remoteFile.extend({ content: z.string(), encoding: z.enum(['utf8', 'base64']).optional() })

@@ -25,7 +25,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
   const base = await skillsFixture()
   const requests: { path: string; body: unknown; authorization?: string }[] = []
   const state = {
-    files: sampleFiles(), versionId: 'version-1', expired: false, corrupt: false, badMetadata: false, missingResource: false,
+    files: sampleFiles(), versionId: 'version-1', expired: false, corrupt: false, badMetadata: false, missingResource: false, nullContentType: false, stringSizes: false,
     publishMode: 'ok' as 'ok' | 'rejected' | 'invalid' | 'disconnect' | 'business-failed',
     hold: undefined as undefined | ReturnType<typeof deferred>, entered: deferred(),
     uploaded: [] as { path: string; bytes: Uint8Array }[], loginHash: '', cursorRequests: 0,
@@ -62,7 +62,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
       }
       if (path === '/tpcoworkapi/skills/store-1') {
         const files = state.files.filter(file => !state.missingResource || file.path !== 'scripts/helper.py')
-          .map(file => ({ path: file.path, size: file.bytes.byteLength, sha256: file.sha256, contentType: 'application/octet-stream' }))
+          .map(file => ({ path: file.path, size: state.stringSizes ? String(file.bytes.byteLength) : file.bytes.byteLength, sha256: file.sha256, contentType: state.nullContentType ? null : 'application/octet-stream' }))
         if (state.badMetadata) files.push({ ...files[0]!, path: '../escape' })
         envelope(res, { skill: { id: 'store-1', slug: 'hub-sample', description: 'A shared skill' }, latestVersion: { id: state.versionId, version: '1.0.0' }, files }); return
       }
@@ -70,7 +70,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
         state.entered.resolve()
         if (state.hold) await state.hold.promise
         const file = state.files.find(file => file.path === new URL(path, 'http://fixture').searchParams.get('path'))!
-        envelope(res, { path: file.path, size: file.bytes.byteLength, sha256: file.sha256, contentType: 'application/octet-stream', encoding: file.path.endsWith('.bin') ? 'base64' : 'utf8', content: state.corrupt ? 'corrupted' : Buffer.from(file.bytes).toString(file.path.endsWith('.bin') ? 'base64' : 'utf8') }); return
+        envelope(res, { path: file.path, size: state.stringSizes ? String(file.bytes.byteLength) : file.bytes.byteLength, sha256: file.sha256, contentType: state.nullContentType ? null : 'application/octet-stream', encoding: file.path.endsWith('.bin') ? 'base64' : 'utf8', content: state.corrupt ? 'corrupted' : Buffer.from(file.bytes).toString(file.path.endsWith('.bin') ? 'base64' : 'utf8') }); return
       }
       if (path === '/tpcoworkapi/skills/publish') {
         const form = await new Request('http://fixture', { method: 'POST', headers: { 'content-type': req.headers['content-type']! }, body: bytes }).formData()

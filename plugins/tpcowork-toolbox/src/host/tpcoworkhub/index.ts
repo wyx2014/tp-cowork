@@ -13,7 +13,7 @@ import { parseSkill, sha256, validateFiles, type SkillFile } from '../installer/
 import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
 import { allowedHubUrl } from './hub-url.ts'
-import { decode, detail, fileContentSchema, loginResultSchema, page, websiteUserSchema } from './protocol.ts'
+import { decode, detail, fileContentSchema, loginResultSchema, page, remoteCount, websiteUserSchema } from './protocol.ts'
 import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
 import { apiBase, HUB_API, RelayAuthError, startRelay } from './relay.ts'
@@ -325,7 +325,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         // status is deliberately not interpreted as approved/public: returned IDs only confirm receipt.
         const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
         if (['failed', 'error', 'rejected'].includes(String(value.status))) throw new TpcoworkHubError('publish-rejected')
-        result = decode(publishResultSchema, { skillId: value.skillId, versionId: value.versionId, fingerprint: value.fingerprint, fileCount: value.fileCount })
+        result = decode(publishResultSchema, { skillId: value.skillId, versionId: value.versionId, fingerprint: value.fingerprint, fileCount: decode(remoteCount, value.fileCount) })
         if (result.fileCount !== files.length) throw new TpcoworkHubError('protocol')
       } catch (error) {
         if (error instanceof TpcoworkHubError && ['tpcoworkhub/publish-rejected', 'tpcoworkhub/session-expired'].includes(error.code)) throw error
@@ -366,9 +366,9 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         }
       } finally { await reader.cancel(); reader.releaseLock() }
       let payload: unknown
-      try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw new TpcoworkHubError('protocol') }
+      try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw new TpcoworkHubError('protocol', { field: 'json' }) }
       if (!enveloped) return payload
-      if (!payload || typeof payload !== 'object' || !('code' in payload)) throw new TpcoworkHubError('protocol')
+      if (!payload || typeof payload !== 'object' || !('code' in payload)) throw new TpcoworkHubError('protocol', { field: 'envelope' })
       const envelope = payload as { code: unknown; data?: unknown }
       if (envelope.code === 401) {
         if (!token) throw new TpcoworkHubError('login-failed')

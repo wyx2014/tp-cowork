@@ -88,7 +88,7 @@
 
 身份与独立启停的回归测试位于 core 插件；在同一目录执行 `node node_modules/vitest/vitest.mjs run --config ../plugins/tpcowork-core/vitest.config.ts`。
 
-`icon.png` 使用用户提供的 512×512 渐变机器人图标，侧栏展开时保留纯文字 TP Cowork，收起后的导航图标使用这张品牌图。产品构建先运行 `scripts/desktop-branding.mjs`，由同一资源生成登录欢迎页标志、浏览器图标、Windows 托盘 ICO 和 macOS ICNS；浏览器浅色与深色主题都保留图标原色。该步骤同时将桌面中英文菜单、关于窗口、登录页、更新提示及开发版应用名称统一为 TP Cowork。Windows 安装包构建已自动执行此步骤；本地开发在产品目录运行 `npm run dev`，自动准备品牌、构建并启动。`npm run desktop:preview` 将现有桌面产物复制到 `.desktop-build/branded-desktop`，用于查看品牌资源，不修改底座源码。
+`icon.png` 使用 512×512 TP Cowork 六边形品牌图标，侧栏展开时保留纯文字 TP Cowork，收起后的导航图标使用这张品牌图。产品构建先运行 `scripts/desktop-branding.mjs`，由 `branding/icon.png` 生成登录欢迎页标志、浏览器图标和 Windows 托盘 ICO，由带留白的 `branding/icon-macos.png` 生成 macOS ICNS；浏览器浅色与深色主题都保留图标原色。该步骤同时将桌面中英文菜单、关于窗口、登录页、更新提示及开发版应用名称统一为 TP Cowork。Windows 安装包构建已自动执行此步骤；本地开发在产品目录运行 `npm run dev`，自动准备品牌、构建并启动。`npm run desktop:preview` 将现有桌面产物复制到 `.desktop-build/branded-desktop`，用于查看品牌资源，不修改底座源码。
 
 桌面端（macOS、Linux）主区域参照 ZCode 的 `data-workspace-conversation-frame`：窗口底色改为侧栏底色，会话栏（首页与会话共用）离窗口上、右、下各 4px，圆角 12px、1px 边框，顶部 4px 留白仍可拖动窗口；打开右侧边栏时它是右侧另一块同样的面板，两者间隔 4px。会话标题栏上内边距相应减 5px，标题行与红绿灯保持齐平。首页按窗口高度定位输入框时，桌面端把顶部占用按 76px（4px 留白、1px 边框和 71px 标题栏）计算；首页滚动区不显示滚动条，窗口过矮时仍可滚动。只改样式，构建时读取 DSH `AppFrame` 与 `SidebarRight` 的 CSS Modules 类名；浏览器版、Windows 标题栏布局和右侧全屏保持原样。
 

@@ -56,6 +56,9 @@ test('brands the welcome flow, native menus, developer application and browser b
   const product = JSON.parse(await readFile(join(productRoot, 'desktop-product.json'), 'utf8'))
   const source = await sharp(await readFile(join(productRoot, product.icon))).metadata()
   assert.equal(source.width, 1024, 'the product icon source is high resolution')
+  const edgeAlpha = async file => (await sharp(await readFile(file)).ensureAlpha().extract({ left: 40, top: 512, width: 1, height: 1 }).raw().toBuffer())[3]
+  assert.equal(await edgeAlpha(join(harness, 'apps/desktop/resources/icon-macos.png')), 0, 'the macOS icon keeps the Dock margin')
+  assert.equal(await edgeAlpha(join(productRoot, product.icon)), 255, 'other platforms use the full-bleed icon')
   for (const [file, size] of [['icon-windows.png', 512], ['icon.png', 512], ['icon-macos.png', 1024]]) {
     assert.equal((await sharp(await readFile(join(harness, 'apps/desktop/resources', file))).metadata()).width, size)
   }

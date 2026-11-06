@@ -3,7 +3,7 @@ import type { z } from 'zod'
 
 export type TpcoworkHubCode = `tpcoworkhub/${string}`
 declare module '@deepseek-ai/dsh-typert-protocol' {
-  interface RemoteErrorDetailsMap { [code: `tpcoworkhub/${string}`]: {} }
+  interface RemoteErrorDetailsMap { [code: `tpcoworkhub/${string}`]: { field?: string } }
 }
 const messages: Record<string, string> = {
   'not-configured': '尚未配置 TP Cowork Hub 服务地址。',
@@ -25,7 +25,8 @@ const messages: Record<string, string> = {
 }
 /** Never retain a remote body, URL, credential value or original exception as the cause. */
 export class TpcoworkHubError extends RemoteError<TpcoworkHubCode> {
-  constructor(code: string) { super(`tpcoworkhub/${code}`, messages[code] ?? 'TP Cowork Hub 操作未完成，请检查输入后重试。', {}) }
+  /** `field` names the rejected location for support reports; it must never carry a remote value. */
+  constructor(code: string, details: { field?: string } = {}) { super(`tpcoworkhub/${code}`, messages[code] ?? 'TP Cowork Hub 操作未完成，请检查输入后重试。', details) }
 }
 export function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value)
