@@ -79,8 +79,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          # The hosted Azure mirror can stall on the 61 MB CJK font archive.
+          # Retain Ubuntu's mirror list while preferring the official HTTPS endpoint.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends \
             build-essential pkg-config dpkg-dev fakeroot libfuse2 dbus-x11 xvfb xauth \
             libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxshmfence1 \
             libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
