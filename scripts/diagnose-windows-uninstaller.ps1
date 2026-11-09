@@ -14,6 +14,7 @@ public static class NativeUninstallButtons {
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr window, int id);
     [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(
         IntPtr window, uint message, UIntPtr length, StringBuilder text, uint flags, uint timeout, out UIntPtr result);
@@ -45,7 +46,7 @@ public static class NativeUninstallButtons {
             ShowWindow(window, 1);
             IntPtr details = IntPtr.Zero;
             EnumChildWindows(window, (child, parameter) => {
-                if (Text(child) == "Show details" && IsWindowEnabled(child)) details = child;
+                if (Text(child) == "Show details" && IsWindowVisible(child) && IsWindowEnabled(child)) details = child;
                 return true;
             }, IntPtr.Zero);
             if (details != IntPtr.Zero) { Click(details); return "Click Show details"; }
