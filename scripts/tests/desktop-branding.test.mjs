@@ -61,6 +61,10 @@ test('brands the welcome flow, native menus, developer application and browser b
   for (const [file, size] of [['icon-windows.png', 512], ['icon.png', 512], ['icon-macos.png', 1024]]) {
     assert.equal((await sharp(await readFile(join(harness, 'apps/desktop/resources', file))).metadata()).width, size)
   }
+  for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
+    const rendition = await sharp(await readFile(join(harness, `apps/desktop/resources/linux-icons/${size}x${size}.png`))).metadata()
+    assert.deepEqual([rendition.width, rendition.height], [size, size], 'Linux gets one standard hicolor size per file')
+  }
   const startupLogo = await sharp(await readFile(join(harness, 'apps/web/public/startup-logo.png'))).metadata()
   assert.deepEqual([startupLogo.width, startupLogo.height], [192, 192], 'the startup cover logo is twice its 96px size')
   const wordmark = await readFile(join(harness, 'apps/desktop/renderer/assets/welcome-brand.svg'), 'utf8')
@@ -102,6 +106,11 @@ test('brands the welcome flow, native menus, developer application and browser b
     const oldInput = join(harness, 'old-input.png')
     await cp(join(productRoot, product.icon), oldInput)
     await assert.rejects(convertIcon({ ...options, sources: [oldInput] }), /Icons tool not found/u)
+    // The Linux package installs the generated renditions as they are, one hicolor size each.
+    const linux = createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: product.appId, DSH_DESKTOP_UNSIGNED: '1',
+      DSH_DESKTOP_STANDALONE: '1', DSH_DESKTOP_PRODUCT_CONFIG: join(productRoot, 'desktop-product.json') }, 'linux', 'x64')
+    const set = await convertIcon({ ...options, format: 'set', sources: [linux.linux.icon] })
+    assert.deepEqual(set.icons.map(icon => icon.size).sort((a, b) => a - b), [16, 24, 32, 48, 64, 128, 256, 512])
   } finally {
     if (previousToolset === undefined) delete process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR
     else process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR = previousToolset

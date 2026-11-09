@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "productName": "TP Cowork Linux",
+  "displayName": "TP CoWork",
   "artifactPrefix": "tpcowork-linux",
   "appId": "com.tparuyi.tpcowork.dsh.linux",
   "icon": "branding/icon.png",

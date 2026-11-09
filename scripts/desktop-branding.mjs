@@ -167,6 +167,10 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     // The startup cover shows the logo at 96 CSS pixels; twice that stays sharp on high-density displays.
     ['apps/web/public/startup-logo.png', await sharp(icon).resize(192, 192).png().toBuffer()],
   ]
+  // Linux menus and desktops look icons up by standard hicolor size; the packager installs one file per size.
+  for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
+    images.push([`apps/desktop/resources/linux-icons/${size}x${size}.png`, await sharp(icon).resize(size, size).png().toBuffer()])
+  }
   // electron-builder pairs name@2x.png with name.png into one Retina disk-image background.
   for (const scale of [1, 2]) {
     images.push([`apps/desktop/resources/dmg-background${scale === 2 ? '@2x' : ''}.png`,

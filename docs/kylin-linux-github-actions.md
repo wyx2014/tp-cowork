@@ -78,6 +78,8 @@ chmod +x ./tpcowork-实际文件名.AppImage
 ./tpcowork-实际文件名.AppImage
 ```
 
+DEB 安装后，应用菜单显示 **TP CoWork** 及应用图标（各标准尺寸的 hicolor 图标），并为 `/home` 下已有桌面文件夹的用户各放一个桌面快捷方式（按 `xdg-user-dir DESKTOP`，否则用 `Desktop` 或 `桌面`）。快捷方式以该用户身份创建；用户删除后，升级不会再放回；卸载时一并删除。应用数据目录仍按产品名 `~/.config/TP Cowork Linux`，菜单改名不影响已有数据。AppImage 不安装菜单项和快捷方式。
+
 AppImage 运行依赖系统 FUSE 支持；需要时可先用 `--appimage-extract` 解压，再运行 `squashfs-root/AppRun`。实机验收至少检查应用启动、登录、浏览器打开、工具箱文档处理和退出重启。
 
 ## 本地 Linux 构建

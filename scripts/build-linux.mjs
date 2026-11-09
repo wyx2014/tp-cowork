@@ -69,12 +69,23 @@ async function verifyLinuxInstallers(source, product, env, variant) {
       const menuDirectory = join(extracted, 'usr/share/applications')
       const entries = await Promise.all((await readdir(menuDirectory)).filter(name => name.endsWith('.desktop'))
         .map(name => readFile(join(menuDirectory, name), 'utf8')))
-      const entry = entries.find(text => text.includes(`Name=${product.productName}\n`))
+      const entry = entries.find(text => text.includes(`Name=${product.displayName ?? product.productName}\n`))
       const command = entry?.match(/^Exec=(?:"([^"]+)"|(\S+))/mu)
       const executable = command?.[1] ?? command?.[2]
       const expected = `/opt/${basename(applications[0])}/${product.artifactPrefix}`
       if (executable !== expected && executable !== product.artifactPrefix) {
         throw new Error(`${product.productName}: desktop menu does not point to ${expected}`)
+      }
+      if (!entry.includes(`\nIcon=${product.artifactPrefix}\n`)) throw new Error(`${product.productName}: desktop menu has no product icon`)
+      for (const size of [48, 128, 256]) {
+        if (!existsSync(join(extracted, `usr/share/icons/hicolor/${size}x${size}/apps/${product.artifactPrefix}.png`))) {
+          throw new Error(`${product.productName}: DEB lacks the ${size}px menu icon`)
+        }
+      }
+      const control = join(scratch, 'control')
+      await runCommand('dpkg-deb', ['--control', join(source, deb), control], { env })
+      if (!(await readFile(join(control, 'postinst'), 'utf8')).includes('desktop-shortcut')) {
+        throw new Error(`${product.productName}: DEB does not create the desktop shortcut`)
       }
     }
     await smoke(applications[0], 'deb')
@@ -107,6 +118,8 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   if ((process.env.PACKAGE_DEPLOYMENT ?? 'standalone') !== 'standalone') throw new Error('TP Cowork: Linux currently supports standalone packaging only')
   const env = { ...process.env, TPCOWORK_NPM_CLI: npmCli(), DSH_TELEMETRY_DISABLED: '1',
     DSH_DESKTOP_PRODUCT_NAME: product.productName, DSH_DESKTOP_ARTIFACT_PREFIX: product.artifactPrefix,
+    // The menu shows displayName; productName keeps naming the data folder (~/.config/<productName>).
+    ...(product.displayName ? { DSH_DESKTOP_DISPLAY_NAME: product.displayName } : {}),
     DSH_DESKTOP_HOMEPAGE: 'https://github.com/wyx2014/tp-cowork' }
   await runCommand(process.execPath, [join(productRoot, 'scripts/check-worktree.mjs')], { env })
   const native = JSON.parse(await readFile(join(harnessRoot, 'apps/desktop/package.json'), 'utf8'))
