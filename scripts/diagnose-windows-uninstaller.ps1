@@ -2,6 +2,19 @@ param([Parameter(Mandatory)][string]$Application, [Parameter(Mandatory)][string]
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Native uninstall diagnostics require a disposable Windows Actions runner.' }
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeUninstallButtons {
+    [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr window);
+    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
+    public static void Click(IntPtr button) {
+        if (!PostMessage(GetParent(button), 0x111, (IntPtr)GetDlgCtrlID(button), button))
+            throw new InvalidOperationException("Cannot send the native uninstaller button command.");
+    }
+}
+'@
 $executable = Join-Path $Scratch 'diagnostic-uninstaller.exe'
 Copy-Item -LiteralPath (Join-Path $Application 'Uninstall TP Cowork.exe') -Destination $executable
 $process = Start-Process -FilePath $executable -ArgumentList ('/currentuser --keep-shortcuts --updated _?=' + $Application) -PassThru
@@ -19,17 +32,16 @@ try {
                 $current = ConvertTo-Json -InputObject $texts -Compress
                 if ($current -ne $previous) { Write-Output "Native uninstaller page: $current"; $previous = $current }
                 foreach ($element in $elements) {
-                    if ($element.Current.ControlType -ne [Windows.Automation.ControlType]::Button -or
-                        -not $element.Current.IsEnabled -or $element.Current.IsOffscreen) { continue }
+                    if ($element.Current.ControlType.Id -ne [Windows.Automation.ControlType]::Button.Id -or
+                        -not $element.Current.IsEnabled) { continue }
                     $name = $element.Current.Name.Replace('&', '').Trim()
                     $advance = $name -match '^(Next\s*>?|Uninstall|Show details)$'
                     $finish = $started -and $name -match '^(Close|Finish)$'
                     if (-not ($advance -or $finish)) { continue }
-                    $pattern = $null
-                    if ($element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+                    if ($element.Current.NativeWindowHandle -ne 0) {
                         Write-Output "Native uninstaller action: $name"
                         if ($name -eq 'Uninstall') { $started = $true }
-                        $pattern.Invoke()
+                        [NativeUninstallButtons]::Click([IntPtr]$element.Current.NativeWindowHandle)
                         break
                     }
                 }
