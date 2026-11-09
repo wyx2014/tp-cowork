@@ -86,6 +86,25 @@ it('lays out the home as one centered column: greeting, workspace row, composer 
   // Let theme colour transitions settle before capturing.
   await page.waitForTimeout(400)
   await page.screenshot({ path: join(artifacts, 'home-dark.png') })
+  // The skyline layer is the artwork's own box, fading from transparent at its left edge, and never wider than the
+  // column: a fade measured across the column once left a hard vertical cut in wide, short windows.
+  const initialViewport = page.viewportSize()
+  for (const [width, height] of [[1920, 1034], [2560, 900], [900, 900]]) {
+    await page.setViewportSize({ width, height })
+    const art = await page.locator('[data-phase="hero"]').first().evaluate(root => {
+      const style = getComputedStyle(root, '::before')
+      return { width: parseFloat(style.width), height: parseFloat(style.height), right: parseFloat(style.right),
+        column: root.clientWidth, columnHeight: root.clientHeight, mask: style.maskImage || style.webkitMaskImage }
+    })
+    expect(art.mask).toMatch(/^linear-gradient\(90deg, (?:transparent|rgba\(0, 0, 0, 0\))/u)
+    expect(art.right).toBe(0)
+    expect(art.width).toBeLessThanOrEqual(art.column + 0.5)
+    expect(Math.abs(art.height - art.columnHeight * 0.82)).toBeLessThan(1)
+    if (art.width < art.column) expect(Math.abs(art.width / art.height - 1672 / 941)).toBeLessThan(0.01)
+    if (width === 1920) await page.screenshot({ path: join(artifacts, 'home-dark-wide.png') })
+  }
+  await page.setViewportSize(initialViewport)
+  await settled()
   await page.emulateMedia({ colorScheme: 'light' })
   // The greeting starts on the composer card's edge, and the workspace chip and suggestions keep fixed offsets from
   // it at every width, macOS full screen included.

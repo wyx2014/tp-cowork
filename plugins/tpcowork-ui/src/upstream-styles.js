@@ -139,8 +139,14 @@ export function upstreamStyles(modules) {
   const backdrop = `${selector('conversation', 'root')}[data-phase="hero"]`;
   rules.push(`${backdrop} { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }`);
   rules.push(`${backdrop}::before, ${backdrop}::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }`);
-  rules.push(`${backdrop}::before { inset: 0; background: var(--tpcowork-home-art) right top / auto 82% no-repeat;
-    mask-image: linear-gradient(90deg, transparent 10%, #000 48%, #000); opacity: var(--tpcowork-home-art-opacity); }`);
+  // The skyline layer is the artwork's own box (assets/home-*.webp are 1672x941), so its fade starts at the picture's
+  // left edge whatever the window's shape. A fade measured across the column left that edge opaque in wide, short
+  // windows, where it showed as a hard vertical cut, most visibly in the dark theme.
+  // In a narrow column the box is capped at the column's width and the artwork crops from the left rather than spill.
+  rules.push(`${backdrop}::before { top: 0; right: 0; height: 82%; aspect-ratio: 1672 / 941; max-width: 100%;
+    background: var(--tpcowork-home-art) right top / cover no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%);
+    opacity: var(--tpcowork-home-art-opacity); }`);
   rules.push(`${backdrop}::after { inset: 49% 0 0; background: var(--tpcowork-home-art) right bottom / 100% 275% no-repeat;
     mask-image: linear-gradient(180deg, transparent, #000 32%); opacity: var(--tpcowork-home-art-opacity); }`);
   rule('input', 'root', 'padding: var(--dsh-composer-padding);');
