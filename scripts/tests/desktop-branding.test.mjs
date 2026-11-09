@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -96,7 +96,9 @@ test('brands the welcome flow, native menus, developer application and browser b
     process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR = emptyToolset
     const options = { roots: [harness], fallbackSources: [], format: 'ico', outDir: join(harness, 'converted-icons') }
     const result = await convertIcon({ ...options, sources: [config.win.icon] })
-    assert.deepEqual(result.icons, [{ file: await realpath(join(harness, 'apps/desktop/resources/icon-windows.ico')), size: 256 }])
+    assert.equal(result.icons.length, 1)
+    assert.equal(result.icons[0].size, 256)
+    assert.deepEqual(await readFile(result.icons[0].file), ico)
     const oldInput = join(harness, 'old-input.png')
     await cp(join(productRoot, product.icon), oldInput)
     await assert.rejects(convertIcon({ ...options, sources: [oldInput] }), /Icons tool not found/u)
