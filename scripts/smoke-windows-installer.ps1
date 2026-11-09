@@ -4,7 +4,7 @@ if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run the real product installation c
 $installers = @(Get-ChildItem -LiteralPath $InstallerDirectory -Filter '*.exe' -File)
 if ($installers.Count -ne 1) { throw "Expected one installer, found $($installers.Count)" }
 $scratch = [IO.Directory]::CreateTempSubdirectory('tp-install-').FullName
-$application = Join-Path $scratch 'TP Cowork'
+$application = Join-Path $env:LOCALAPPDATA 'Programs\TP Cowork'
 $uninstaller = Join-Path $application 'Uninstall TP Cowork.exe'
 $productSmoke = Join-Path $PSScriptRoot 'smoke-windows-product.mjs'
 $legacy = Join-Path $scratch 'nanobot'
@@ -14,6 +14,7 @@ $legacyGuid = 'b542a9d7-0e9f-56ff-bedf-01b1117d50af'
 $legacyKeys = @("HKCU:\Software\$legacyGuid", "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$legacyGuid")
 $ownedLegacyKeys = @()
 $failure = $null
+$ownsApplication = $false
 
 Add-Type -TypeDefinition @'
 using System;
@@ -97,6 +98,8 @@ function Invoke-InstallerProcess([string]$Executable, [string]$Arguments) {
 }
 
 try {
+    if (Test-Path -LiteralPath $application) { throw "The default installation directory already exists; refusing to overwrite it: $application" }
+    $ownsApplication = $true
     if (-not $Diagnostics) {
         New-Item -ItemType Directory -Path $legacy | Out-Null
         $markerLiteral = '@"' + $legacyMarker.Replace('"', '""') + '"'
@@ -122,6 +125,11 @@ try {
         }
         # NSIS requires /D last and unquoted, even when the path contains spaces.
         Invoke-InstallerProcess $installers[0].FullName ("/S /D=" + $application)
+        if ($mode -eq 'first installation') {
+            $longest = Get-ChildItem -LiteralPath $application -Recurse -File |
+                Sort-Object { $_.FullName.Length } -Descending | Select-Object -First 1
+            Write-Output "Longest installed path ($($longest.FullName.Length) characters): $($longest.FullName)"
+        }
         if (-not $Diagnostics) {
             $hadElectronMode = Test-Path Env:ELECTRON_RUN_AS_NODE
             $previousElectronMode = $env:ELECTRON_RUN_AS_NODE
@@ -152,7 +160,7 @@ try {
     if (Test-Path -LiteralPath $legacyMarker) { Write-Output 'Legacy nanobot uninstaller was invoked by the DSH installer.' }
 } finally {
     try {
-        if (Test-Path -LiteralPath $uninstaller) {
+        if ($ownsApplication -and (Test-Path -LiteralPath $uninstaller)) {
             Invoke-InstallerProcess $uninstaller ("/S _?=" + $application)
         }
     } catch {
@@ -160,6 +168,7 @@ try {
         else { Write-Warning "Cleanup failed: $_" }
     } finally {
         foreach ($key in $ownedLegacyKeys) { Remove-Item -LiteralPath $key -Recurse -Force }
+        if ($ownsApplication -and (Test-Path -LiteralPath $application)) { Remove-Item -LiteralPath $application -Recurse -Force }
         Remove-Item -LiteralPath $scratch -Recurse -Force
     }
 }
