@@ -21,7 +21,7 @@ permissions:
 jobs:
   install:
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: tp-cowork

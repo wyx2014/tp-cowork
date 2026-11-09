@@ -15,6 +15,42 @@ $legacyKeys = @("HKCU:\Software\$legacyGuid", "HKCU:\Software\Microsoft\Windows\
 $ownedLegacyKeys = @()
 $failure = $null
 
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class InstallerWindowDiagnostics {
+    private delegate bool WindowVisitor(IntPtr window, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(WindowVisitor visitor, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr window, WindowVisitor visitor, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(
+        IntPtr window, uint message, UIntPtr length, StringBuilder text, uint flags, uint timeout, out UIntPtr result);
+    public static string[] Read(uint process) {
+        var texts = new List<string>();
+        WindowVisitor read = (window, parameter) => {
+            if (texts.Count >= 64) return false;
+            var text = new StringBuilder(2048);
+            UIntPtr result;
+            SendMessageTimeout(window, 13, (UIntPtr)text.Capacity, text, 2, 100, out result);
+            if (text.Length > 0) texts.Add(text.ToString());
+            return true;
+        };
+        EnumWindows((window, parameter) => {
+            uint owner;
+            GetWindowThreadProcessId(window, out owner);
+            if (owner == process) {
+                read(window, IntPtr.Zero);
+                EnumChildWindows(window, read, IntPtr.Zero);
+            }
+            return texts.Count < 64;
+        }, IntPtr.Zero);
+        return texts.ToArray();
+    }
+}
+'@
+
 function Write-InstallerProgress([int]$InstallerProcessId, [int]$ElapsedSeconds) {
     try {
         $processes = @(Get-CimInstance Win32_Process)
@@ -26,12 +62,16 @@ function Write-InstallerProgress([int]$InstallerProcessId, [int]$ElapsedSeconds)
                 if ($owned.Contains([uint32]$entry.ParentProcessId) -and $owned.Add([uint32]$entry.ProcessId)) { $added = $true }
             }
         } while ($added)
-        $snapshot = @($processes | Where-Object { $owned.Contains([uint32]$_.ProcessId) } |
+        $snapshot = @($processes | Where-Object { $owned.Contains([uint32]$_.ProcessId) -or
+            ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($application + '\', [StringComparison]::OrdinalIgnoreCase)) } |
             Select-Object ProcessId, ParentProcessId, Name, KernelModeTime, UserModeTime, ReadTransferCount, WriteTransferCount, ExecutablePath)
         Write-Output ("Installer still running after ${ElapsedSeconds}s: " + (ConvertTo-Json -InputObject $snapshot -Depth 3 -Compress))
         $windows = @(Get-Process -Id @($owned) -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 |
             Select-Object Id, MainWindowTitle, Responding)
         Write-Output ("Installer windows: " + (ConvertTo-Json -InputObject $windows -Compress))
+        foreach ($window in $windows) {
+            Write-Output ("Installer window text: " + (ConvertTo-Json -InputObject @([InstallerWindowDiagnostics]::Read([uint32]$window.Id)) -Compress))
+        }
     } catch { Write-Warning "Cannot inspect installer progress: $_" }
 }
 
@@ -44,10 +84,10 @@ function Invoke-InstallerProcess([string]$Executable, [string]$Arguments) {
         while (-not $process.WaitForExit(30000)) {
             Write-InstallerProgress $process.Id ([int]$elapsed.Elapsed.TotalSeconds)
             if ($process.HasExited) { break }
-            if ($elapsed.Elapsed.TotalMinutes -ge 15) {
+            if ($elapsed.Elapsed.TotalMinutes -ge 5) {
                 $process.Kill($true)
                 $process.WaitForExit()
-                throw 'Installer process did not exit within fifteen minutes; see the preceding process diagnostics.'
+                throw 'Installer process did not exit within five minutes; see the preceding process and window diagnostics.'
             }
         }
         Write-Output ("Installer finished after {0:N1}s" -f $elapsed.Elapsed.TotalSeconds)
