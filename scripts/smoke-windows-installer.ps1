@@ -15,15 +15,42 @@ $legacyKeys = @("HKCU:\Software\$legacyGuid", "HKCU:\Software\Microsoft\Windows\
 $ownedLegacyKeys = @()
 $failure = $null
 
+function Write-InstallerProgress([int]$InstallerProcessId, [int]$ElapsedSeconds) {
+    try {
+        $processes = @(Get-CimInstance Win32_Process)
+        $owned = [Collections.Generic.HashSet[uint32]]::new()
+        [void]$owned.Add([uint32]$InstallerProcessId)
+        do {
+            $added = $false
+            foreach ($entry in $processes) {
+                if ($owned.Contains([uint32]$entry.ParentProcessId) -and $owned.Add([uint32]$entry.ProcessId)) { $added = $true }
+            }
+        } while ($added)
+        $snapshot = @($processes | Where-Object { $owned.Contains([uint32]$_.ProcessId) } |
+            Select-Object ProcessId, ParentProcessId, Name, KernelModeTime, UserModeTime, ReadTransferCount, WriteTransferCount, ExecutablePath)
+        Write-Output ("Installer still running after ${ElapsedSeconds}s: " + (ConvertTo-Json -InputObject $snapshot -Depth 3 -Compress))
+        $windows = @(Get-Process -Id @($owned) -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 |
+            Select-Object Id, MainWindowTitle, Responding)
+        Write-Output ("Installer windows: " + (ConvertTo-Json -InputObject $windows -Compress))
+    } catch { Write-Warning "Cannot inspect installer progress: $_" }
+}
+
 function Invoke-InstallerProcess([string]$Executable, [string]$Arguments) {
     Write-Output "Running $Executable"
     $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -PassThru -NoNewWindow
     try {
-        if (-not $process.WaitForExit(300000)) {
-            $process.Kill($true)
-            $process.WaitForExit()
-            throw 'Installer process did not exit within five minutes.'
+        $elapsed = [Diagnostics.Stopwatch]::StartNew()
+        # The stock upgrader moves installed files aside individually before extracting the replacement.
+        while (-not $process.WaitForExit(30000)) {
+            Write-InstallerProgress $process.Id ([int]$elapsed.Elapsed.TotalSeconds)
+            if ($process.HasExited) { break }
+            if ($elapsed.Elapsed.TotalMinutes -ge 15) {
+                $process.Kill($true)
+                $process.WaitForExit()
+                throw 'Installer process did not exit within fifteen minutes; see the preceding process diagnostics.'
+            }
         }
+        Write-Output ("Installer finished after {0:N1}s" -f $elapsed.Elapsed.TotalSeconds)
         Write-Output "Installer exit code: $($process.ExitCode)"
         if ($process.ExitCode -ne 0) { throw "Installer process failed with exit code $($process.ExitCode)." }
     } finally { $process.Dispose() }
