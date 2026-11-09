@@ -13,6 +13,10 @@ on:
         description: 'Diagnose an existing installer without the legacy nanobot registration'
         type: boolean
         default: false
+      native_upgrade_diagnostics:
+        description: 'Capture native uninstaller pages instead of accepting the installer'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -58,8 +62,9 @@ jobs:
         shell: pwsh
         env:
           CLEAN_MACHINE: ${{ inputs.clean_machine }}
+          NATIVE_UPGRADE_DIAGNOSTICS: ${{ inputs.native_upgrade_diagnostics }}
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
-        run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -CleanMachine:($env:CLEAN_MACHINE -eq 'true')
+        run: ./scripts/smoke-windows-installer.ps1 -InstallerDirectory installer -CleanMachine:($env:CLEAN_MACHINE -eq 'true') -NativeUpgradeDiagnostics:($env:NATIVE_UPGRADE_DIAGNOSTICS -eq 'true')
       - name: Diagnose browser bridge and expert toolbox (non-blocking)
         continue-on-error: true
         shell: pwsh

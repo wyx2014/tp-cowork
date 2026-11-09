@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$InstallerDirectory, [switch]$CleanMachine, [switch]$Diagnostics)
+param([Parameter(Mandatory)][string]$InstallerDirectory, [switch]$CleanMachine, [switch]$Diagnostics, [switch]$NativeUpgradeDiagnostics)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run the real product installation check on a disposable GitHub Actions runner.' }
 $installers = @(Get-ChildItem -LiteralPath $InstallerDirectory -Filter '*.exe' -File)
@@ -116,6 +116,10 @@ try {
     $modes = if ($Diagnostics) { @('feature diagnostics') } else { @('first installation', 'same-directory upgrade', 'legacy-profile upgrade') }
     foreach ($mode in $modes) {
         Write-Output "Checking $mode at $application"
+        if ($NativeUpgradeDiagnostics -and $mode -eq 'same-directory upgrade') {
+            & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'diagnose-windows-uninstaller.ps1') -Application $application -Scratch $scratch
+            throw 'Native upgrade diagnostic run finished; inspect the uninstaller page records. This run does not verify an installer.'
+        }
         # NSIS requires /D last and unquoted, even when the path contains spaces.
         Invoke-InstallerProcess $installers[0].FullName ("/S /D=" + $application)
         if (-not $Diagnostics) {
