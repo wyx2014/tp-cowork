@@ -23,6 +23,8 @@
 
 工作流在 Windows Server 2022 x64 上安装 Node.js 24、Python 3.13 和锁定的 pnpm，依次构建底座、`desktop-product.json` 中声明的产品插件及离线依赖，生成 NSIS 安装包。最终应用通过底座运行时检查后，完整复制到独立、带空格的临时目录，执行产品 bundle、浏览器归档和离线 Python 导入检查，全部通过才上传安装包。临时目录在验证结束后清理；这样同时验证应用可迁移，并避开深层 CI 构建目录触发的 Python 原生 DLL 路径长度限制。上传及发布前再次核验 EXE 的 SHA-256；安装、启动或校验和检查失败会阻止预发行版发布。Actions 安装包保留 30 天，失败诊断日志保留 14 天。
 
+品牌准备阶段在本地将产品 PNG 生成包含 16–256 像素图层的 `icon-windows.ico`，Windows 应用及安装器直接使用该 ICO。PNG 仍用于应用内展示；Windows 打包无需下载 `icons-bundle.tar.gz` 做图标转换。
+
 预发行版使用流水线自带的 `GITHUB_TOKEN` 和 `contents: write` 权限，不需要额外的个人令牌。发布说明包含版本、打包模式及两个仓库的实际 commit；预发行版不会设为 Latest。Windows 与 Linux 使用不同的标签前缀，可以分别下载各平台的安装包。
 
 底座 fork 为公开仓库时，默认 GitHub Token 即可拉取。改为私有仓库后，在产品仓库的 **Settings → Secrets and variables → Actions** 设置 `HARNESS_READ_TOKEN`，授予底座仓库只读内容权限。

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -74,6 +74,36 @@ test('brands the welcome flow, native menus, developer application and browser b
     const offset = ico.readUInt32LE(6 + index * 16 + 12)
     assert.deepEqual(ico.subarray(offset, offset + 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
   }
+  assert.deepEqual(await readFile(join(harness, 'apps/desktop/resources/icon-windows.ico')), ico)
+
+  // Load the branded builder configuration with its real helpers, without changing the checkout.
+  for (const file of await readdir(join(harnessRoot, 'apps/desktop/scripts'))) {
+    if (file.endsWith('.mjs') && file !== 'electron-builder-config.mjs') {
+      await symlink(join(harnessRoot, 'apps/desktop/scripts', file), join(harness, 'apps/desktop/scripts', file), 'file')
+    }
+  }
+  await symlink(join(harnessRoot, 'scripts/libreoffice-packages.mjs'), join(harness, 'scripts/libreoffice-packages.mjs'), 'file')
+  const { createElectronBuilderConfig } = await import(pathToFileURL(join(harness, 'apps/desktop/scripts/electron-builder-config.mjs')))
+  const config = createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: product.appId, DSH_DESKTOP_UNSIGNED: '1',
+    DSH_DESKTOP_STANDALONE: '1', DSH_DESKTOP_PRODUCT_CONFIG: join(productRoot, 'desktop-product.json'),
+    DSH_DESKTOP_PRODUCT_ICON: join(productRoot, product.icon) }, 'win32', 'x64')
+  const { convertIcon } = createRequire(join(harnessRoot, 'apps/desktop/package.json'))('app-builder-lib/out/util/iconConverter.js')
+  const emptyToolset = join(harness, 'empty-icon-toolset')
+  await mkdir(emptyToolset)
+  const previousToolset = process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR
+  try {
+    // Any attempt to use the downloaded converter fails; the generated ICO must work without it.
+    process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR = emptyToolset
+    const options = { roots: [harness], fallbackSources: [], format: 'ico', outDir: join(harness, 'converted-icons') }
+    const result = await convertIcon({ ...options, sources: [config.win.icon] })
+    assert.deepEqual(result.icons, [{ file: await realpath(join(harness, 'apps/desktop/resources/icon-windows.ico')), size: 256 }])
+    const oldInput = join(harness, 'old-input.png')
+    await cp(join(productRoot, product.icon), oldInput)
+    await assert.rejects(convertIcon({ ...options, sources: [oldInput] }), /Icons tool not found/u)
+  } finally {
+    if (previousToolset === undefined) delete process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR
+    else process.env.ELECTRON_BUILDER_ICONS_TOOLSET_DIR = previousToolset
+  }
   const icns = await readFile(join(harness, 'apps/desktop/resources/icon.icns'))
   assert.equal(icns.toString('ascii', 0, 4), 'icns')
   assert.equal(icns.readUInt32BE(4), icns.length)
@@ -85,6 +115,7 @@ test('brands the welcome flow, native menus, developer application and browser b
     assert.deepEqual([metadata.width, metadata.height], [width, height])
     files.push(path)
   }
+  files.push('apps/desktop/resources/icon-windows.ico')
 
   const first = await Promise.all(files.map(file => readFile(join(harness, file))))
   await prepareDesktopBranding({ harness })

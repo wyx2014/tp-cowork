@@ -102,6 +102,14 @@ function windowsApplicationMenu(text) {
     + ".filter((item, index, items) => item.type !== 'separator' || (index > 0 && index < items.length - 1 && items[index - 1]?.type !== 'separator'))")
 }
 
+/** Use the locally generated ICO so packaging does not download a PNG conversion tool. */
+function windowsPackagingIcon(text) {
+  const original = "    win: {\n      icon: env.DSH_DESKTOP_PRODUCT_ICON ?? fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),"
+  const branded = "    win: {\n      icon: fileURLToPath(new URL('../resources/icon-windows.ico', import.meta.url)),"
+  if (!text.includes(original) && !text.includes(branded)) throw new Error('Missing Windows packaging icon configuration')
+  return text.replace(original, branded)
+}
+
 /** Product builds run this before the framework compiler and runtime inventories. */
 export async function prepareDesktopBranding({ harness = harnessRoot, product = productRoot, configFile = 'desktop-product.json', imageProcessor } = {}) {
   const config = JSON.parse(await readFile(resolve(product, configFile), 'utf8'))
@@ -114,6 +122,7 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   // The source is high resolution for the Dock and Linux; embedded and window icons use smaller renditions.
   const icon512 = await sharp(icon).resize(512, 512).png().toBuffer()
   const icon256 = await sharp(icon).resize(256, 256).png().toBuffer()
+  const ico = await windowsIcon(icon, sharp)
   const textFiles = [
     'apps/desktop/src/locale.ts', 'apps/desktop/src/main.ts',
     'apps/desktop/scripts/development-app.ts', 'apps/desktop/scripts/electron-builder-config.mjs',
@@ -129,6 +138,7 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
         text = text.replaceAll(`${isolateHome}\n`, '')
         if (config.bundles.length === 0 || config.appId === 'com.tparuyi.tpcowork.dsh.linux') text = text.replace(anchor, `${isolateHome}\n${anchor}`)
       }
+      if (file === 'apps/desktop/scripts/electron-builder-config.mjs') text = windowsPackagingIcon(text)
       text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork Linux', 'DeepSeek Harness').replaceAll('TP Cowork', 'DeepSeek Harness')
       return productText(file.endsWith('development-app.ts') ? developmentBrand(text)
       : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, name)
@@ -147,9 +157,10 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   const images = [
     ['apps/desktop/resources/icon.png', icon512],
     ['apps/desktop/resources/icon-windows.png', icon512],
+    ['apps/desktop/resources/icon-windows.ico', ico],
     ['apps/desktop/resources/icon-macos.png', await sharp(macSource).resize(1024, 1024).png().toBuffer()],
     ['apps/desktop/resources/icon.icns', await macIcon(macSource, sharp)],
-    ['apps/desktop/resources/tray-windows.ico', await windowsIcon(icon, sharp)],
+    ['apps/desktop/resources/tray-windows.ico', ico],
     ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, name, true)],
     ['apps/web/public/favicon.svg', productSvg(icon256, name)],
     ['apps/web/public/favicon-dark.svg', productSvg(icon256, name)],
@@ -192,6 +203,7 @@ export async function stageBrandedDesktop(destination = join(productRoot, '.desk
   for (const file of ['icon.png', 'icon-windows.png']) await writeFile(join(destination, 'resources', file), icon512)
   await writeFile(join(destination, 'resources/icon-macos.png'), await sharp(macSource).resize(1024, 1024).png().toBuffer())
   await writeFile(join(destination, 'resources/tray-windows.ico'), await windowsIcon(icon, sharp))
+  await cp(join(destination, 'resources/tray-windows.ico'), join(destination, 'resources/icon-windows.ico'))
   await writeFile(join(destination, 'resources/icon.icns'), await macIcon(macSource, sharp))
   return destination
 }
