@@ -58,7 +58,10 @@ export function upstreamStyles(modules) {
   const frame = `${desktop} .${className('frame', 'frame')}`;
   const panel = 'margin: 4px 4px 4px 0; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l3); border-radius: 12px; overflow: hidden; background: var(--dsw-alias-bg-base);';
   rules.push(`${frame} { background: var(--dsh-sidebar-material); }`);
-  rules.push(`${frame}::before { content: ''; position: absolute; z-index: 1; inset: 0 0 auto; height: 4px; -webkit-app-region: drag; }`);
+  // Only a window without the caption row needs this 4px strip. Linux draws the Windows caption (data-windows-titlebar),
+  // whose 40px strip is the frame's ::before too: shrinking it left the Linux header impossible to drag.
+  const uncaptioned = `:is(html[data-platform="darwin"], html[data-platform="linux"]):not([data-windows-titlebar]) body[data-tpcowork-ui] .${className('frame', 'frame')}`;
+  rules.push(`${uncaptioned}::before { content: ''; position: absolute; z-index: 1; inset: 0 0 auto; height: 4px; -webkit-app-region: drag; }`);
   rules.push(`${frame} > .${className('frame', 'sidebarCol')} { border-right: none; }`);
   rules.push(`${frame} > .${className('frame', 'centerCol')} { ${panel} }`);
   rules.push(`${frame} > .${className('frame', 'bottomRow')} { background: transparent; }`);

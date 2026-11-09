@@ -29,7 +29,7 @@ html body[data-tpcowork-ui] .WY7D4G_panelRow { min-height: var(--dsh-sidebar-pan
     padding: var(--dsh-sidebar-panel-padding); border-radius: var(--dsh-sidebar-action-radius); }
 html[data-platform="darwin"] body[data-tpcowork-ui] .pa6opG_sidebarCol { background: var(--dsh-sidebar-material); }
 :is(html[data-platform="darwin"], html[data-platform="linux"]) body[data-tpcowork-ui] .pa6opG_frame { background: var(--dsh-sidebar-material); }
-:is(html[data-platform="darwin"], html[data-platform="linux"]) body[data-tpcowork-ui] .pa6opG_frame::before { content: ''; position: absolute; z-index: 1; inset: 0 0 auto; height: 4px; -webkit-app-region: drag; }
+:is(html[data-platform="darwin"], html[data-platform="linux"]):not([data-windows-titlebar]) body[data-tpcowork-ui] .pa6opG_frame::before { content: ''; position: absolute; z-index: 1; inset: 0 0 auto; height: 4px; -webkit-app-region: drag; }
 :is(html[data-platform="darwin"], html[data-platform="linux"]) body[data-tpcowork-ui] .pa6opG_frame > .pa6opG_sidebarCol { border-right: none; }
 :is(html[data-platform="darwin"], html[data-platform="linux"]) body[data-tpcowork-ui] .pa6opG_frame > .pa6opG_centerCol { margin: 4px 4px 4px 0; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l3); border-radius: 12px; overflow: hidden; background: var(--dsw-alias-bg-base); }
 :is(html[data-platform="darwin"], html[data-platform="linux"]) body[data-tpcowork-ui] .pa6opG_frame > .pa6opG_bottomRow { background: transparent; }

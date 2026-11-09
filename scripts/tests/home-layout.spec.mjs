@@ -123,7 +123,26 @@ it('lays out the home as one centered column: greeting, workspace row, composer 
   expect(new Set(offsets.map(String)).size).toBe(1)
   await page.setViewportSize({ width: 1512, height: 982 })
   await page.screenshot({ path: join(artifacts, 'fullscreen-1512.png') })
-  await page.evaluate(() => { delete document.documentElement.dataset.platform; document.documentElement.removeAttribute('data-fullscreen') })
+  await page.evaluate(() => { document.documentElement.removeAttribute('data-fullscreen') })
+  // The frame's top strip drags the window: 4px above the raised panel on macOS, and the whole 40px caption row where
+  // Linux and Windows draw their own caption, so the Linux header stays draggable.
+  const dragStrip = () => page.evaluate(() => {
+    const frame = [...document.querySelectorAll('[class$="_frame"], [class*="_frame "]')].find(element => getComputedStyle(element, '::before').content !== 'none')
+    const style = getComputedStyle(frame, '::before')
+    return { height: parseFloat(style.height), region: style.getPropertyValue('app-region') || style.getPropertyValue('-webkit-app-region') }
+  })
+  expect(await dragStrip()).toEqual({ height: 4, region: 'drag' })
+  await page.evaluate(() => {
+    document.documentElement.dataset.platform = 'linux'
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    document.documentElement.style.setProperty('--dsh-windows-titlebar-height', '40px')
+  })
+  expect(await dragStrip()).toEqual({ height: 40, region: 'drag' })
+  await page.evaluate(() => {
+    delete document.documentElement.dataset.platform
+    document.documentElement.removeAttribute('data-windows-titlebar')
+    document.documentElement.style.removeProperty('--dsh-windows-titlebar-height')
+  })
   await page.setViewportSize({ width: 1440, height: 1000 })
   for (const viewport of [{ width: 1280, height: 778 }, { width: 1000, height: 640 }, { width: 390, height: 640 }]) {
     await page.setViewportSize(viewport)
