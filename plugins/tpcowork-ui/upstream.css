@@ -80,11 +80,9 @@ html body[data-tpcowork-ui] [data-conversation-content][data-content-phase="hero
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"] { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::before, html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }
 html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::before { top: 0; right: 0; height: 82%; aspect-ratio: 1672 / 941; max-width: 100%;
-    background: var(--tpcowork-home-art) right top / cover no-repeat;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%);
+    background: var(--tpcowork-home-sky) right top / cover no-repeat; opacity: var(--tpcowork-home-art-opacity); }
+html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::after { inset: 49% 0 0; background: var(--tpcowork-home-water) center bottom / 100% 100% no-repeat;
     opacity: var(--tpcowork-home-art-opacity); }
-html body[data-tpcowork-ui] .FXhjRG_root[data-phase="hero"]::after { inset: 49% 0 0; background: var(--tpcowork-home-art) right bottom / 100% 275% no-repeat;
-    mask-image: linear-gradient(180deg, transparent, #000 32%); opacity: var(--tpcowork-home-art-opacity); }
 html body[data-tpcowork-ui] .-vAKla_root { padding: var(--dsh-composer-padding); }
 html body[data-tpcowork-ui]:not([data-tpcowork-developer]) .-vAKla_root:not(.-vAKla_hero) { padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
 html body[data-tpcowork-ui] .-vAKla_card { gap: var(--dsh-composer-gap); padding-top: var(--dsh-composer-top-padding);
