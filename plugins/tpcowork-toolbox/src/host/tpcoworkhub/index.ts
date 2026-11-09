@@ -37,6 +37,10 @@ export const Config = z.object({
   apis: z.dict(z.string()).default({}).description('Internal APIs skills may call with the signed-in user\'s login: name → base URL.'),
 })
 export const sessionKey = credentialKey(name, 'session')
+/** How long a Hub-confirmed login is trusted before account reads ask the Hub again. */
+const VERIFY_INTERVAL_MS = 5 * 60_000
+/** Account reads never wait longer than this for the Hub; a slow or unreachable Hub keeps the stored login. */
+const VERIFY_TIMEOUT_MS = 5_000
 type Session = { endpoint: string; token?: string; expired?: boolean; user?: import('../../contracts/tpcoworkhub.ts').TpcoworkHubUser }
 type PublishResult = Awaited<ReturnType<TpcoworkHubApi['publish']>>
 function session(record: CredentialRecord | undefined): Session | undefined {
@@ -55,6 +59,9 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private readonly publications = new Map<string, { key: string; promise: Promise<PublishResult> }>()
   private readonly pages = new Map<string, { query: string; items: TpcoworkHubSkill[]; expires: number }>()
   private readonly rejected = new Set<string>()
+  /** Tokens the Hub accepted recently (hash → check time), and checks in flight, so account reads stay cheap. */
+  private readonly verified = new Map<string, number>()
+  private readonly verifying = new Map<string, Promise<void>>()
   constructor(ctx: Context, readonly config: Config, readonly installer: SkillInstaller) {
     super(ctx, 'toolboxTpcoworkHub')
     ctx.on('credentials/record-updated', key => {
@@ -149,10 +156,35 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     if (this.rejected.has(sha256(endpoint + '\0' + record.token))) throw new TpcoworkHubError('session-expired')
     return record.token
   }
+  /**
+   * Ask the Hub whether a stored token is still valid. Hub logins expire on the server (the access token
+   * lasts hours), and nothing else tells this Host until a request fails, so a restored account would
+   * otherwise keep showing as signed in. A 401 marks the session expired through {@link request};
+   * network failures and timeouts keep the stored login, so being offline never signs the user out.
+   */
+  private verify(endpoint: string, token: string): Promise<void> {
+    const key = sha256(endpoint + '\0' + token)
+    const checked = this.verified.get(key)
+    if (checked !== undefined && Date.now() - checked < VERIFY_INTERVAL_MS) return Promise.resolve()
+    let pending = this.verifying.get(key)
+    if (pending === undefined) {
+      pending = this.run(AbortSignal.timeout(VERIFY_TIMEOUT_MS), async active => {
+        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
+        // Some deployments answer an expired login with HTTP 200 and a 401 envelope.
+        if (raw && typeof raw === 'object' && (raw as { code?: unknown }).code === 401) { await this.expire(token); return }
+        this.verified.set(key, Date.now())
+      }).catch(() => undefined).finally(() => { this.verifying.delete(key) })
+      this.verifying.set(key, pending)
+    }
+    return pending
+  }
   async account(): ReturnType<TpcoworkHubApi['account']> {
     let endpoint: string
     try { endpoint = this.endpoint() } catch { return { configured: false, writable: false, state: 'unconfigured' } }
     try {
+      const restored = await this.stored()
+      if (restored?.endpoint === endpoint && restored.token && !restored.expired
+        && !this.rejected.has(sha256(endpoint + '\0' + restored.token))) await this.verify(endpoint, restored.token)
       const record = await this.stored()
       const { writable } = await this.ctx.credentials.describeRecord(sessionKey)
       const expired = record?.endpoint === endpoint && (record.expired || (record.token && this.rejected.has(sha256(endpoint + '\0' + record.token))))
@@ -175,6 +207,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token, user } })) }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
         this.rejected.delete(sha256(endpoint + '\0' + token))
+        this.verified.set(sha256(endpoint + '\0' + token), Date.now())
         return { configured: true }
       })
       this.authTail = work.catch(() => undefined)
@@ -199,6 +232,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token: result.token, user: result.user } })) }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
         this.rejected.delete(sha256(endpoint + '\0' + result.token))
+        this.verified.set(sha256(endpoint + '\0' + result.token), Date.now())
         return { configured: true }
       })
       this.authTail = work.catch(() => undefined)
@@ -386,6 +420,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private async expire(token: string): Promise<void> {
     const endpoint = this.endpoint()
     this.rejected.add(sha256(endpoint + '\0' + token))
+    this.verified.delete(sha256(endpoint + '\0' + token))
     try {
       await this.ctx.credentials.modifyRecord(sessionKey, async current => {
         const value = session(current)

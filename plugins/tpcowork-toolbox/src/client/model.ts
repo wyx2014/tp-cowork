@@ -7,6 +7,12 @@ import type { SkillsClientApi } from './remote.ts'
 import { unwrap } from './remote.ts'
 import { visibleMcp } from './visibility.ts'
 
+/** Ask the desktop shell to re-read the Hub account; absent outside the desktop app. */
+function refreshDesktopAccount(): Promise<unknown> {
+  const bridge = (globalThis as { dshDesktop?: { tpcoworkHub?: { state?: () => Promise<unknown> } } }).dshDesktop?.tpcoworkHub
+  return typeof bridge?.state === 'function' ? bridge.state().catch(() => undefined) : Promise.resolve()
+}
+
 export type Tab = 'teams' | 'skills' | 'mcp' | 'tpcoworkhub'
 export interface Load<T> { value: T | null; loading: boolean; failed: boolean }
 export interface Choice {
@@ -85,7 +91,13 @@ export class ToolboxModel {
   }
 
   private async refreshDomain(domain: Exclude<Change['domain'], 'modules'>): Promise<void> {
-    if (domain === 'tpcoworkhub') { this.state.update(s => { s.epoch++ }); return }
+    if (domain === 'tpcoworkhub') {
+      this.state.update(s => { s.epoch++ })
+      // The sidebar account reads the same Host login through the desktop bridge; re-reading it there
+      // broadcasts the new state, so a login the Hub rejected here no longer shows as signed in.
+      void refreshDesktopAccount()
+      return
+    }
     const key = domain === 'installer' ? 'skills' : domain
     await Promise.all([this.loadCatalog(key), this.refreshChoices()])
   }

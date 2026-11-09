@@ -261,6 +261,32 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(await ctx.credentials.readRecord(sessionKey)).toBeUndefined()
     expect(await service.account()).toMatchObject({ state: 'signed_out' })
   })
+  it('reports a restored login the Hub has expired as expired instead of signed in', async () => {
+    const { ctx, service, state, login, start, attach } = await hubFixture()
+    await login()
+    expect(await service.account()).toMatchObject({ state: 'signed_in' })
+    await ctx.fiber.dispose()
+    // Overnight the Hub expires the access token; the restarted app must not keep showing the account.
+    state.expired = true
+    const restarted = await start()
+    const restored = (await attach(restarted)).service
+    expect(await restored.account()).toEqual({ configured: false, writable: true, state: 'expired' })
+    expect(JSON.stringify(await restarted.credentials.readRecord(sessionKey))).not.toContain(secret)
+  })
+  it('keeps a restored login while the Hub is unreachable and checks it at most once per interval', async () => {
+    const { ctx, service, state, login, start, attach, requests } = await hubFixture()
+    await login()
+    await ctx.fiber.dispose()
+    state.override = (_req, res) => { res.statusCode = 503; res.end(); return true }
+    const restarted = await start()
+    const restored = (await attach(restarted)).service
+    expect(await restored.account()).toMatchObject({ state: 'signed_in' })
+    state.override = undefined
+    expect(await restored.account()).toMatchObject({ state: 'signed_in' })
+    const checks = requests.filter(row => (row.body as { path?: string } | undefined)?.path === 'users:me').length
+    expect(await restored.account()).toMatchObject({ state: 'signed_in' })
+    expect(requests.filter(row => (row.body as { path?: string } | undefined)?.path === 'users:me')).toHaveLength(checks)
+  })
   it('supports explicitly configured SHA-256 login and rejects raw secrets in reference fields', async () => {
     const { login, state, service, requests } = await hubFixture({ passwordEncoding: 'sha256' })
     await login(); expect(state.loginHash).toBe(sha256(password))

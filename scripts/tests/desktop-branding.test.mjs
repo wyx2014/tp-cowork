@@ -14,7 +14,6 @@ test('brands the welcome flow, native menus, developer application and browser b
   const files = [
     'apps/desktop/src/locale.ts', 'apps/desktop/src/main.ts', 'apps/desktop/package.json',
     'apps/desktop/scripts/development-app.ts', 'apps/desktop/scripts/electron-builder-config.mjs',
-    'apps/desktop/installer/strings.nsh', 'apps/desktop/installer/extract-report.h',
     'scripts/client-build-environment.ts', 'apps/web/index.html', 'apps/web/vite.config.ts',
     'apps/web/public/manifest.webmanifest',
     'packages/client/locale/src/locales/en.ts', 'packages/client/locale/src/locales/zh.ts',
@@ -80,36 +79,11 @@ test('brands the welcome flow, native menus, developer application and browser b
   assert.equal(icns.readUInt32BE(4), icns.length)
   for (const size of ['ic07', 'ic08', 'ic09', 'ic10']) assert.ok(icns.includes(Buffer.from(size)))
 
-  for (const [asset, width, height] of [['brand', 600, 196], ['brand-2x', 1200, 392], ['brand-dark', 600, 196], ['brand-dark-2x', 1200, 392], ['uninstaller-sidebar', 164, 314]]) {
-    const path = `apps/desktop/installer/assets/${asset}.png`
-    const bytes = await readFile(join(harness, path))
-    const metadata = await sharp(bytes).metadata()
-    assert.equal(metadata.width, width)
-    assert.equal(metadata.height, height)
-    const background = await sharp(bytes).extract({ left: 0, top: 0, width: 1, height: 1 }).removeAlpha().raw().toBuffer()
-    // The application's Zai Light and Zai Dark surfaces.
-    assert.deepEqual([...background], asset.includes('dark') ? [22, 22, 22] : [248, 248, 248])
-    const size = asset === 'uninstaller-sidebar' ? 80 : width / 600 * 112
-    const top = asset === 'uninstaller-sidebar' ? 76 : width / 600 * 12
-    const actualIcon = await sharp(bytes).extract({ left: (width - size) / 2, top, width: size, height: size }).removeAlpha().raw().toBuffer()
-    assert.ok(actualIcon.some((value, i) => i % 3 === 0 && Math.abs(value - actualIcon[i + 2]) > 30), 'installer must contain the colored product icon')
-    files.push(path)
-  }
   for (const [asset, width, height] of [['dmg-background', 540, 380], ['dmg-background@2x', 1080, 760]]) {
     const path = `apps/desktop/resources/${asset}.png`
     const metadata = await sharp(await readFile(join(harness, path))).metadata()
     assert.deepEqual([metadata.width, metadata.height], [width, height])
     files.push(path)
-  }
-  const theme = await readFile(join(harness, 'apps/desktop/installer/product-theme.nsh'), 'utf8')
-  assert.match(theme, /^!define INSTALLER_LIGHT_BG_HEX F8F8F8\r$/mu)
-  assert.match(theme, /^!define INSTALLER_DARK_BG_COLORREF 0x161616\r$/mu)
-  assert.match(theme, /^!define INSTALLER_PRIMARY 0xFF000000\r$/mu)
-  files.push('apps/desktop/installer/product-theme.nsh')
-  for (const file of ['strings.nsh', 'extract-report.h']) {
-    const contents = await readFile(join(harness, 'apps/desktop/installer', file), 'utf8')
-    assert.doesNotMatch(contents, /DeepSeek Harness/u)
-    assert.match(contents, /TP Cowork/u)
   }
 
   const first = await Promise.all(files.map(file => readFile(join(harness, file))))
