@@ -2,6 +2,7 @@ param([Parameter(Mandatory)][string]$Application, [Parameter(Mandatory)][string]
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Native uninstall diagnostics require a disposable Windows Actions runner.' }
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -Path (Join-Path $PSScriptRoot 'windows-uninstaller-listview.cs')
 Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -69,6 +70,7 @@ $process = Start-Process -FilePath $executable -ArgumentList ('/currentuser --ke
 $started = $false
 $previous = ''
 $previousAction = ''
+$readFailure = $false
 $timer = [Diagnostics.Stopwatch]::StartNew()
 try {
     $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$process.Id)
@@ -80,6 +82,11 @@ try {
                 $texts = @($elements | ForEach-Object { $_.Current.Name } | Where-Object { $_ } | Select-Object -Last 40)
                 $current = ConvertTo-Json -InputObject $texts -Compress
                 if ($current -ne $previous) { Write-Output "Native uninstaller page: $current"; $previous = $current }
+                if (-not $readFailure -and $texts -contains 'Uninstallation Aborted') {
+                    [NativeUninstallDetails]::Read([uint32]$process.Id) | ForEach-Object { Write-Output "Native uninstall detail: $_" }
+                    $readFailure = $true
+                    throw 'Native uninstaller aborted; failure details were captured above.'
+                }
             } catch [Windows.Automation.ElementNotAvailableException] {
                 # The installer replaced this page while its controls were being inspected.
             }
