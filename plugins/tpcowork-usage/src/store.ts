@@ -1,12 +1,12 @@
 /**
- * Durable usage rows per session. The file is a cache of what session logs already hold, so the service can rebuild
- * missing sessions from history; it is still never overwritten while its contents are unknown.
+ * Durable usage rows per session, recorded as usage happens (the only copy, as in ZCode). An unreadable file is set
+ * aside rather than overwritten, so the file is never replaced while its contents are unknown.
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { UsageLog } from './aggregate.ts'
 
-/** Bump when the row shape or its extraction changes; older files are set aside and rebuilt from session logs. */
+/** Bump when the row shape or its extraction changes; older files are set aside and counting starts afresh. */
 const VERSION = 3
 const FLUSH_DELAY_MS = 2_000
 /** Windows security software can hold a just-written file briefly; such reads are retried before giving up. */
@@ -33,7 +33,7 @@ export class UsageStore {
     this.file = join(home, 'usage', `records.v${VERSION}.json`)
   }
 
-  /** An unreadable file must not fail the page; it is preserved and the service rebuilds from session logs. */
+  /** An unreadable file must not fail the page; it is preserved under a dated name. */
   load(): Promise<void> {
     return this.loaded ??= this.read()
   }
@@ -67,7 +67,7 @@ export class UsageStore {
     const kept = this.file.replace(/\.json$/u, `.unreadable-${new Date().toISOString().replace(/[:.]/gu, '-')}.json`)
     try {
       await rename(this.file, kept)
-      this.onError(`${reason}，已保留为 ${kept}，将从会话记录重新统计`)
+      this.onError(`${reason}，已保留为 ${kept}，统计从空记录重新开始`)
     } catch (error) {
       this.frozen = true
       this.onError(`${reason}，且无法另存（${error instanceof Error ? error.message : String(error)}）；为避免覆盖原文件，本次运行不保存用量记录`)
