@@ -114,6 +114,8 @@ function windowsPackagingIcon(text) {
 export async function prepareDesktopBranding({ harness = harnessRoot, product = productRoot, configFile = 'desktop-product.json', imageProcessor } = {}) {
   const config = JSON.parse(await readFile(resolve(product, configFile), 'utf8'))
   const name = config.productName
+  // What people read (menus, tray, dialogs, window titles); productName keeps naming the data folder and package.
+  const display = config.displayName ?? name
   const icon = await readFile(resolve(product, config.icon))
   // macOS does not mask app icons, so its source carries the Dock's standard margin.
   const macSource = config.macIcon ? await readFile(resolve(product, config.macIcon)) : icon
@@ -139,9 +141,11 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
         if (config.bundles.length === 0 || config.appId === 'com.tparuyi.tpcowork.dsh.linux') text = text.replace(anchor, `${isolateHome}\n${anchor}`)
       }
       if (file === 'apps/desktop/scripts/electron-builder-config.mjs') text = windowsPackagingIcon(text)
-      text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork Linux', 'DeepSeek Harness').replaceAll('TP Cowork', 'DeepSeek Harness')
+      text = text.replaceAll('TP Cowork Basic', 'DeepSeek Harness').replaceAll('TP Cowork Linux', 'DeepSeek Harness')
+        .replaceAll('TP Cowork', 'DeepSeek Harness').replaceAll('TP CoWork', 'DeepSeek Harness')
+      // The packaging default names the installed folder and data directory, so it keeps the product name.
       return productText(file.endsWith('development-app.ts') ? developmentBrand(text)
-      : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, name)
+      : file.endsWith('/main.ts') ? windowsApplicationMenu(text) : text, file.endsWith('electron-builder-config.mjs') ? name : display)
       .replaceAll('com.deepseek.harness.dev.', `${config.appId}.dev.`)
       .replace(/label:(\s*)darwin \? app\.name/g, 'label:$1darwin ? currentDesktopLocale().messages.aboutProduct')
     })
@@ -152,7 +156,7 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
   const webManifestPath = join(harness, 'apps/web/public/manifest.webmanifest')
   const webManifest = JSON.parse(await readFile(webManifestPath, 'utf8'))
-  webManifest.name = webManifest.short_name = name
+  webManifest.name = webManifest.short_name = display
   await writeFile(webManifestPath, JSON.stringify(webManifest, null, 2) + '\n')
   const images = [
     ['apps/desktop/resources/icon.png', icon512],
@@ -161,9 +165,9 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
     ['apps/desktop/resources/icon-macos.png', await sharp(macSource).resize(1024, 1024).png().toBuffer()],
     ['apps/desktop/resources/icon.icns', await macIcon(macSource, sharp)],
     ['apps/desktop/resources/tray-windows.ico', ico],
-    ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, name, true)],
-    ['apps/web/public/favicon.svg', productSvg(icon256, name)],
-    ['apps/web/public/favicon-dark.svg', productSvg(icon256, name)],
+    ['apps/desktop/renderer/assets/welcome-brand.svg', productSvg(icon256, display, true)],
+    ['apps/web/public/favicon.svg', productSvg(icon256, display)],
+    ['apps/web/public/favicon-dark.svg', productSvg(icon256, display)],
     // The startup cover shows the logo at 96 CSS pixels; twice that stays sharp on high-density displays.
     ['apps/web/public/startup-logo.png', await sharp(icon).resize(192, 192).png().toBuffer()],
   ]
@@ -174,7 +178,7 @@ export async function prepareDesktopBranding({ harness = harnessRoot, product = 
   // electron-builder pairs name@2x.png with name.png into one Retina disk-image background.
   for (const scale of [1, 2]) {
     images.push([`apps/desktop/resources/dmg-background${scale === 2 ? '@2x' : ''}.png`,
-      await sharp(Buffer.from(dmgSvg(icon512, name)), { density: 72 * scale }).png().toBuffer()])
+      await sharp(Buffer.from(dmgSvg(icon512, display)), { density: 72 * scale }).png().toBuffer()])
   }
   for (const [file, content] of images) {
     await mkdir(dirname(join(harness, file)), { recursive: true })
