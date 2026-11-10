@@ -8,6 +8,7 @@ import { finishFirstRunGuide, checkInstalledProductUi } from './installed-ui-che
 const [executable, homeArgument, outputArgument, configArgument] = process.argv.slice(2)
 if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Linux executable, private home and evidence directory')
 const config = JSON.parse(await readFile(configArgument ?? new URL('../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
+const hasBrowser = config.bundles.includes('@tpcowork/dsh-browser')
 const expectedClients = []
 for (const name of config.bundles) {
   const manifest = JSON.parse(await readFile(new URL(`../plugins/${name.replace('@tpcowork/dsh-', 'tpcowork-')}/package.json`, import.meta.url), 'utf8'))
@@ -117,14 +118,18 @@ try {
     page.setDefaultTimeout(30_000)
     await finishFirstRunGuide(page)
     const zoom = await page.evaluate(() => window.dshDesktop.browserAutomation.request('windowZoom', { action: 'get' }))
-    assert.equal(zoom.level, 0, 'Interface zoom must work without the browser plugin')
+    assert.equal(zoom.level, 0, 'Interface zoom must work with the selected plugin set')
+    if (hasBrowser) {
+      await page.waitForFunction(async () => (await window.dshDesktop.browserAutomation.request('snapshot')).enabled === true,
+        null, { timeout: 30_000, polling: 250 })
+    }
     const browser = await page.evaluate(() => window.dshDesktop.browserAutomation.request('snapshot'))
-    assert.equal(browser.enabled, false, 'Browser automation must remain disabled')
+    assert.equal(browser.enabled, hasBrowser, 'Browser automation must match the selected plugin set')
     const originalDialog = await app.evaluateHandle(({ dialog }) => dialog.showMessageBox)
     try {
       await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false }) })
       const diagnostics = await page.evaluate(() => window.dshDesktop.browserAutomation.request('diagnostics', { action: 'export', locale: 'en' }))
-      assert.equal(diagnostics.status, 'cancelled', 'Diagnostics must retain its privacy confirmation without the browser plugin')
+      assert.equal(diagnostics.status, 'cancelled', 'Diagnostics must retain its privacy confirmation')
     } finally {
       await app.evaluate(({ dialog }, original) => { dialog.showMessageBox = original }, originalDialog)
       await originalDialog.dispose()

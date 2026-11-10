@@ -63,7 +63,7 @@ test('Basic plan selects an independent identity and no product plugins', async 
   await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be standard, full or basic/u)
 })
 
-test('default Linux product restores every full-product bundle except browser and Computer Use', async () => {
+test('default Linux product includes the browser and every full-product bundle except Computer Use', async () => {
   const { stdout } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--plan'], {
     env: { ...process.env, PACKAGE_VARIANT: 'standard' },
   })
@@ -72,8 +72,9 @@ test('default Linux product restores every full-product bundle except browser an
   const basic = JSON.parse(await readFile(new URL('../../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
   assert.equal(standard.product, 'TP Cowork Linux')
   assert.equal(standard.variant, 'standard')
-  assert.deepEqual(standard.bundles, full.bundles.filter(name => !['@tpcowork/dsh-browser', '@tpcowork/dsh-computer-use'].includes(name)))
-  assert.equal(standard.bundles.length, 10)
+  assert.deepEqual(standard.bundles, full.bundles.filter(name => name !== '@tpcowork/dsh-computer-use'))
+  assert.equal(standard.bundles.length, 11)
+  assert.deepEqual(standard.excludedBundles, ['@tpcowork/dsh-computer-use'])
   assert.notEqual(standard.appId, full.appId)
   assert.notEqual(standard.appId, basic.appId)
   assert.match(standard.verification, /real GUI/u)

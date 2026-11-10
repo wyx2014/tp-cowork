@@ -19,7 +19,7 @@ on:
         default: auto
         required: true
       variant:
-        description: 'standard 排除浏览器和 Computer Use、保留其余插件；basic 仅底座；full 全部插件'
+        description: 'standard 包含浏览器、仅排除 Computer Use；basic 仅底座；full 全部插件'
         type: choice
         options: [standard, basic, full]
         default: standard
@@ -170,9 +170,9 @@ jobs:
             `${productName} ${version} Linux x64`, '',
             '- Built and runtime-tested on Ubuntu 22.04 x64.',
             basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.'
-              : standard ? '- Standard: all 10 remaining product plugins; browser and Computer Use automation excluded; shared interface zoom and diagnostics retained.' : '- Full product plugin set.',
+              : standard ? `- Standard: ${info.bundles.length} product plugins; browser included; Computer Use excluded; interface zoom and diagnostics retained.` : '- Full product plugin set.',
             ...(info.guiSmokeVerified ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
-            ...(standard ? ['- Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
+            ...(standard ? ['- Browser automation enabled; Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
             `- Included product bundles: ${info.bundles.join(', ') || '(none)'}`,
             `- Excluded product bundles: ${(info.excludedBundles ?? []).join(', ') || '(none)'}`,
             `- Product commit: ${info.productCommit}`,

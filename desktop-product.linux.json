@@ -11,6 +11,7 @@
     "@tpcowork/dsh-core",
     "@tpcowork/dsh-ui",
     "@tpcowork/dsh-workbench",
+    "@tpcowork/dsh-browser",
     "@tpcowork/dsh-toolbox",
     "@tpcowork/dsh-automation",
     "@tpcowork/dsh-memory",

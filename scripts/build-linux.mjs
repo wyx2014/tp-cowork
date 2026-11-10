@@ -104,8 +104,9 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   if (!Object.hasOwn(configs, variant)) throw new Error('TP Cowork: Linux variant must be standard, full or basic')
   const config = join(productRoot, configs[variant])
   const product = JSON.parse(await readFile(config, 'utf8'))
+  const excludedBundles = variant === 'standard' ? ['@tpcowork/dsh-computer-use'] : []
   if (values.plan) {
-    console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, appId: product.appId,
+    console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, excludedBundles, appId: product.appId,
       target: 'linux-x64', runner: 'ubuntu-22.04',
       formats: ['AppImage', 'deb'], output: 'dist/installers', deployment: 'standalone',
       verification: variant !== 'full'
@@ -143,7 +144,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
     platform: 'linux', arch: 'x64', variant, productName: product.productName, bundles: product.bundles,
     deployment: 'standalone', unsigned: true,
     buildHost: { platform: process.platform, arch: process.arch }, guiSmokeVerified: variant !== 'full', kylinMachineVerified: false,
-    excludedBundles: variant === 'standard' ? ['@tpcowork/dsh-browser', '@tpcowork/dsh-computer-use'] : [],
+    excludedBundles,
   })
   if (variant !== 'full') {
     const name = variant === 'basic' ? 'diagnose-linux-basic.sh' : 'diagnose-linux.sh'
