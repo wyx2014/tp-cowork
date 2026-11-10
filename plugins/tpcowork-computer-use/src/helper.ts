@@ -7,8 +7,10 @@
  *   `--status` prints one JSON line with the platform's readiness instead, for the Settings page.
  */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readlink } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { BridgeError, CuaDriverBridge, type DriverCall, type DriverReply } from './bridge.ts'
 
@@ -36,7 +38,25 @@ interface NativeDriver {
   uniffiDestroy(): void
 }
 
+/**
+ * A packaged app reads Cua Driver from `app.asar`, but the native loader cannot open a library inside the archive. The
+ * desktop build unpacks every native file beside it, so open the library from `app.asar.unpacked` instead.
+ */
+export function unpackedLibrary(path: string, exists: (path: string) => boolean = existsSync): string {
+  const unpacked = path.replace(/([\\/])app\.asar([\\/])/u, '$1app.asar.unpacked$2')
+  return unpacked !== path && exists(unpacked) ? unpacked : path
+}
+
+interface NativeRuntime { resolveLibPath(options: unknown): string }
+
 async function openDriver(entry: string): Promise<NativeDriver> {
+  // The driver's bindings read `resolveLibPath` from this shared runtime object when they load, so wrap it first.
+  const runtimeUrl = new URL('./native/node-runtime.js', entry)
+  if (runtimeUrl.protocol === 'file:' && existsSync(fileURLToPath(runtimeUrl))) {
+    const runtime = (await import(runtimeUrl.href) as { default: NativeRuntime }).default
+    const resolveLibPath = runtime.resolveLibPath
+    runtime.resolveLibPath = options => unpackedLibrary(resolveLibPath(options))
+  }
   const { CuaDriver } = await import(entry) as { CuaDriver: { create(options: undefined): NativeDriver } }
   return CuaDriver.create(undefined)
 }
