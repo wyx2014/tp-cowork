@@ -142,15 +142,16 @@ export function upstreamStyles(modules) {
   const backdrop = `${selector('conversation', 'root')}[data-phase="hero"]`;
   rules.push(`${backdrop} { position: relative; isolation: isolate; background: var(--tpcowork-home-wash); }`);
   rules.push(`${backdrop}::before, ${backdrop}::after { position: absolute; z-index: -1; content: ''; pointer-events: none; }`);
-  // The skyline layer is the artwork's own box (assets/home-*.webp are 1672x941), right-aligned at 82% of the column
-  // height; its left 45% fades in. The water layer is the artwork's bottom strip stretched under the composer, fading in
-  // from its top. Both fades are baked into the images as transparency (fade-home-art.mjs): CSS mask-image fades
-  // rendered as hard vertical and horizontal cuts on Kylin, where the mask's semi-transparent part vanished.
-  // In a narrow column the skyline box is capped at the column's width and crops from the left rather than spill.
+  // The skyline layer is the artwork's own box (assets/home-*.webp are 1672x941), so its fade starts at the picture's
+  // left edge whatever the window's shape. A fade measured across the column left that edge opaque in wide, short
+  // windows, where it showed as a hard vertical cut, most visibly in the dark theme.
+  // In a narrow column the box is capped at the column's width and the artwork crops from the left rather than spill.
   rules.push(`${backdrop}::before { top: 0; right: 0; height: 82%; aspect-ratio: 1672 / 941; max-width: 100%;
-    background: var(--tpcowork-home-sky) right top / cover no-repeat; opacity: var(--tpcowork-home-art-opacity); }`);
-  rules.push(`${backdrop}::after { inset: 49% 0 0; background: var(--tpcowork-home-water) center bottom / 100% 100% no-repeat;
+    background: var(--tpcowork-home-art) right top / cover no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%);
     opacity: var(--tpcowork-home-art-opacity); }`);
+  rules.push(`${backdrop}::after { inset: 49% 0 0; background: var(--tpcowork-home-art) right bottom / 100% 275% no-repeat;
+    mask-image: linear-gradient(180deg, transparent, #000 32%); opacity: var(--tpcowork-home-art-opacity); }`);
   rule('input', 'root', 'padding: var(--dsh-composer-padding);');
   // Keep a breathing space below the chat card when the developer footer is absent.
   rules.push(`${scope}:not([data-tpcowork-developer]) .${className('input', 'root')}:not(.${className('input', 'hero')}) { padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }`);

@@ -86,20 +86,17 @@ it('lays out the home as one centered column: greeting, workspace row, composer 
   // Let theme colour transitions settle before capturing.
   await page.waitForTimeout(400)
   await page.screenshot({ path: join(artifacts, 'home-dark.png') })
-  // The skyline layer is the artwork's own box and never wider than the column. Both layers carry their fades in the
-  // images and use no CSS mask: Kylin rendered mask fades as hard vertical and horizontal cuts.
+  // The skyline layer is the artwork's own box, fading from transparent at its left edge, and never wider than the
+  // column: a fade measured across the column once left a hard vertical cut in wide, short windows.
   const initialViewport = page.viewportSize()
   for (const [width, height] of [[1920, 1034], [2560, 900], [900, 900]]) {
     await page.setViewportSize({ width, height })
     const art = await page.locator('[data-phase="hero"]').first().evaluate(root => {
       const style = getComputedStyle(root, '::before')
       return { width: parseFloat(style.width), height: parseFloat(style.height), right: parseFloat(style.right),
-        column: root.clientWidth, columnHeight: root.clientHeight,
-        masks: ['::before', '::after'].map(pseudo => { const layer = getComputedStyle(root, pseudo); return layer.maskImage || layer.webkitMaskImage || 'none' }),
-        images: ['::before', '::after'].map(pseudo => getComputedStyle(root, pseudo).backgroundImage.startsWith('url("data:image/webp')) }
+        column: root.clientWidth, columnHeight: root.clientHeight, mask: style.maskImage || style.webkitMaskImage }
     })
-    expect(art.masks).toEqual(['none', 'none'])
-    expect(art.images).toEqual([true, true])
+    expect(art.mask).toMatch(/^linear-gradient\(90deg, (?:transparent|rgba\(0, 0, 0, 0\))/u)
     expect(art.right).toBe(0)
     expect(art.width).toBeLessThanOrEqual(art.column + 0.5)
     expect(Math.abs(art.height - art.columnHeight * 0.82)).toBeLessThan(1)

@@ -50,10 +50,9 @@ for (const [name, modes] of Object.entries(tokens)) {
 }
 const locales = { en: JSON.parse(enText).ui, zh: JSON.parse(zhText).ui };
 const brandIcon = `data:image/png;base64,${(await readFile(new URL('icon.png', import.meta.url))).toString('base64')}`;
-// The home backdrop is the reference product's skyline, embedded because Client CSS has no asset origin. Its fades are
-// baked into the images (fade-home-art.mjs), so the page needs no CSS masks.
-const homeArt = async (mode, layer) => `url("data:image/webp;base64,${(await readFile(new URL(`assets/home-${mode}-${layer}.webp`, import.meta.url))).toString('base64')}")`;
-for (const layer of ['sky', 'water']) tokens[`--tpcowork-home-${layer}`] = { light: await homeArt('light', layer), dark: await homeArt('dark', layer) };
+// The home backdrop is the reference product's skyline, embedded because Client CSS has no asset origin.
+const homeArt = async mode => `url("data:image/webp;base64,${(await readFile(new URL(`assets/home-${mode}.webp`, import.meta.url))).toString('base64')}")`;
+tokens['--tpcowork-home-art'] = { light: await homeArt('light'), dark: await homeArt('dark') };
 // Match upstream artwork rather than row order or translated labels. Keep the
 // replacement scoped to settings navigation so other DSH icons stay intact.
 const settingsIconSelectors = JSON.parse(await read('src/settings-icon-selectors.json'));
