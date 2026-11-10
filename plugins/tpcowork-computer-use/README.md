@@ -2,7 +2,7 @@
 
 参照 ZCode 的 Computer Use：Agent 先选择应用，读取它的无障碍（辅助功能）树，按元素编号点击、填写，再重新读取确认结果；坐标只在无障碍信息看不到的内容上使用。支持 **Windows** 与 **macOS 13+**；**Linux X11** 代码相同，作为实验功能保留（Wayland 不支持）。默认关闭。
 
-ZCode 的 Helper 未开源（`tp-cowork/packages/tpcowork-cua` 只是占位实现），因此原生部分改用 DSH 运行时已安装的 [Cua Driver](https://github.com/trycua/cua) 0.28（MIT，自带 Windows x64/arm64、macOS、Linux x64/arm64 预编译库）。模型看到的接口沿用 DSH 的 `@deepseek-ai/dsh-cua`（与 ZCode 同一形态的应用/窗口对象 API 与按应用授权），本插件提供 Windows/macOS/Linux 的原生实现。
+ZCode 的 Helper 未开源（`tp-cowork/packages/tpcowork-cua` 只是占位实现），因此原生部分改用 [Cua Driver](https://github.com/trycua/cua) 0.28（MIT，自带 Windows x64/arm64、macOS、Linux x64/arm64 预编译库）。它是本插件的普通依赖（`dependencies`）：桌面运行时安装时不自动补装 peer 依赖，写在 `peerDependencies` 会使安装包缺少它。模型看到的接口沿用 DSH 的 `@deepseek-ai/dsh-cua`（与 ZCode 同一形态的应用/窗口对象 API 与按应用授权），本插件提供 Windows/macOS/Linux 的原生实现。
 
 ## 组成
 
