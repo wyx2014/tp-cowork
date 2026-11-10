@@ -53,7 +53,7 @@ ZCode 的 Helper 未开源（`tp-cowork/packages/tpcowork-cua` 只是占位实�
 
 ## 打包
 
-`@trycua/cua-driver` 及其平台库随 DSH 运行时安装（`dsh-experimental-computer-use-cua-driver-native` 的依赖），在哪个系统上构建就带哪个系统的库，因此 Windows 安装包须在 Windows 上构建（现有 `windows-installer.yml` 即如此），macOS 包在 macOS 上构建。Helper 由 Host 的运行时（Electron，`ELECTRON_RUN_AS_NODE=1`）启动，用户无需安装 Node。
+`@trycua/cua-driver` 及其平台库是本插件的 `dependencies`，随插件装入安装包（桌面运行时不自动安装 peer 依赖），在哪个系统上构建就带哪个系统的库，因此 Windows 安装包须在 Windows 上构建（现有 `windows-installer.yml` 即如此），macOS 包在 macOS 上构建。Helper 由 Host 的运行时（Electron，`ELECTRON_RUN_AS_NODE=1`）启动，用户无需安装 Node。
 
 ## 验证
 
