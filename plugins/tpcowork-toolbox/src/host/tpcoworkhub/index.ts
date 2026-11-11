@@ -170,8 +170,9 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     if (pending === undefined) {
       pending = this.run(AbortSignal.timeout(VERIFY_TIMEOUT_MS), async active => {
         const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
-        // Some deployments answer an expired login with HTTP 200 and a 401 envelope.
-        if (raw && typeof raw === 'object' && (raw as { code?: unknown }).code === 401) { await this.expire(token); return }
+        // The Hub's convex/query is public, so an expired token reads as anonymous: users:me answers null with HTTP 200.
+        // Some deployments instead answer HTTP 200 with a 401 envelope.
+        if (raw === null || (raw && typeof raw === 'object' && (raw as { code?: unknown }).code === 401)) { await this.expire(token); return }
         this.verified.set(key, Date.now())
       }).catch(() => undefined).finally(() => { this.verifying.delete(key) })
       this.verifying.set(key, pending)

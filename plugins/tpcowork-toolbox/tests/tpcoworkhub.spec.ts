@@ -273,6 +273,20 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(await restored.account()).toEqual({ configured: false, writable: true, state: 'expired' })
     expect(JSON.stringify(await restarted.credentials.readRecord(sessionKey))).not.toContain(secret)
   })
+  it('treats users:me answering null for the token as an expired login, as the deployed Hub does', async () => {
+    const { ctx, service, state, login, start, attach } = await hubFixture()
+    await login()
+    await ctx.fiber.dispose()
+    // The Hub's convex/query is public: an expired token reads as anonymous, users:me is null with HTTP 200,
+    // and the catalog still answers; only /skills/** and /skill-versions/** return 401.
+    state.override = (req, res) => {
+      if (req.url !== '/tpcoworkapi/convex/query') return false
+      res.setHeader('content-type', 'application/json'); res.end('null'); return true
+    }
+    const restored = (await attach(await start())).service
+    expect(await restored.account()).toEqual({ configured: false, writable: true, state: 'expired' })
+    await expect(restored.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+  })
   it('keeps a restored login while the Hub is unreachable and checks it at most once per interval', async () => {
     const { ctx, service, state, login, start, attach, requests } = await hubFixture()
     await login()
