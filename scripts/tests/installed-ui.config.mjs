@@ -6,7 +6,8 @@ export default {
   test: {
     ...base.test,
     pool: 'forks',
-    include: [fileURLToPath(new URL('./installed-ui.spec.mjs', import.meta.url))],
+    include: ['installed-ui.spec.mjs', 'installed-ui-startup.spec.mjs']
+      .map(file => fileURLToPath(new URL(file, import.meta.url))),
     testTimeout: 120000,
     hookTimeout: 120000,
   },

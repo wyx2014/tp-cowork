@@ -1,6 +1,19 @@
 /** Installed product interactions shared by the Windows smoke and browser regressions. */
 import assert from 'node:assert/strict'
 
+/** Open settings after the initial session baseline and its onboarding effects have settled. */
+export async function openInstalledSettings(page) {
+  await page.waitForFunction(() => performance.getEntriesByType('resource')
+    .some(entry => new URL(entry.name).pathname === '/api/session/list'))
+  // An already-dismissed guide returns immediately on upgrades. The session baseline can still
+  // select a hidden onboarding step, which closes a settings panel opened before that first commit.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await page.getByRole('button', { name: /^(设置|Settings)$/u }).click()
+  const settings = page.getByRole('dialog', { name: /^(设置|Settings)$/u })
+  await settings.waitFor({ state: 'visible' })
+  return settings
+}
+
 /** Dismiss first-run setup through its confirmation; saved profiles go straight to the workspace. */
 export async function finishFirstRunGuide(page) {
   await page.waitForFunction(() => localStorage.getItem('tpcowork.first-run-guide.v1') !== null
@@ -22,8 +35,7 @@ export async function checkInstalledProductUi(page, { capture = async () => {},
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
   console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
-  await page.getByRole('button', { name: /^(设置|Settings)$/u }).click()
-  const settings = page.getByRole('dialog', { name: /^(设置|Settings)$/u })
+  const settings = await openInstalledSettings(page)
   const developerMode = settings.getByRole('switch', { name: /^(开发者模式|Developer mode)$/u })
   await developerMode.waitFor()
   assert.equal(await developerMode.getAttribute('aria-checked'), 'false', 'Fresh installations must keep Developer mode disabled')
