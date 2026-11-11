@@ -1,10 +1,22 @@
 /** Installed product interactions shared by the Windows smoke and browser regressions. */
 import assert from 'node:assert/strict'
 
+/** Observe before navigation; Electron's custom protocol does not publish resource performance entries. */
+export function observeInstalledStartup(page) {
+  const startup = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session/list',
+    { timeout: 60_000 }).then(async response => {
+    assert.equal(response.status(), 200, 'Initial session list request must succeed')
+    assert.equal(await response.finished(), null, 'Initial session list response must finish')
+  })
+  // A window can fail before the caller reaches the settings check; its evidence owner reports that failure.
+  void startup.catch(() => {})
+  return startup
+}
+
 /** Open settings after the initial session baseline and its onboarding effects have settled. */
-export async function openInstalledSettings(page) {
-  await page.waitForFunction(() => performance.getEntriesByType('resource')
-    .some(entry => new URL(entry.name).pathname === '/api/session/list'))
+export async function openInstalledSettings(page, startup) {
+  assert.ok(startup, 'Observe the initial session list before opening the application')
+  await startup
   // An already-dismissed guide returns immediately on upgrades. The session baseline can still
   // select a hidden onboarding step, which closes a settings panel opened before that first commit.
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -28,14 +40,14 @@ export async function finishFirstRunGuide(page) {
 }
 
 /** Require the shipped Client modules and developer defaults, then return to the workspace. */
-export async function checkInstalledProductUi(page, { capture = async () => {},
+export async function checkInstalledProductUi(page, { capture = async () => {}, startup,
   clientPlugins = ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage'] } = {}) {
   const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
   for (const name of clientPlugins) {
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
   console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
-  const settings = await openInstalledSettings(page)
+  const settings = await openInstalledSettings(page, startup)
   const developerMode = settings.getByRole('switch', { name: /^(开发者模式|Developer mode)$/u })
   await developerMode.waitFor()
   assert.equal(await developerMode.getAttribute('aria-checked'), 'false', 'Fresh installations must keep Developer mode disabled')

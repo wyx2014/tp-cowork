@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 import { expect, it, onTestFinished } from 'vitest'
 import { launchWebScaffold } from '../../../deepseek-harness/apps/web/tests/scaffold.ts'
-import { openInstalledSettings } from '../installed-ui-checks.mjs'
+import { observeInstalledStartup, openInstalledSettings } from '../installed-ui-checks.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -24,6 +24,8 @@ it('waits for a delayed startup baseline before opening settings on an existing 
   await page.addInitScript(() => {
     localStorage.setItem('tpcowork.first-run-guide.v1', 'skipped')
     globalThis.dshDesktop = {}
+    const entries = performance.getEntriesByType.bind(performance)
+    performance.getEntriesByType = type => type === 'resource' ? [] : entries(type)
   })
   const intercepted = Promise.withResolvers()
   const release = Promise.withResolvers()
@@ -34,6 +36,7 @@ it('waits for a delayed startup baseline before opening settings on an existing 
     await release.promise
     await route.fulfill({ response })
   })
+  const startup = observeInstalledStartup(page)
   await page.goto(scaffold.authenticatedUrl)
   await page.locator('body[data-tpcowork-ui]').waitFor()
   await intercepted.promise
@@ -42,7 +45,7 @@ it('waits for a delayed startup baseline before opening settings on an existing 
   await page.exposeFunction('recordSettingsClick', () => { settingsClicks++ })
   await page.getByRole('button', { name: 'Settings', exact: true })
     .evaluate(button => button.addEventListener('click', () => { void window.recordSettingsClick() }))
-  const opening = openInstalledSettings(page)
+  const opening = openInstalledSettings(page, startup)
   // Hold the first list response while the rest of the interface is already interactive.
   await page.waitForTimeout(250)
   expect(settingsClicks).toBe(0)

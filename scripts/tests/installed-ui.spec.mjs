@@ -6,7 +6,7 @@ import { chromium } from 'playwright-core'
 import { expect, it, onTestFinished } from 'vitest'
 import { launchWebScaffold } from '../../../deepseek-harness/apps/web/tests/scaffold.ts'
 import { artifactPeers } from '../../plugins/tpcowork-toolbox/tests/artifact-peers.mjs'
-import { finishFirstRunGuide, checkInstalledProductUi } from '../installed-ui-checks.mjs'
+import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup } from '../installed-ui-checks.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -32,6 +32,7 @@ it('runs the installed-product checks after real setup confirmation and again af
     onTestFinished(() => context.close())
     const page = await context.newPage()
     page.setDefaultTimeout(20000)
+    let startup = observeInstalledStartup(page)
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(scaffold.authenticatedUrl)
@@ -40,13 +41,15 @@ it('runs the installed-product checks after real setup confirmation and again af
     expect(await guide.getAttribute('aria-label')).toBe(locale === 'en-US' ? 'Set up TP Cowork' : '设置 TP Cowork')
     await finishFirstRunGuide(page)
     expect(await guide.count()).toBe(0)
-    await checkInstalledProductUi(page, { capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })
+    await checkInstalledProductUi(page, { startup,
+      capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })
     await page.screenshot({ path: join(output, `${locale}-first-launch.png`) })
+    startup = observeInstalledStartup(page)
     await page.reload()
     await page.locator('body[data-tpcowork-ui]').waitFor()
     await finishFirstRunGuide(page)
     expect(await guide.count()).toBe(0)
-    await checkInstalledProductUi(page)
+    await checkInstalledProductUi(page, { startup })
     expect(errors).toEqual([])
     await context.close()
   }

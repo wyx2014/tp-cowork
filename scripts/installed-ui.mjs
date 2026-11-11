@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
-import { finishFirstRunGuide } from './installed-ui-checks.mjs'
+import { finishFirstRunGuide, observeInstalledStartup } from './installed-ui-checks.mjs'
 
 export async function inspectInstalledUi(check) {
   const [executable, homeArgument, outputArgument] = process.argv.slice(2)
@@ -60,6 +60,7 @@ export async function inspectInstalledUi(check) {
     }
     const observe = window => {
       if (observers.some(observer => observer.window === window)) return
+      const startup = observeInstalledStartup(window)
       const pageerror = error => errors.push(redact(error.message))
       const consoleError = message => {
         if (message.type() !== 'error') return
@@ -68,7 +69,7 @@ export async function inspectInstalledUi(check) {
       }
       const response = response => {
         const url = new URL(response.url())
-        if (/^\/api\/(settings\/describe|memoryCatalog\/list|archiveManager\/list|usage\/get)$/u.test(url.pathname)) {
+        if (/^\/api\/(session\/list|settings\/describe|memoryCatalog\/list|archiveManager\/list|usage\/get)$/u.test(url.pathname)) {
           apiResponses.push({ path: url.pathname, status: response.status() })
         }
         if (response.status() < 400) return
@@ -84,7 +85,7 @@ export async function inspectInstalledUi(check) {
       }
       const events = { pageerror, console: consoleError, response, request, requestfinished, requestfailed }
       for (const [event, listener] of Object.entries(events)) window.on(event, listener)
-      observers.push({ window, events })
+      observers.push({ window, events, startup })
     }
     app.on('window', observe)
     for (const window of app.windows()) observe(window)
@@ -99,7 +100,8 @@ export async function inspectInstalledUi(check) {
     await waitForPageAssets(page)
     page.setDefaultTimeout(20_000)
     await finishFirstRunGuide(page)
-    await check(page, { capture: name => captureWindow(page, join(output, `${name}.png`)) })
+    await check(page, { startup: observers.find(observer => observer.window === page)?.startup,
+      capture: name => captureWindow(page, join(output, `${name}.png`)) })
     if (legacyProfile) {
       const profile = JSON.parse(await readFile(join(home, 'profiles/desktop/package.json'), 'utf8'))
       assert.equal(profile.description, 'Existing profile retained during product upgrade')
