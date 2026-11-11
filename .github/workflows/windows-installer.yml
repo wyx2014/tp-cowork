@@ -23,6 +23,12 @@ on:
         type: boolean
         default: true
         required: true
+      hub_environment:
+        description: 'TP Cowork Hub 环境：test 测试环境，production 生产环境（地址见 plugins/tpcowork-toolbox/hub-environments.json）'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
       deployment:
         description: 'standalone 为独立测试包；test/production 需要更新策略服务'
         type: choice
@@ -140,6 +146,7 @@ jobs:
           DSH_DESKTOP_BUILD_CACHE_DIR: ${{ github.workspace }}/deepseek-harness/apps/desktop/.desktop-build/build-cache
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
           PACKAGE_DEPLOYMENT: ${{ inputs.deployment }}
+          TPCOWORK_HUB_ENV: ${{ inputs.hub_environment }}
           PACKAGE_POLICY_ORIGIN: ${{ inputs.policy_origin || vars.PACKAGE_POLICY_ORIGIN }}
           PACKAGE_LOGIN_ORIGINS: ${{ inputs.deployment == 'test' && (inputs.login_origins || vars.PACKAGE_LOGIN_ORIGINS) || '' }}
           TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
@@ -188,6 +195,7 @@ jobs:
             '- Built and installation-tested on Windows Server 2022 x64.',
             `- Product commit: ${info.productCommit}`,
             `- Harness commit: ${info.harnessCommit}`,
+            `- TP Cowork Hub: ${info.hub ? `${info.hub.environment} (${info.hub.endpoint})` : '(not included)'}`,
             `- Deployment: ${info.deployment}; unsigned NSIS installer.`, '',
             'The EXE, its SHA-256 checksum, and build-info.json are attached.', '',
           ].join('\n')

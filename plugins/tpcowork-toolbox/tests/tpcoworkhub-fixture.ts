@@ -90,7 +90,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
   const attach = async (ctx: typeof base.ctx) => {
     await ctx.plugin(LocalCredentials, { path: join(base.home, '.test-credentials.yaml'), watch: false })
     await ctx.credentials.set(credentialRef('HUB_PASSWORD'), password)
-    const fiber = await ctx.plugin(hub, { endpoint, ...config })
+    const fiber = await ctx.plugin(hub, { endpointOverride: endpoint, ...config })
     return { service: ctx.toolboxTpcoworkHub as hub.ToolboxTpcoworkHub, fiber }
   }
   const { service, fiber } = await attach(base.ctx)

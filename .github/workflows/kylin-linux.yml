@@ -18,6 +18,12 @@ on:
         type: string
         default: auto
         required: true
+      hub_environment:
+        description: 'TP Cowork Hub 环境：test 测试环境，production 生产环境（地址见 plugins/tpcowork-toolbox/hub-environments.json）'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
       variant:
         description: 'standard 包含浏览器、仅排除 Computer Use；basic 仅底座；full 全部插件'
         type: choice
@@ -137,6 +143,7 @@ jobs:
           DSH_DESKTOP_BUILD_CACHE_DIR: ${{ github.workspace }}/deepseek-harness/apps/desktop/.desktop-build/build-cache
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
           PACKAGE_VARIANT: ${{ inputs.variant }}
+          TPCOWORK_HUB_ENV: ${{ inputs.hub_environment }}
           TPCOWORK_DEEPSEEK_BASE_URL: ${{ vars.TPCOWORK_DEEPSEEK_BASE_URL }}
           TPCOWORK_DEEPSEEK_API_KEY: ${{ secrets.TPCOWORK_DEEPSEEK_API_KEY }}
           TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
@@ -171,6 +178,7 @@ jobs:
             '- Built and runtime-tested on Ubuntu 22.04 x64.',
             basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.'
               : standard ? `- Standard: ${info.bundles.length} product plugins; browser included; Computer Use excluded; interface zoom and diagnostics retained.` : '- Full product plugin set.',
+            ...(info.hub ? [`- TP Cowork Hub: ${info.hub.environment} (${info.hub.endpoint})`] : []),
             ...(info.guiSmokeVerified ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
             ...(standard ? ['- Browser automation enabled; Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
             `- Included product bundles: ${info.bundles.join(', ') || '(none)'}`,

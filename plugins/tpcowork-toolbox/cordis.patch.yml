@@ -1,6 +1,4 @@
 - insert:
+    # The Hub address is baked into the build (hub-environments.json), never written into the profile.
     - id: tpcowork-toolbox
       name: '@tpcowork/dsh-toolbox'
-      config:
-        tpcoworkhub:
-          endpoint: http://10.17.12.229:20255

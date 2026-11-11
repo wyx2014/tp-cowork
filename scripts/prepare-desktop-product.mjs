@@ -14,7 +14,8 @@ if (!['product', 'linux'].some(name => packages === join(productRoot, '.desktop-
 const staging = dirname(packages)
 await rm(staging, { recursive: true, force: true })
 await mkdir(packages, { recursive: true })
-const env = { ...process.env, TPCOWORK_PACKAGED_PYTHON_SOURCE: join(resolveDesktopTargetBuildPaths().runtime, 'primary-runtime/dependencies/python') }
+// Installers talk to the test Hub unless the build asks for another (TPCOWORK_HUB_ENV=production).
+const env = { ...process.env, TPCOWORK_HUB_ENV: process.env.TPCOWORK_HUB_ENV || 'test', TPCOWORK_PACKAGED_PYTHON_SOURCE: join(resolveDesktopTargetBuildPaths().runtime, 'primary-runtime/dependencies/python') }
 // Recreate the selected native payload so a cached build cannot mix browser and utility variants.
 await rm(join(harnessRoot, 'apps/desktop/lib/tpcowork-browser'), { recursive: true, force: true })
 for (const [directory, buildArgs] of [

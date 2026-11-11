@@ -178,17 +178,22 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(await service.detail({ id: 'pending', preview: true })).toMatchObject({ skill: { approvalStatus: 'pending', versionId: '' }, files: [] })
     await expect(service.detail({ id: 'pending' })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-package' })
   })
-  it('ignores environment overrides of the Hub address', async () => {
+  it('ignores environment overrides of the Hub address and uses the build\'s Hub', async () => {
     const previous = { ...process.env }
-    Object.assign(process.env, { DSH_DESKTOP_DEV_APP: '1', DSH_TPCOWORKHUB_URL: 'http://localhost:8080' })
+    Object.assign(process.env, { DSH_DESKTOP_DEV_APP: '1', DSH_TPCOWORKHUB_URL: 'http://10.0.0.9:1' })
     try {
-      const { service } = await hubFixture({ endpoint: '' })
-      expect((await service.browserAuth()).loginUrl).toBe('http://10.17.12.229:20255/desktop/authorize')
+      const { service } = await hubFixture({ endpointOverride: '' })
+      // Unbuilt source has no baked address and uses the local Hub, as `npm run dev` does.
+      expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
     } finally { process.env = previous }
   })
-  it('replaces a local Hub address left in an older profile', async () => {
-    const { service } = await hubFixture({ endpoint: 'http://localhost:8080' })
-    expect((await service.browserAuth()).loginUrl).toBe('http://10.17.12.229:20255/desktop/authorize')
+  it('ignores the Hub address older release patches wrote into profiles', async () => {
+    const { service } = await hubFixture({ endpointOverride: '', endpoint: 'http://10.17.12.229:20255' } as never)
+    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
+  })
+  it('honours a profile override, including a local Hub on localhost', async () => {
+    const { service } = await hubFixture({ endpointOverride: 'http://localhost:8080/' })
+    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
   })
   it('validates the website session, restores the shared desktop account and clears it on sign-out', async () => {
     const { ctx, endpoint, requests, service, start, attach } = await hubFixture()

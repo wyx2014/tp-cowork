@@ -80,7 +80,7 @@ try {
   await ctx.plugin(Typert); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway); await ctx.plugin(Skills)
   await ctx.plugin(Credentials, { path: credentialFile, watch: false })
   await ctx.plugin(skills, { userRoot: join(home, 'user-skills') })
-  await ctx.plugin(hub, { endpoint })
+  await ctx.plugin(hub, { endpointOverride: endpoint })
   const mainFile = join(home, 'main.mjs')
   await writeFile(mainFile, `import {app,BrowserWindow,net,session} from 'electron';
     import {DesktopTpcoworkHub,createTpcoworkHubClient} from ${JSON.stringify(new URL('../lib/desktop/tpcoworkhub.js', import.meta.url).href)};

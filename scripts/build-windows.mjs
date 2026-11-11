@@ -35,6 +35,12 @@ export async function collectWindowsInstallers(source, output, revisions) {
   return names
 }
 
+/** The TP Cowork Hub the toolbox was built for (`lib/hub.json`), when this build includes the toolbox. */
+export async function builtHub(root = productRoot) {
+  try { return { hub: JSON.parse(await readFile(join(root, 'plugins/tpcowork-toolbox/lib/hub.json'), 'utf8')) } }
+  catch (error) { if (error.code === 'ENOENT') return {}; throw error }
+}
+
 /** Build on a Windows x64 host; Mac users run the same entry point on GitHub Actions. */
 export async function buildWindows(argv = process.argv.slice(2)) {
   const { values } = parseArgs({ args: argv.filter(value => value !== '--'), options: {
@@ -94,7 +100,7 @@ export async function buildWindows(argv = process.argv.slice(2)) {
     await withStagedWindowsApplication(application, staged => runCommand(join(staged, `${product.productName}.exe`),
       ['--expose-internals', join(productRoot, 'scripts/smoke-windows-product.mjs'), join(staged, 'resources')], { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }))
     const revision = async cwd => (await runCommand('git', ['rev-parse', 'HEAD'], { cwd, env, capture: true })).trim()
-    const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), version, deployment, unsigned: true }
+    const revisions = { productCommit: await revision(productRoot), harnessCommit: await revision(harnessRoot), version, deployment, unsigned: true, ...await builtHub() }
     const names = await collectWindowsInstallers(join(harnessRoot, 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'), output, revisions)
     console.log(`TP Cowork: ${join(output, names[0])}`)
   } finally {

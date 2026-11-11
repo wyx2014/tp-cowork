@@ -57,7 +57,7 @@ try {
   await ctx.plugin(Credentials, { path: join(home, '.credentials.yaml'), watch: false })
   await ctx.credentials.set(credentialRef('FIXTURE_PASSWORD'), 'compiled-fixture-password')
   await ctx.plugin(skills, { userRoot: join(home, 'user-skills') })
-  const module = await ctx.plugin(hub, { endpoint: `http://127.0.0.1:${server.address().port}` })
+  const module = await ctx.plugin(hub, { endpointOverride: `http://127.0.0.1:${server.address().port}` })
   await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'login', args: { request: { username: 'fixture', passwordRef: 'FIXTURE_PASSWORD' } } })
   const detail = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'detail', args: { request: { id: 'fixture' } } })
   const result = await ctx.typertGateway.invoke({ peer, namespace: 'toolboxTpcoworkHub', method: 'install', args: { request: { requestId: 'compiled', source: { kind: 'tpcoworkhub', skillId: 'fixture', versionId: 'v1', fingerprint: detail.fingerprint }, scope: { kind: 'user' }, conflict: 'reject' } } })

@@ -23,14 +23,22 @@ import { bundledPythonPath } from '../../runtime-paths.ts'
 export const name = 'toolbox-tpcoworkhub'
 export const inject = ['credentials', 'skills', 'profileContext', 'typert', 'toolboxInstaller']
 export interface Config {
-  endpoint: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number
+  /** A Hub address for this profile only; empty uses the build's Hub ({@link HUB_ENDPOINT}). */
+  endpointOverride: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number
   /** Internal APIs skills may call with the user's login through the relay: name → base URL. `hub` is always the Hub. */
   apis: Record<string, string>
 }
-/** The TP Cowork Hub address. */
-export const HUB_ENDPOINT = 'http://10.17.12.229:20255'
+declare const __TPCOWORK_HUB_ENDPOINT__: string | undefined
+/** The local Hub that unbuilt source and tests use; `hub-environments.json` `local` lists the same address. */
+export const LOCAL_HUB_ENDPOINT = 'http://localhost:8080'
+/**
+ * This build's TP Cowork Hub, baked in by the toolbox build from `hub-environments.json` and `TPCOWORK_HUB_ENV`.
+ * Profiles keep no Hub address of their own, so installing a production build over a test one switches Hubs.
+ */
+export const HUB_ENDPOINT: string = typeof __TPCOWORK_HUB_ENDPOINT__ === 'string' ? __TPCOWORK_HUB_ENDPOINT__ : LOCAL_HUB_ENDPOINT
 export const Config = z.object({
-  endpoint: z.string().default(HUB_ENDPOINT), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
+  // Profiles from builds before 2026-11-11 carry `endpoint` written by the release patch; it is ignored, not migrated.
+  endpointOverride: z.string().default('').description('Hub address for this profile only; leave empty to use the Hub this build was made for.'), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
   requestTimeoutMs: z.number().min(1).default(30000), pageSize: z.number().min(1).max(100).default(30),
   maxCatalogItems: z.number().min(1).default(10000), maxResponseBytes: z.number().min(1).default(96 * 1024 * 1024),
   browserAuthTimeoutMs: z.number().min(1000).max(900000).default(300000),
@@ -124,9 +132,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private changed(): void { this.ctx.emit('toolbox/changed', { domain: 'tpcoworkhub', revision: ++this.revision }) }
   private endpoint(): string {
     try {
-      const url = new URL(this.config.endpoint || HUB_ENDPOINT)
-      // Builds before 2026-11-03 defaulted to a local Hub; a profile may still carry that address.
-      if (url.hostname === 'localhost') return HUB_ENDPOINT
+      const url = new URL(this.config.endpointOverride || HUB_ENDPOINT)
       if (url.search || url.hash || !allowedHubUrl(url)) throw new Error()
       return url.href.replace(/\/+$/, '')
     } catch { throw new TpcoworkHubError('not-configured') }

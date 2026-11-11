@@ -7,7 +7,7 @@ import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { harnessRoot, npmCli, productRoot, runCommand } from './package-command.mjs'
-import { standaloneBuildVersion } from './build-windows.mjs'
+import { builtHub, standaloneBuildVersion } from './build-windows.mjs'
 import { prepareDesktopBranding } from './desktop-branding.mjs'
 
 /** Refuse incomplete or ambiguous output so an old package cannot masquerade as this build. */
@@ -144,7 +144,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
     platform: 'linux', arch: 'x64', variant, productName: product.productName, bundles: product.bundles,
     deployment: 'standalone', unsigned: true,
     buildHost: { platform: process.platform, arch: process.arch }, guiSmokeVerified: variant !== 'full', kylinMachineVerified: false,
-    excludedBundles,
+    excludedBundles, ...(product.bundles.includes('@tpcowork/dsh-toolbox') ? await builtHub() : {}),
   })
   if (variant !== 'full') {
     const name = variant === 'basic' ? 'diagnose-linux-basic.sh' : 'diagnose-linux.sh'
