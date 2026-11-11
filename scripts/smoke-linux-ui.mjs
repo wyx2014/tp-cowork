@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
-import { finishFirstRunGuide, checkInstalledProductUi } from './installed-ui-checks.mjs'
+import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup } from './installed-ui-checks.mjs'
 
 const [executable, homeArgument, outputArgument, configArgument] = process.argv.slice(2)
 if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Linux executable, private home and evidence directory')
@@ -20,11 +20,11 @@ await mkdir(output, { recursive: true })
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)
   && !name.startsWith('DSH_') && name !== 'ELECTRON_RUN_AS_NODE'))
 const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
-const errors = [], logs = [], observed = new Set()
+const errors = [], logs = [], observed = new Map()
 let app, page, failure, state
 const observe = window => {
   if (observed.has(window)) return
-  observed.add(window)
+  observed.set(window, observeInstalledStartup(window))
   window.on('pageerror', error => errors.push(redact(error.message)))
   window.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())) })
 }
@@ -134,7 +134,8 @@ try {
       await app.evaluate(({ dialog }, original) => { dialog.showMessageBox = original }, originalDialog)
       await originalDialog.dispose()
     }
-    await checkInstalledProductUi(page, { clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
+    await checkInstalledProductUi(page, { startup: observed.get(page),
+      clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
       capture: name => capture(`${name}.png`) })
     await page.getByTestId('toolbox-navigation').click()
     await page.getByTestId('toolbox-page').waitFor({ state: 'visible' })

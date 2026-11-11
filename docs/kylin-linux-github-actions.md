@@ -52,6 +52,8 @@ bash diagnose-linux-basic.sh
 
 标准版使用自己的应用数据目录；显式 `DSH_HOME` 仍优先。两种安装包均验证实际产品包清单和运行时解析，随后在开启 Chromium 沙箱的真实图形窗口内完成首次启动，确认浏览器自动化已启用，并检查产品界面、记忆、归档、统计和工具箱页面。截图与报告位于 `linux-standard-startup-<run_id>` Artifact。发布附带 `diagnose-linux.sh`，默认启动 `/opt/TP Cowork Linux/tpcowork-linux`。
 
+Linux GUI 验收从窗口创建时监听首次会话列表响应，并把启动完成状态传入共享设置检查，确保打开设置前已完成会话初始化。AppImage 和 DEB 均使用这一检查入口。
+
 ### 验证范围
 
 当前 Runner 是 Ubuntu，新构建的标准版仍需在麒麟实机验证安装、图形界面和系统库兼容性。`build-info.json` 的 `kylinMachineVerified` 固定为 `false`，避免把构建成功当成麒麟实机验收。此流程仅构建 x86_64，ARM64、龙芯和申威等架构需要对应的运行环境和验证。
