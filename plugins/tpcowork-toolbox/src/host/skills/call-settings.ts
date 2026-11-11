@@ -55,6 +55,40 @@ async function localSource(directory: string): Promise<Record<string, unknown>> 
 }
 const field = (data: Record<string, unknown>, key: string) => typeof data[key] === 'string' ? data[key] as string : ''
 
+/** The local extension table (`内部分机信息表.md`) kept with the phone setup; it is never packaged or uploaded. */
+export async function directoryTable(directory: string, source?: Record<string, unknown>): Promise<string> {
+  const tablePath = field(source ?? await localSource(directory), 'directory')
+  return await readLocal(tablePath ? resolve(directory, tablePath) : join(directory, directoryName))
+    ?? await readLocal(join(directory, '..', 't46u-dial', directoryName)) ?? ''
+}
+function directoryRows(table: string): Record<string, string>[] {
+  let header: string[] | undefined
+  const rows: Record<string, string>[] = []
+  for (const line of table.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    if (!line.trim().startsWith('|')) continue
+    const cells = line.trim().replace(/^\||\|$/g, '').split('|').map(value => value.trim())
+    if (!header) { header = cells; continue }
+    if (cells.length === header.length && !cells.every(cell => /^:?-{3,}:?$/.test(cell))) rows.push(Object.fromEntries(header.map((key, index) => [key, cells[index]!])))
+  }
+  return rows
+}
+/**
+ * A colleague's extension by name, as the previous desktop looked it up: one exact match on the extension, Chinese or
+ * English name, otherwise one partial name match. Several or no matches return a message and never pick someone.
+ */
+export function directoryExtension(table: string, name: string): { number: string } | { error: string } {
+  const query = name.trim().toLowerCase()
+  const rows = directoryRows(table)
+  if (!query) return { error: '请提供要拨打的姓名或号码。' }
+  const keys = ['分机短号', '显示名称', '显示名称(英文)']
+  const exact = rows.filter(row => keys.some(key => (row[key] ?? '').trim().toLowerCase() === query))
+  const partial = exact.length ? exact : rows.filter(row => keys.slice(1).some(key => (row[key] ?? '').toLowerCase().includes(query)))
+  if (!rows.length) return { error: '本机没有分机表（内部分机信息表.md），请直接提供号码，或在“设置电话”所选目录中放入分机表。' }
+  if (partial.length > 1) return { error: exact.length ? `「${name}」对应多条记录，请提供分机号。` : `「${name}」匹配多个人，请提供完整姓名或分机号。` }
+  if (!partial.length) return { error: `通讯录里没有「${name}」，请检查姓名或直接提供号码。` }
+  const number = (partial[0]!['分机短号'] ?? '').trim()
+  return /^\d{4}$/.test(number) ? { number } : { error: `「${name}」没有有效的四位分机号。` }
+}
 /** Exact extension lookup only; duplicates and placeholder IPs never choose an arbitrary phone. */
 export function directoryPhone(table: string, caller: string): string | undefined {
   let header: string[] | undefined
@@ -100,9 +134,7 @@ async function draft(ctx: Context, refs: Refs, request: CallSetupRequest) {
   const sameSaved = saved?.caller === caller && saved.sourceDirectory === directory
   const sameSource = field(source, 'caller').trim() === caller
   const scheme = field(source, 'scheme') || 'https'
-  const tablePath = field(source, 'directory')
-  const table = await readLocal(tablePath ? resolve(directory, tablePath) : join(directory, directoryName))
-    ?? await readLocal(join(directory, '..', 't46u-dial', directoryName)) ?? ''
+  const table = await directoryTable(directory, source)
   const host = directoryPhone(table, caller)
   const sourceHost = sameSource ? field(source, 'phone_ip') : ''
   const phoneUrl = sameSaved ? saved.phoneUrl : (sourceHost || host) ? `${scheme}://${sourceHost || host}` : ''

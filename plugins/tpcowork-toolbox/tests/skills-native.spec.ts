@@ -4,7 +4,7 @@ import FileSystem from '@deepseek-ai/dsh-fs-local'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { skillsFixture } from './skills-fixture.ts'
-import { extractImage, nativeMissing, sendCall, type NativeOptions } from '../src/host/skills/native.ts'
+import { extractImage, nativeMissing, phoneTransport, sendCall, type NativeOptions } from '../src/host/skills/native.ts'
 const config: NativeOptions = { requestTimeoutMs: 1000, imageMaxBytes: 1024, visionMaxTokens: 123, callUsernameRef: 'PHONE_USER', callPasswordRef: 'PHONE_PASSWORD', visionKeyRef: 'VISION_KEY' }
 describe('native external-service adapters', () => {
   it('reports missing configuration without making requests', async () => {
@@ -25,17 +25,24 @@ describe('native external-service adapters', () => {
     vi.stubEnv('DSH_YEALINK_URL', 'https://phone.test')
     vi.stubEnv('DSH_YEALINK_CALLER', '1234')
     vi.stubEnv('DSH_YEALINK_PBX', 'pbx.test')
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('OK'))
+    const phone = vi.spyOn(phoneTransport, 'request').mockResolvedValue({ status: 200, body: 'OK' })
     try {
       const result = await sendCall(ctx, { action: 'dial', number: '5678' }, new AbortController().signal, config)
-      const url = fetch.mock.calls[0]![0] as URL
+      const url = phone.mock.calls[0]![0]
       expect(url.pathname).toBe('/cgi-bin/ConfigManApp.com')
       expect(url.searchParams.get('outgoing_url')).toBe('1234@pbx.test')
       expect(url.searchParams.get('number')).toBe('5678')
-      expect(result).toBe('已向话机发送拨号指令；是否接通请以话机状态为准。')
-      fetch.mockResolvedValueOnce(new Response('<html>private-test-value</html>'))
-      await expect(sendCall(ctx, { action: 'hangup' }, new AbortController().signal, config)).rejects.toThrow('话机指令失败；请检查网络、TLS 证书和凭证。')
-    } finally { fetch.mockRestore(); vi.unstubAllEnvs(); await ctx.fiber.dispose() }
+      expect(phone.mock.calls[0]![1]).toBe(`Basic ${Buffer.from('private-test-value:private-test-value').toString('base64')}`)
+      expect(result).toBe('已向主叫分机 1234 的话机发送拨打 5678 的指令；是否接通请以话机状态为准。')
+      phone.mockResolvedValueOnce({ status: 200, body: '<html>private-test-value</html>' })
+      const rejected = sendCall(ctx, { action: 'hangup' }, new AbortController().signal, config)
+      await expect(rejected).rejects.toThrow('话机未接受指令（HTTP 200）')
+      await expect(sendCall(ctx, { action: 'hangup' }, new AbortController().signal, config).catch((error: Error) => error.message)).resolves.not.toContain('private-')
+      phone.mockResolvedValueOnce({ status: 401, body: '' })
+      await expect(sendCall(ctx, { action: 'hangup' }, new AbortController().signal, config)).rejects.toThrow('话机拒绝了登录')
+      phone.mockRejectedValueOnce(new Error('connect ETIMEDOUT'))
+      await expect(sendCall(ctx, { action: 'hangup' }, new AbortController().signal, config)).rejects.toThrow('无法连接话机 phone.test')
+    } finally { phone.mockRestore(); vi.unstubAllEnvs(); await ctx.fiber.dispose() }
   })
   it('reads image bytes through DSH FS, sends the deployed model request, and rejects empty output', async () => {
     const { ctx, home } = await skillsFixture()

@@ -6,7 +6,9 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
 import { loadImageExtractDeployment } from './image-extract-deployment.ts'
-import { activeCallSettings, phoneEndpoint } from './call-settings.ts'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { activeCallSettings, directoryExtension, directoryTable, phoneEndpoint } from './call-settings.ts'
 export interface NativeOptions {
   requestTimeoutMs: number; imageMaxBytes: number; visionMaxTokens: number
   callUsernameRef: string; callPasswordRef: string; visionKeyRef: string
@@ -44,26 +46,60 @@ async function boundedBody(response: Response, maxBytes: number): Promise<string
     return Buffer.concat(chunks).toString('utf8')
   } finally { await reader.cancel(); reader.releaseLock() }
 }
-export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
+/**
+ * One request to the desk phone. Yealink phones serve HTTPS with their own self-signed certificate, so, as the previous
+ * desktop did, the phone's certificate is not verified; the request goes straight to the phone on the LAN, never
+ * through a proxy. Replaceable for tests.
+ */
+export const phoneTransport = {
+  request(url: URL, authorization: string, signal: AbortSignal, maxBytes = 2048): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const options = { headers: { Authorization: authorization }, signal, agent: false as const }
+      const done = (response: import('node:http').IncomingMessage) => {
+        const chunks: Buffer[] = []
+        let size = 0
+        response.on('data', (chunk: Buffer) => { size += chunk.length; if (size <= maxBytes) chunks.push(chunk); else response.destroy() })
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
+        response.on('close', () => resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
+        response.on('error', reject)
+      }
+      const request = url.protocol === 'https:' ? httpsRequest(url, { ...options, rejectUnauthorized: false }, done) : httpRequest(url, options, done)
+      request.on('error', reject)
+      request.end()
+    })
+  },
+}
+export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined; name?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
   const active = await activeCallSettings(ctx, config)
   if (active.missing.length || !active.settings) throw new Error('电话尚未配置；请打开工具箱 → 技能 → call → 设置电话，确认自己的办公分机号。')
-  if (!['dial','hangup'].includes(args.action) || (args.action === 'dial' && !/^\d{3,20}$/.test(args.number ?? ''))) throw new Error('拨号需要明确的数字号码。')
+  if (!['dial','hangup'].includes(args.action)) throw new Error('电话操作只能是拨号或挂断。')
+  let number = args.number?.replace(/[\s()（）-]/g, '')
+  if (args.action === 'dial' && !number && args.name?.trim()) {
+    // A name is looked up in this machine's extension table; several or no matches are reported, never guessed.
+    const found = directoryExtension(await directoryTable(active.settings.sourceDirectory), args.name)
+    if ('error' in found) throw new Error(found.error)
+    number = found.number
+  }
+  if (args.action === 'dial' && !/^\d{3,20}$/.test(number ?? '')) throw new Error('拨号需要明确的数字号码或通讯录中的姓名。')
   const url = new URL('/cgi-bin/ConfigManApp.com', phoneEndpoint(active.settings.phoneUrl)!)
   if (args.action === 'hangup') url.searchParams.set('key', 'CALLEND')
   else {
     const prefix = active.settings.outgoingPrefix
     if (!/^\d*$/.test(prefix)) throw new Error('电话拨出前缀配置无效。')
-    const number = args.number!
-    url.searchParams.set('number', number.length === 4 || number.startsWith(prefix) ? number : prefix + number)
+    url.searchParams.set('number', number!.length === 4 || number!.startsWith(prefix) ? number! : prefix + number!)
     url.searchParams.set('outgoing_url', `${active.settings.caller}@${active.settings.pbx}`)
   }
   const { username: user, password } = active
+  let reply: { status: number; body: string }
   try {
-    const response = await fetch(url, { headers: { Authorization: `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}` }, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]) })
-    const body = await boundedBody(response, 2048)
-    if (response.status !== 200 || /\b(?:error|failed|invalid|login)\b|<html/i.test(body)) throw new Error('rejected')
-    return args.action === 'hangup' ? '已向话机发送挂断指令。' : '已向话机发送拨号指令；是否接通请以话机状态为准。'
-  } catch { throw new Error(signal.aborted ? '电话操作已取消。' : '话机指令失败；请检查网络、TLS 证书和凭证。') }
+    reply = await phoneTransport.request(url, `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`, AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]))
+  } catch {
+    throw new Error(signal.aborted ? '电话操作已取消。' : `无法连接话机 ${url.host}；请确认电脑在内网，且话机地址正确。`)
+  }
+  if (reply.status === 401 || reply.status === 403) throw new Error('话机拒绝了登录；请在“设置电话”中重新填写话机登录账号和密码。')
+  if (reply.status !== 200 || /\b(?:error|failed|invalid|login)\b|<html/i.test(reply.body)) throw new Error(`话机未接受指令（HTTP ${String(reply.status)}）；请检查话机登录账号和密码。`)
+  if (args.action === 'hangup') return `已向主叫分机 ${active.settings.caller} 的话机发送挂断指令。`
+  return `已向主叫分机 ${active.settings.caller} 的话机发送拨打 ${args.name?.trim() && !args.number ? `${args.name.trim()}（${number!}）` : number!} 的指令；是否接通请以话机状态为准。`
 }
 export async function extractImage(ctx: Context, args: { image_path: string; prompt?: string | undefined }, signal: AbortSignal, config: NativeOptions, cwd?: string): Promise<string> {
   if ((await nativeMissing(ctx, 'image-extract', config)).length) throw new Error('图片提取尚未配置；请补充多模态服务和 TP Cowork 凭证引用。')
@@ -100,8 +136,9 @@ export async function extractImage(ctx: Context, args: { image_path: string; pro
 /** Register only when another native adapter does not already own the same tool. */
 export function applyNativeTools(ctx: Context, config: NativeOptions): void {
   if (!ctx.tools.get('call')) ctx.tools.register(defineTool({
-    name: 'call', description: 'Send a dial or hangup command to the configured Yealink desk phone only on the user\'s explicit request. Delivery is not proof of connection.',
-    parameters: { action: { type: 'string', enum: ['dial','hangup'], required: true }, number: { type: 'string', description: 'Explicit numeric phone number for dial.' } },
+    name: 'call', description: 'Send a dial or hangup command to the user\'s configured Yealink desk phone, only on the user\'s explicit request. Dial a number, or a colleague by name from the local extension table. Delivery is not proof of connection.',
+    parameters: { action: { type: 'string', enum: ['dial','hangup'], required: true }, number: { type: 'string', description: 'Numeric phone number or extension the user gave, for dial.' },
+      name: { type: 'string', description: 'Colleague name the user gave, for dial without a number; looked up in this machine\'s extension table.' } },
     output: { schema: { type: 'string' }, render: (_args, text) => [{ type: 'text', text }] },
     execute: (args, exec) => sendCall(ctx, args, exec.signal, config),
   }))
