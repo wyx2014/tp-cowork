@@ -46,6 +46,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
   };
   const TaskDock = createTaskDock(React, ReactDOM.createPortal);
   const SettingsLauncher = createSettingsLauncher(React, primitives);
+  const LoginGate = createLoginGate(React, primitives, brandIcon);
   const FirstRunGuide = createFirstRunGuide(React, primitives);
   const SettingsSidebarChrome = createSettingsSidebarChrome(React, ReactDOM, primitives, SettingsLauncher, classes.settings);
   const generalPreferences = createGeneralPreferences();
@@ -173,6 +174,13 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       });
       const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub);
       ctx.effect(() => () => account.dispose(), 'tpcowork: TpcoworkHub account lifetime');
+      // The shell owns the root and its child seats. Use its supported overlay with the existing account source.
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay', id: 'tpcowork-login', locale: 'tpcowork', inject: () => ({
+          account: account.source, startSignIn: account.startSignIn,
+          cancelSignIn: account.cancelSignIn, refreshAccount: account.refreshAccount,
+        }),
+      }, LoginGate));
       // The reference product's interface zoom: the whole window, from the account menu and Command/Control +, - and 0.
       // The keys replace DSH's text-size keys; chat text size stays in Appearance.
       const zoom = createWindowZoom(window.dshDesktop?.browserAutomation);

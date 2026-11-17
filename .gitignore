@@ -42,3 +42,4 @@ agents.local.json
 .credentials.yml
 *.pem
 /plugins/tpcowork-core/model.js
+/plugins/tpcowork-core/hub-model.js

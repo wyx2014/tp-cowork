@@ -18,6 +18,10 @@
     "more": "更多",
     "settings": "设置",
     "signIn": "连接使用",
+    "loginTitle": "欢迎来到 TP Cowork",
+    "loginWaiting": "等待浏览器登录…",
+    "loginUnavailable": "暂时无法登录，请稍后重试",
+    "loginRetry": "重试",
     "signOut": "退出登录",
     "cancelSignIn": "取消登录",
     "authCommitting": "正在同步登录状态…",
@@ -217,6 +221,7 @@
     "guideProcess_standard": "关键细节",
     "guideProcess_standard_body": "结果优先，仅展示重要步骤和关键操作",
     "guideProcess_detailed": "完整过程",
-    "guideProcess_detailed_body": "查看完整工作过程，方便调试和排查问题"
+    "guideProcess_detailed_body": "查看完整工作过程，方便调试和排查问题",
+    "loginAction": "登录"
   }
 }

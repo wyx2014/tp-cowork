@@ -91,7 +91,7 @@ test('Mac and Linux Windows builds stop before installing or preparing files', {
   await assert.rejects(buildWindows([]), /Windows x64/)
 })
 
-test('core staging ignores the developer deployment file but forwards an explicit deployment API key', async () => {
+test('explicit static core staging ignores the developer deployment file and uses its configured API key', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tpcowork-core-staging-'))
   try {
     const source = join(root, 'source')
@@ -103,7 +103,7 @@ test('core staging ignores the developer deployment file but forwards an explici
     await writeFile(join(source, 'model.patch.yml'), 'local patch')
     await writeFile(join(source, 'model.js'), 'local model')
     const destination = join(root, 'release')
-    await stageCoreBundle(source, destination, { TPCOWORK_DEEPSEEK_API_KEY: 'ambient-example-secret', TPCOWORK_DEEPSEEK_BASE_URL: 'https://release.example.com/v1' })
+    await stageCoreBundle(source, destination, { TPCOWORK_MODEL_SOURCE: 'static', TPCOWORK_DEEPSEEK_API_KEY: 'ambient-example-secret', TPCOWORK_DEEPSEEK_BASE_URL: 'https://release.example.com/v1' })
     const staged = JSON.parse(await readFile(join(destination, 'deployment.local.json'), 'utf8'))
     assert.equal(staged.apiKey, 'ambient-example-secret')
     assert.equal(staged.apiBase, 'https://release.example.com/v1')
@@ -113,7 +113,7 @@ test('core staging ignores the developer deployment file but forwards an explici
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
-test('core staging stays credential-free when no deployment API key is provided', async () => {
+test('default core staging loads SkillHub models and ignores even an ambient deployment key', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tpcowork-core-staging-default-'))
   try {
     const source = join(root, 'source')
@@ -124,8 +124,11 @@ test('core staging stays credential-free when no deployment API key is provided'
     await writeFile(join(source, 'model.patch.yml'), 'local patch')
     await writeFile(join(source, 'model.js'), 'local model')
     const destination = join(root, 'release')
-    await stageCoreBundle(source, destination, {})
+    await stageCoreBundle(source, destination, { TPCOWORK_DEEPSEEK_API_KEY: 'ambient-example-secret' })
     const staged = JSON.parse(await readFile(join(destination, 'deployment.local.json'), 'utf8'))
     assert.equal(staged.apiKey, undefined)
+    assert.equal(staged.modelSource, 'skillhub')
+    assert.deepEqual(JSON.parse(await readFile(join(destination, 'model.patch.yml'), 'utf8')),
+      [{ insert: [{ id: 'tpcowork-hub-model', name: '@tpcowork/dsh-core/hub-model' }] }])
   } finally { await rm(root, { recursive: true, force: true }) }
 })

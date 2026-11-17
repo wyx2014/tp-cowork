@@ -54,7 +54,8 @@ try {
 } finally { rmSync(profile, { recursive: true, force: true }) }
 const core = JSON.parse(readFileSync(join(runtime, 'node_modules/@tpcowork/dsh-core/deployment.local.json'), 'utf8'))
 // Only the explicitly configured deployment key may ship; a developer's local key never may.
-assert.equal(core.apiKey, process.env.TPCOWORK_DEEPSEEK_API_KEY || undefined, 'Product package must embed only the configured deployment API key')
+assert.equal(core.apiKey, core.modelSource === 'skillhub' ? undefined : process.env.TPCOWORK_DEEPSEEK_API_KEY || undefined,
+  'Login-managed packages must never embed a shared model key')
 const toolbox = join(runtime, 'node_modules/@tpcowork/dsh-toolbox')
 const browser = JSON.parse(readFileSync(join(toolbox, 'runtime/playwright.json'), 'utf8'))
 assert.equal(browser.platform, process.platform)

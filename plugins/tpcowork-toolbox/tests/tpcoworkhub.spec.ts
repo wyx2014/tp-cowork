@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
@@ -8,8 +8,72 @@ import { hubFixture, deferred, password, sampleFiles, secret } from './tpcoworkh
 import { fingerprint, sha256 } from '../src/host/installer/files.ts'
 import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
 import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
+import LlmRuntime from '../../../../deepseek-harness/packages/llm/llm/src/index.ts'
+import * as HubModel from '../../tpcowork-core/src/hub-model.ts'
+import { assemble } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/assemble.ts'
+import { textEvents } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/mock-server.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
+  it('loads the personal gateway after login, streams directly with its key and removes it on logout', async () => {
+    const { ctx, login, state, endpoint, service, requests } = await hubFixture()
+    const key = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    state.override = (request, response) => {
+      if (request.url === '/tpcoworkapi/client-config') {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1', apiKey: key, defaultModel: 'qwen-chat', models: [{ id: 'qwen-chat' }] }))
+        return true
+      }
+      if (request.url === '/modelgw/v1/chat/completions') {
+        response.setHeader('Content-Type', 'text/event-stream')
+        response.end(textEvents.map(event => `data: ${event}\n\n`).join(''))
+        return true
+      }
+      return false
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    expect(ctx.llm.listProviders()).toEqual([])
+    await login()
+    await vi.waitFor(async () => expect((await ctx.llm.listModels(HubModel.providerId)).map(model => model.id)).toEqual(['qwen-chat']))
+    expect((await assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).message.content)
+      .toEqual([{ type: 'text', text: 'hello' }])
+    expect(requests.find(row => row.path === '/tpcoworkapi/client-config')?.authorization).toBe(`Bearer ${secret}`)
+    expect(requests.find(row => row.path === '/modelgw/v1/chat/completions')?.authorization).toBe(`Bearer ${key}`)
+    // The shared account state and durable Hub session contain no model key.
+    expect(JSON.stringify(await service.account())).not.toContain(key)
+    expect(JSON.stringify(await ctx.credentials.readRecord(sessionKey))).not.toContain(key)
+    await service.logout()
+    expect(ctx.llm.listProviders()).toEqual([])
+  })
+
+  it('discards delayed config after logout and rejects another users config', async () => {
+    const { ctx, login, state, endpoint, service } = await hubFixture()
+    const entered = deferred()
+    const release = deferred()
+    let wrongUser = false
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/client-config') return false
+      entered.resolve()
+      void release.promise.then(() => {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ userId: wrongUser ? 'other-user' : 'user-1', quotaStatus: 'active', baseURL: endpoint + '/v1', apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', models: [{ id: 'qwen-chat' }] }))
+      })
+      return true
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    await login()
+    await entered.promise
+    await service.logout()
+    release.resolve()
+    expect(ctx.llm.listProviders()).toEqual([])
+    wrongUser = true
+    const configured = vi.spyOn(ctx.tpcoworkGateway, 'configure')
+    await login()
+    await vi.waitFor(() => expect(ctx.tpcoworkGateway.status).toBe('unavailable'))
+    expect(configured).not.toHaveBeenCalled()
+    expect(ctx.llm.listProviders()).toEqual([])
+  })
   it('accepts accessToken/userInfo with a numeric internal user ID and stores only the access token and public profile', async () => {
     const { service, state, login, ctx, requests } = await hubFixture()
     state.override = (request, response) => {
@@ -265,6 +329,84 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await service.logout()
     expect(await ctx.credentials.readRecord(sessionKey)).toBeUndefined()
     expect(await service.account()).toMatchObject({ state: 'signed_out' })
+  })
+  it.each(['password', 'browser'])('restores %s login only on the same calendar day and requires explicit sign-in the next day', async method => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => vi.useRealTimers())
+    vi.setSystemTime(new Date(2026, 10, 17, 12, 30))
+    const { ctx, service, login, start, attach, requests } = await hubFixture()
+    if (method === 'password') await login()
+    else await service.acceptBrowserSession({ token: secret })
+    const saved = (await ctx.credentials.readRecord(sessionKey))!
+    expect(saved.payload).toMatchObject({ expiresAt: new Date(2026, 10, 18).getTime() })
+    await ctx.fiber.dispose()
+    vi.setSystemTime(new Date(2026, 10, 17, 23, 59))
+    const sameDay = await start()
+    const sameDayService = (await attach(sameDay)).service
+    expect(await sameDayService.account()).toMatchObject({ state: 'signed_in' })
+    expect((await sameDay.credentials.readRecord(sessionKey))?.payload).toEqual(saved.payload)
+    await sameDay.fiber.dispose()
+    vi.setSystemTime(new Date(2026, 10, 18))
+    const checks = requests.length
+    const nextDay = await start()
+    const nextDayService = (await attach(nextDay)).service
+    expect(await nextDayService.account()).toMatchObject({ configured: false, state: 'expired' })
+    await expect(nextDayService.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+    expect(requests).toHaveLength(checks)
+    expect(JSON.stringify(await nextDay.credentials.readRecord(sessionKey))).not.toContain(secret)
+    // The website may still be signed in; only explicit browser confirmation creates today's desktop grant.
+    await nextDayService.acceptBrowserSession({ token: secret })
+    expect(await nextDayService.account()).toMatchObject({ state: 'signed_in' })
+    expect((await nextDay.credentials.readRecord(sessionKey))?.payload).toMatchObject({ expiresAt: new Date(2026, 10, 19).getTime() })
+  })
+  it('blocks model calls at midnight and expires an app left running without account requests', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    onTestFinished(() => vi.useRealTimers())
+    vi.setSystemTime(new Date(2026, 10, 17, 23, 59, 30))
+    const { ctx, service, login, state, endpoint, requests } = await hubFixture()
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/client-config') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/v1', apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', models: [{ id: 'qwen-chat' }] }))
+      return true
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    await login()
+    await vi.waitFor(async () => expect(await ctx.llm.listModels(HubModel.providerId)).toHaveLength(1))
+    vi.setSystemTime(new Date(2026, 10, 18))
+    await expect(assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+    expect(requests.some(request => request.path === '/v1/chat/completions')).toBe(false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.waitFor(async () => expect((await ctx.credentials.readRecord(sessionKey))?.payload).toEqual({ endpoint, expired: true }))
+    expect(await service.account()).toMatchObject({ state: 'expired' })
+    expect(ctx.llm.listProviders()).toEqual([])
+    await service.acceptBrowserSession({ token: secret })
+    await vi.waitFor(async () => expect(await ctx.llm.listModels(HubModel.providerId)).toHaveLength(1))
+  })
+  it.each(['legacy', 'read-only'])('denies expired %s grants without silently extending or repeatedly publishing expiry', async mode => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => vi.useRealTimers())
+    vi.setSystemTime(new Date(2026, 10, 17, 12))
+    const { ctx, service, login } = await hubFixture()
+    await login()
+    if (mode === 'legacy') {
+      await ctx.credentials.modifyRecord(sessionKey, async record => {
+        const payload = { ...record!.payload as Record<string, unknown> }
+        delete payload.expiresAt
+        return { kind: 'grant', payload }
+      })
+    } else {
+      ctx.credentials.modifyRecord = async () => { throw new Error('read-only') }
+      vi.setSystemTime(new Date(2026, 10, 18))
+    }
+    const changed = vi.fn()
+    ctx.on('toolbox/changed', changed)
+    expect(await service.account()).toMatchObject({ state: 'expired' })
+    const count = changed.mock.calls.length
+    expect(await service.account()).toMatchObject({ state: 'expired' })
+    await expect(service.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+    expect(changed).toHaveBeenCalledTimes(count)
   })
   it('reports a restored login the Hub has expired as expired instead of signed in', async () => {
     const { ctx, service, state, login, start, attach } = await hubFixture()

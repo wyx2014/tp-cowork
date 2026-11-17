@@ -63,4 +63,12 @@ Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命�
 
 `npm run dev:rebuild` 统一完成底座和插件构建。单独管理已初始化桌面的插件可使用 `node scripts/desktop-plugin.mjs install all`。检查源码和依赖链接使用 `node scripts/check-worktree.mjs`。
 
-运行所需模型和 MCP 凭证由应用内的 DSH 凭证服务管理；本地凭证、会话、缓存及编译产物不提交到 GitHub。
+模型配置默认由 SkillHub 登录账号下发。登录或重启恢复账号后，Host 请求 `/tpcoworkapi/client-config`，加载该账号的 New API 网关和模型列表；模型请求直接发往 New API。退出、账号切换或配置失效后移除托管模型，不回退到共享 DeepSeek 密钥。模型密钥仅保留在 Host 内存，不写入普通设置或传给界面；登录凭证仍由 DSH 凭证服务管理。
+
+应用启动时先验证 SkillHub 登录。未登录、登录过期或无法恢复账号时显示全屏登录入口，隐藏工作台和历史会话，并禁止背景交互；没有跳过入口。登录成功后进入工作台，退出后回到登录页。Host 同时要求有效的个人网关授权，手动添加的模型来源也不能绕过登录调用。
+
+桌面登录只保留到登录当天结束，按本机时区计算下一个午夜；当天重启可恢复，第二天打开必须重新登录，不按登录后 24 小时计算，也不自动续期。Host 在启动、读取账号、访问内部 API 和模型调用时检查期限，跨夜运行时每分钟检查并更新登录页。没有每日到期时间的旧版登录记录升级后要求重新登录一次；网站本身的登录期限不变。
+
+登录限制沿用上述 SkillHub 认证与授权边界，参考 [OWASP ASVS 5.0.0](https://asvs.owasp.org/) 及 [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)。回归覆盖加载、退出、过期、取消、失败重试、Esc 和背景弹层；原生浏览器授权已验证 wangyb 登录恢复原有模型选择。SkillHub 原有密码存储与服务端令牌撤销仍是独立待改造项。
+
+服务端需配置 New API 地址、受限管理 PAT 和固定用户绑定，见 SkillHub 的 `.env.production.example`。默认构建忽略旧的 DeepSeek 部署文件和构建密钥；独立静态部署可显式设置 `TPCOWORK_MODEL_SOURCE=static`。本地凭证、会话、缓存及编译产物不提交到 GitHub。

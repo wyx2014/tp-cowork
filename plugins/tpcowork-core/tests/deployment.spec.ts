@@ -39,12 +39,24 @@ it('uses build environment overrides and supports another intranet model and cap
     apiBase: 'http://old.test/v1', apiKey: 'old-key', modelId: 'custom-model', contextWindow: 64000, maxTokens: 4096,
   }))
   await buildCore({ directory: output.url, env: {
+    TPCOWORK_MODEL_SOURCE: 'static',
     TPCOWORK_DEEPSEEK_BASE_URL: ' http://new.test/v1 ', TPCOWORK_DEEPSEEK_API_KEY: ' new-key ',
   } })
   const deployment = await loadDeployment(output.url, {})
   expect(deployment).toMatchObject({ apiBase: 'http://new.test/v1', apiKey: 'new-key', modelId: 'custom-model' })
   const rows = JSON.parse(await readFile(join(output.root, 'model.patch.yml'), 'utf8'))
   expect(rows.find((row: { id: string }) => row.id === 'agent-default-model').config.model).toBe('custom-model')
+})
+
+it('ships login-managed models by default and never imports a legacy shared key', async () => {
+  const output = await directory()
+  await writeFile(join(output.root, 'deployment.local.json'), JSON.stringify({ apiKey: 'legacy-shared-key' }))
+  await buildCore({ directory: output.url, env: { TPCOWORK_DEEPSEEK_API_KEY: 'build-shared-key' } })
+  expect(await loadDeployment(output.url, {})).toEqual({ modelSource: 'skillhub' })
+  const patch = await readFile(join(output.root, 'model.patch.yml'), 'utf8')
+  expect(JSON.parse(patch)).toEqual([{ insert: [{ id: 'tpcowork-hub-model', name: '@tpcowork/dsh-core/hub-model' }] }])
+  expect(patch).not.toMatch(/asset-deepseek|shared-key/)
+  expect(await readFile(join(output.root, 'hub-model.js'), 'utf8')).not.toContain('shared-key')
 })
 
 it('seeds the dedicated credential once, preserving subsequent user or environment credentials', async () => {

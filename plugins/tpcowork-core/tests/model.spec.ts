@@ -2,11 +2,12 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { Context } from '../../../../deepseek-harness/vendor/cordis/src/index.ts'
+import { Context, Service } from '../../../../deepseek-harness/vendor/cordis/src/index.ts'
 import { applyEntryPatches, entryListSchema } from '../../../../deepseek-harness/vendor/include/src/index.ts'
-import LlmRuntime, { createToolResultMessage, createUserMessage } from '../../../../deepseek-harness/packages/llm/llm/src/index.ts'
+import LlmRuntime, { BlockAssembler, createToolResultMessage, createUserMessage } from '../../../../deepseek-harness/packages/llm/llm/src/index.ts'
 import * as PiAi from '../../../../deepseek-harness/packages/llm/llm-pi-ai/src/index.ts'
 import * as CoreModel from '../src/model.ts'
+import * as HubModel from '../src/hub-model.ts'
 import { MemoryCredentials } from '../../../../deepseek-harness/packages/credentials/credentials/tests/memory.ts'
 import { assemble } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/assemble.ts'
 import { textEvents } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/mock-server.ts'
@@ -52,16 +53,14 @@ it('composes the shipped core model defaults over DSH and restores upstream sele
   const warnings: string[] = []
   const rows = applyEntryPatches(original, layers.flat(), message => warnings.push(message))
   expect(warnings).toEqual([])
-  expect(rows.find(row => row.id === 'agent-default-model')?.config).toEqual({
-    provider: 'asset-deepseek', model: 'deepseek_v4_flash_api',
-  })
+  expect(rows.find(row => row.id === 'agent-default-model')).toEqual(original.find(row => row.id === 'agent-default-model'))
   for (const id of ['llm-pi-ai', 'llm-deepseek-account', 'deepseek-account']) {
     expect(rows.find(row => row.id === id)).toEqual(original.find(row => row.id === id))
   }
   // The upstream "DeepSeek" (official, API-key) route is disabled; only asset-deepseek ships.
   expect(original.find(row => row.id === 'llm-deepseek')?.disabled).toBeFalsy()
   expect(rows.find(row => row.id === 'llm-deepseek')?.disabled).toBe(true)
-  expect(rows.find(row => row.id === 'tpcowork-core-model')?.name).toBe('@tpcowork/dsh-core/model')
+  expect(rows.find(row => row.id === 'tpcowork-hub-model')?.name).toBe('@tpcowork/dsh-core/hub-model')
   const restored = applyEntryPatches([], base, () => {})
   expect(restored).toEqual(original)
   expect(restored.find(row => row.id === 'agent-default-model')?.config).toMatchObject({ provider: 'deepseek-official' })
@@ -70,7 +69,7 @@ it('composes the shipped core model defaults over DSH and restores upstream sele
     { id: 'llm-pi-ai', config: { providers: { 'existing-deepseek': { baseURL: 'https://existing.test/v1' } } } },
   ], () => {})
   expect(user.find(row => row.id === 'agent-default-model')?.config).toEqual({ provider: 'user', model: 'chosen' })
-  expect(user.find(row => row.id === 'tpcowork-core-model')).toEqual(rows.find(row => row.id === 'tpcowork-core-model'))
+  expect(user.find(row => row.id === 'tpcowork-hub-model')).toEqual(rows.find(row => row.id === 'tpcowork-hub-model'))
 })
 
 it('streams a tool call and its follow-up through the intranet Chat Completions route without reasoning fields', async () => {
@@ -133,6 +132,41 @@ it('reports a missing product credential before sending a request', async () => 
   expect(server.paths).toEqual([])
 })
 
+it('selects a login-managed default even when defaults mount later and rejects requests prepared for the previous account', async () => {
+  const server = transport([textEvents])
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime).await()
+  await ctx.plugin(MemoryCredentials).await()
+  await ctx.plugin(HubModel).await()
+  expect(ctx.llm.listProviders()).toEqual([])
+  const configuration = { quotaStatus: 'active', apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    baseURL: 'https://first.example/v1', models: [{ id: 'qwen-chat' }], defaultModel: 'qwen-chat' }
+  await ctx.tpcoworkGateway.configure(configuration)
+  const save = vi.fn(async (_selection: unknown) => {})
+  class Defaults extends Service {
+    constructor(scope: Context) { super(scope, 'agentDefaultModel' as never) }
+    currentSelection() { return { provider: 'asset-deepseek', model: 'old-model' } }
+    saveSelection = save
+  }
+  await ctx.plugin({ name: 'fixture-defaults', apply(scope: Context) { new Defaults(scope) } }).await()
+  await vi.waitFor(() => expect(save).toHaveBeenCalledWith({ provider: HubModel.providerId, model: 'qwen-chat' }))
+  const prepared = await ctx.llm.prepareCall({ provider: HubModel.providerId, model: 'qwen-chat' })
+  await ctx.tpcoworkGateway.configure({ ...configuration, baseURL: 'https://second.example/v1', apiKey: 'sk-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' })
+  const result = new BlockAssembler()
+  for await (const chunk of prepared.stream({ ...prepared.config, messages: [] })) result.push(chunk)
+  expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
+  expect(server.urls).toEqual([])
+  expect((await assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).message.content)
+    .toEqual([{ type: 'text', text: 'hello' }])
+  expect(server.urls).toEqual(['https://second.example/v1/chat/completions'])
+  expect(server.headers[0]!.get('authorization')).toBe('Bearer sk-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+  await ctx.tpcoworkGateway.configure({ quotaStatus: 'exhausted' })
+  expect(ctx.llm.listProviders()).toEqual([])
+  await expect(ctx.tpcoworkGateway.configure({ ...configuration, baseURL: 'http://public.example/v1' })).rejects.toThrow('requires HTTPS')
+  expect(ctx.llm.listProviders()).toEqual([])
+})
+
 it('keeps an existing DeepSeek source and credential working while core registers and removes its independent source', async () => {
   const server = transport([textEvents, textEvents])
   const ctx = new Context()
@@ -157,4 +191,35 @@ it('keeps an existing DeepSeek source and credential working while core register
   expect((await assemble(ctx, request)).message.content).toEqual([{ type: 'text', text: 'hello' }])
   expect(server.headers.map(headers => headers.get('authorization'))).toEqual(['Bearer existing-key', 'Bearer existing-key'])
   expect(server.urls).toEqual(['https://existing.test/v1/chat/completions', 'https://existing.test/v1/chat/completions'])
+})
+
+it('requires a SkillHub grant for a manually configured provider and blocks it again after midnight and logout', async () => {
+  const server = transport([textEvents])
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime).await()
+  await ctx.plugin(MemoryCredentials, { OWN_MODEL_KEY: 'private-own-key' }).await()
+  await ctx.plugin(PiAi, { providers: { own: { api: 'openai-completions', baseURL: 'https://own.example/v1',
+    apiKeyEnv: 'OWN_MODEL_KEY', models: [{ id: 'own-model' }] } } }).await()
+  await ctx.plugin(HubModel).await()
+  const request = { provider: 'own', model: 'own-model', messages: [] }
+  await expect(assemble(ctx, request)).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+  expect(server.urls).toEqual([])
+  const configuration = { quotaStatus: 'active', apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    baseURL: 'https://gateway.example/v1', models: [{ id: 'qwen-chat' }] }
+  const deadline = Date.now() + 60_000
+  await ctx.tpcoworkGateway.configure(configuration, deadline)
+  expect((await assemble(ctx, request)).message.content).toEqual([{ type: 'text', text: 'hello' }])
+  const prepared = await ctx.llm.prepareCall({ provider: HubModel.providerId, model: 'qwen-chat' })
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline)
+  try {
+    await expect(async () => {
+      for await (const _chunk of prepared.stream({ ...prepared.config, messages: [] })) { /* consume the prepared call */ }
+    }).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+    await expect(assemble(ctx, request)).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+    await expect(ctx.tpcoworkGateway.configure(configuration, deadline)).rejects.toThrow('Expired model configuration')
+  } finally { clock.mockRestore() }
+  ctx.tpcoworkGateway.clear()
+  await expect(assemble(ctx, request)).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+  expect(server.urls).toEqual(['https://own.example/v1/chat/completions'])
 })

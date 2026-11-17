@@ -47,6 +47,7 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
   })
   const plugin = factory!(id => id === 'react-dom' ? ReactDOM : id === 'react' ? React : primitives)
   const entries = new Map<string, React.FunctionComponent<{ t: (key: string) => string }>>()
+  const registrations: { name: string; id?: string }[] = []
   const disposers: (() => void)[] = []
   const snapshot = { layoutInfo: { sidebar: 280 } }
   const instance = { getSnapshot: () => snapshot, actions: { setSidebar: (width: number) => { snapshot.layoutInfo.sidebar = width } },
@@ -59,15 +60,19 @@ it('shows the greeting and sidebar preview badge with shipped upstream styles an
     configForms: { get: () => ({ getSnapshot: () => ({}), subscribe: () => () => {} }),
       developerTools: { enabled: { getSnapshot: () => false, subscribe: () => () => {} } } }, on: () => () => {},
     slots: {
-      entries: (name: string) => name === 'root' ? [{ store: { create: () => instance } }] : [],
+      entries: (name: string) => name === 'root' ? [{ options: {}, component: () => null, store: { create: () => instance } }] : [],
       subscribe: () => () => {},
       inject: (_name: string, effect: () => () => void) => { const dispose = effect(); disposers.push(dispose); return dispose },
-      register: (options: { name: string }, component: React.FunctionComponent<{ t: (key: string) => string }>) => {
+      register: (options: { name: string; id?: string }, component: React.FunctionComponent<{ t: (key: string) => string }>) => {
+        registrations.push(options)
         entries.set(options.name, component)
         return () => { entries.delete(options.name) }
       },
     },
   })
+  // The shipped client must use the shell's live overlay seat, preserving the root's child declarations.
+  expect(registrations.find(options => options.id === 'tpcowork-login')?.name).toBe('shell.overlay')
+  expect(registrations.some(options => options.name === 'root')).toBe(false)
   const zh = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
   const Brand = entries.get('sidebar.brand.name')!
   const Mark = entries.get('sidebar.brand.mark')!

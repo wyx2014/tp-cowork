@@ -4,6 +4,7 @@ import z from '@deepseek-ai/schemastery'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-app-boot'
+import type {} from '../../../../tpcowork-core/src/gateway-contract.ts'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { randomUUID } from 'node:crypto'
 import type {} from '../../host.ts'
@@ -49,14 +50,21 @@ export const sessionKey = credentialKey(name, 'session')
 const VERIFY_INTERVAL_MS = 5 * 60_000
 /** Account reads never wait longer than this for the Hub; a slow or unreachable Hub keeps the stored login. */
 const VERIFY_TIMEOUT_MS = 5_000
-type Session = { endpoint: string; token?: string; expired?: boolean; user?: import('../../contracts/tpcoworkhub.ts').TpcoworkHubUser }
+type Session = { endpoint: string; token?: string; expiresAt?: number; expired?: boolean; user?: import('../../contracts/tpcoworkhub.ts').TpcoworkHubUser }
 type PublishResult = Awaited<ReturnType<TpcoworkHubApi['publish']>>
 function session(record: CredentialRecord | undefined): Session | undefined {
   if (record?.kind !== 'grant' || !record.payload || typeof record.payload !== 'object') return
   const raw = record.payload as Partial<Session>
   if (typeof raw.endpoint !== 'string' || (raw.token !== undefined && typeof raw.token !== 'string')) return
   const user = userSchema.safeParse(raw.user)
-  return { endpoint: raw.endpoint, ...(raw.token ? { token: raw.token } : {}), ...(raw.expired === true ? { expired: true } : {}), ...(user.success ? { user: user.data } : {}) }
+  return { endpoint: raw.endpoint, ...(raw.token ? { token: raw.token } : {}),
+    ...(typeof raw.expiresAt === 'number' && Number.isSafeInteger(raw.expiresAt) ? { expiresAt: raw.expiresAt } : {}),
+    ...(raw.expired === true ? { expired: true } : {}), ...(user.success ? { user: user.data } : {}) }
+}
+/** A desktop grant ends at the next local midnight, including daylight-saving calendar changes. */
+function desktopLoginDeadline(): number {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
 }
 export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkHubApi {
   private revision = 0
@@ -85,6 +93,46 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       }
     }))
     ctx.effect(() => async () => { this.lifetime.abort(); await Promise.allSettled([...this.pending]); this.pages.clear() })
+    ctx.effect(() => {
+      const check = () => { void this.run(undefined, async () => { await this.stored() }, false).catch(() => undefined) }
+      check()
+      const timer = setInterval(check, 60_000)
+      return () => { clearInterval(timer) }
+    })
+    // The Hub session stays owned by this module; only the Host model service receives the personal gateway key.
+    ctx.inject(['tpcoworkGateway'], scope => {
+      let revision = 0
+      let request: AbortController | undefined
+      const refresh = () => {
+        const current = ++revision
+        request?.abort()
+        request = new AbortController()
+        scope.tpcoworkGateway.clear('loading')
+        void this.run(AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]), async active => {
+          const endpoint = this.endpoint()
+          const record = await this.stored()
+          active.throwIfAborted()
+          if (current !== revision) return
+          if (record?.endpoint !== endpoint || !record.token || record.expired || !record.user) { scope.tpcoworkGateway.clear(); return }
+          const config = await this.request('/tpcoworkapi/client-config', { method: 'GET' }, active, await this.token(), false)
+          active.throwIfAborted()
+          if (current !== revision) return
+          if (!config || typeof config !== 'object' || (config as { userId?: unknown }).userId !== record.user.id) throw new TpcoworkHubError('protocol')
+          await scope.tpcoworkGateway.configure(config, record.expiresAt)
+        }).catch(() => {
+          if (current === revision) {
+            scope.tpcoworkGateway.clear('unavailable')
+            scope.logger.warn('Personal model configuration is unavailable; sign in or check the Hub configuration.')
+          }
+        })
+      }
+      scope.on('credentials/record-updated', key => { if (key === sessionKey) refresh() })
+      scope.effect(() => {
+        refresh()
+        const timer = setInterval(refresh, 5 * 60_000)
+        return () => { revision++; request?.abort(); clearInterval(timer); scope.tpcoworkGateway.clear() }
+      })
+    })
     // Skills call internal APIs as the signed-in user through a loopback relay; see relay.ts and docs/toolbox/skill-api-auth.md.
     ctx.inject(['shellEnv'], scope => {
       scope.effect(() => {
@@ -152,7 +200,16 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     return pending
   }
   private async stored(): Promise<Session | undefined> {
-    try { return session(await this.ctx.credentials.readRecord(sessionKey)) }
+    try {
+      const record = session(await this.ctx.credentials.readRecord(sessionKey))
+      this.lifetime.signal.throwIfAborted()
+      if (record && record.endpoint !== this.endpoint()) return record
+      if (record?.token && this.rejected.has(sha256(record.endpoint + '\0' + record.token))) return { endpoint: record.endpoint, expired: true }
+      if (!record?.token || record.expired || record.expiresAt !== undefined && Date.now() < record.expiresAt) return record
+      // Legacy grants have no deadline: require one fresh sign-in instead of extending their lifetime on restart.
+      await this.expire(record.token, record)
+      return { endpoint: record.endpoint, expired: true }
+    }
     catch { throw new TpcoworkHubError('credentials-unavailable') }
   }
   private async token(): Promise<string> {
@@ -163,8 +220,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     return record.token
   }
   /**
-   * Ask the Hub whether a stored token is still valid. Hub logins expire on the server (the access token
-   * lasts hours), and nothing else tells this Host until a request fails, so a restored account would
+   * Ask the Hub whether a same-day desktop grant is still valid upstream. Otherwise a restored account would
    * otherwise keep showing as signed in. A 401 marks the session expired through {@link request};
    * network failures and timeouts keep the stored login, so being offline never signs the user out.
    */
@@ -211,9 +267,14 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
         const user = decode(websiteUserSchema, raw)
         active.throwIfAborted()
-        try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token, user } })) }
+        try {
+          await this.ctx.credentials.modifyRecord(sessionKey, async () => {
+            // Clear the previous desktop rejection before the credential update starts model refresh.
+            this.rejected.delete(sha256(endpoint + '\0' + token))
+            return { kind: 'grant', payload: { endpoint, token, user, expiresAt: desktopLoginDeadline() } }
+          })
+        }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
-        this.rejected.delete(sha256(endpoint + '\0' + token))
         this.verified.set(sha256(endpoint + '\0' + token), Date.now())
         return { configured: true }
       })
@@ -236,9 +297,13 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         const raw = await this.request('/tpcoworkapi/users/login', { method: 'POST', body: JSON.stringify({ username: input.username.trim(), passwordHash: this.config.passwordEncoding === 'sha256' ? sha256(password) : password }) }, active)
         const result = decode(loginResultSchema, raw)
         active.throwIfAborted()
-        try { await this.ctx.credentials.modifyRecord(sessionKey, async () => ({ kind: 'grant', payload: { endpoint, token: result.token, user: result.user } })) }
+        try {
+          await this.ctx.credentials.modifyRecord(sessionKey, async () => {
+            this.rejected.delete(sha256(endpoint + '\0' + result.token))
+            return { kind: 'grant', payload: { endpoint, token: result.token, user: result.user, expiresAt: desktopLoginDeadline() } }
+          })
+        }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
-        this.rejected.delete(sha256(endpoint + '\0' + result.token))
         this.verified.set(sha256(endpoint + '\0' + result.token), Date.now())
         return { configured: true }
       })
@@ -424,16 +489,30 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       throw new TpcoworkHubError('network')
     }
   }
-  private async expire(token: string): Promise<void> {
+  private async expire(token: string, expected?: Session): Promise<void> {
     const endpoint = this.endpoint()
-    this.rejected.add(sha256(endpoint + '\0' + token))
-    this.verified.delete(sha256(endpoint + '\0' + token))
+    const revision = this.revision
+    if (!expected) {
+      this.rejected.add(sha256(endpoint + '\0' + token))
+      this.verified.delete(sha256(endpoint + '\0' + token))
+    }
     try {
       await this.ctx.credentials.modifyRecord(sessionKey, async current => {
         const value = session(current)
-        return value?.endpoint === endpoint && value.token === token ? { kind: 'grant', payload: { endpoint, expired: true } } : undefined
+        if (value?.endpoint !== endpoint || value.token !== token || expected && value.expiresAt !== expected.expiresAt) return
+        this.rejected.add(sha256(endpoint + '\0' + token))
+        this.verified.delete(sha256(endpoint + '\0' + token))
+        this.ctx.get('tpcoworkGateway')?.clear('expired')
+        return { kind: 'grant', payload: { endpoint, expired: true } }
       })
-    } catch { /* Report authentication failure even when a read-only credential provider cannot clear it. */ }
+    } catch {
+      // A read-only credential store must not keep a past-day grant usable or trigger repeated expiry events.
+      if (this.revision === revision) {
+        this.rejected.add(sha256(endpoint + '\0' + token))
+        this.verified.delete(sha256(endpoint + '\0' + token))
+        this.ctx.get('tpcoworkGateway')?.clear('expired')
+      }
+    }
     this.changed()
   }
 }

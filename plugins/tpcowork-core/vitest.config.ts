@@ -5,6 +5,7 @@ export default {
   resolve: {
     ...base.resolve,
     alias: [
+      { find: /^@deepseek-ai\/cordis$/, replacement: new URL('../../../deepseek-harness/vendor/cordis/src/index.ts', import.meta.url).pathname },
       { find: /^@deepseek-ai\/dsh-llm-pi-ai$/, replacement: new URL('../../../deepseek-harness/packages/llm/llm-pi-ai/src/index.ts', import.meta.url).pathname },
       { find: /^@deepseek-ai\/dsh-llm$/, replacement: new URL('../../../deepseek-harness/packages/llm/llm/src/index.ts', import.meta.url).pathname },
     ],

@@ -18,6 +18,10 @@
     "more": "More",
     "settings": "Settings",
     "signIn": "Connect to use",
+    "loginTitle": "Welcome to TP Cowork",
+    "loginWaiting": "Waiting for browser sign-in…",
+    "loginUnavailable": "Unable to sign in right now. Please try again.",
+    "loginRetry": "Try again",
     "signOut": "Sign out",
     "cancelSignIn": "Cancel sign-in",
     "authCommitting": "Syncing your account…",
@@ -217,6 +221,7 @@
     "guideProcess_standard": "Key details",
     "guideProcess_standard_body": "Results first, with only the important steps and actions",
     "guideProcess_detailed": "Full process",
-    "guideProcess_detailed_body": "See the full process for easier debugging and troubleshooting"
+    "guideProcess_detailed_body": "See the full process for easier debugging and troubleshooting",
+    "loginAction": "Sign in"
   }
 }

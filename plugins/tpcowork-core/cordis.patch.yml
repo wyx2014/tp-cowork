@@ -1,8 +1,6 @@
 - insert:
     - id: tpcowork-core
       name: '@tpcowork/dsh-core'
-# TP Cowork ships only the intranet asset-deepseek route; the upstream "DeepSeek" (official,
-# API-key) provider stays listed in Settings and confuses people otherwise, since it needs a
-# DeepSeek account credential this deployment never has.
+# Personal model routes are supplied after SkillHub login.
 - id: llm-deepseek
   disabled: true

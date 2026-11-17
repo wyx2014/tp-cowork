@@ -38,10 +38,11 @@ if (defaultMatch === null) throw new Error('TP Cowork: upstream sidebar default 
 const defaultSidebarWidth = Number(defaultMatch[1]);
 
 const read = path => readFile(new URL(path, import.meta.url), 'utf8');
-const [source, adapter, navigation, developerMode, modelControls, taskPanel, launcher, account, preferences, notifications, shortcutSettings, modelSettings, appearanceSettings, settingsSidebar, generalSettings, windowZoom, uiFontSize, firstRunGuide, diagnosticsSettings, baseCss, themeText, enText, zhText] = await Promise.all([
+const [runtimeSource, adapter, navigation, developerMode, modelControls, taskPanel, launcher, account, preferences, notifications, shortcutSettings, modelSettings, appearanceSettings, settingsSidebar, generalSettings, windowZoom, uiFontSize, firstRunGuide, diagnosticsSettings, loginGate, baseCss, themeText, enText, zhText] = await Promise.all([
   read('src/runtime.js'), read('src/layout-adapter.js'), read('src/navigation.js'), read('src/developer-mode.js'), read('src/model-controls.js'), read('src/task-panel.js'), read('src/settings-launcher.js'), read('src/tpcoworkhub-account.js'), read('src/interface-preferences.js'), read('src/notifications.js'), read('src/shortcut-settings.js'), read('src/model-settings.js'), read('src/appearance-settings.js'), read('src/settings-sidebar.js'), read('src/general-settings.js'), read('src/window-zoom.js'), read('src/ui-font-size.js'), read('src/first-run-guide.js'), read('src/diagnostics-settings.js'),
-  read('styles.css'), read('theme.json'), read('locale/en.json'), read('locale/zh.json'),
+  read('src/login-gate.js'), read('styles.css'), read('theme.json'), read('locale/en.json'), read('locale/zh.json'),
 ]);
+const source = loginGate.replace('export function createLoginGate', 'function createLoginGate') + '\n' + runtimeSource;
 const tokens = JSON.parse(themeText);
 for (const [name, modes] of Object.entries(tokens)) {
   if (!name.startsWith('--') || typeof modes.light !== 'string' || typeof modes.dark !== 'string') {

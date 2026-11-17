@@ -55,6 +55,7 @@ export async function loadDeployment(directory = new URL('./', import.meta.url),
   let input;
   try { input = JSON.parse(content); }
   catch { throw new Error('TP Cowork: invalid DeepSeek deployment configuration'); }
+  if (input?.modelSource === 'skillhub') return { modelSource: 'skillhub' };
   return resolveDeployment(input, env);
 }
 

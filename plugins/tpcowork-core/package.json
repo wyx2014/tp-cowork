@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "TP Cowork product identity, office assistant instructions and intranet DeepSeek defaults for DeepSeek Harness",
+  "description": "TP Cowork identity, office assistant instructions and personal SkillHub model configuration",
   "exports": {
     ".": "./index.js",
     "./model": "./model.js",
+    "./hub-model": "./hub-model.js",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["index.js", "model.js", "deployment.js", "deployment.local.json", "persona.md", "cordis.patch.yml", "model.patch.yml", "locale/*.json", "README.md"],
+  "files": ["index.js", "model.js", "hub-model.js", "deployment.js", "deployment.local.json", "persona.md", "cordis.patch.yml", "model.patch.yml", "locale/*.json", "README.md"],
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.3",
