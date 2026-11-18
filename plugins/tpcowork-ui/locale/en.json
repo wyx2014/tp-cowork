@@ -18,7 +18,8 @@
     "more": "More",
     "settings": "Settings",
     "signIn": "Connect to use",
-    "loginTitle": "Welcome to TP Cowork",
+    "loginTitle": "Welcome to TP CoWork",
+    "loginDescription": "Connect your account to get started with TP CoWork",
     "loginWaiting": "Waiting for browser sign-in…",
     "loginUnavailable": "Unable to sign in right now. Please try again.",
     "loginRetry": "Try again",
@@ -222,6 +223,6 @@
     "guideProcess_standard_body": "Results first, with only the important steps and actions",
     "guideProcess_detailed": "Full process",
     "guideProcess_detailed_body": "See the full process for easier debugging and troubleshooting",
-    "loginAction": "Sign in"
+    "loginAction": "Get started"
   }
 }

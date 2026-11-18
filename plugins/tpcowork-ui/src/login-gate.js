@@ -52,11 +52,13 @@ export function createLoginGate(React, primitives, brandIcon) {
     if (checking) actionLabel = 'authLoading';
     else if (waiting) actionLabel = state.phase === 'committing' ? 'authCommitting' : 'loginWaiting';
     return h(Modal, { open: true, headless: true, onClose: () => {}, title: t('loginTitle'), className: 'tpcowork-login-modal' },
-      h('main', { ref: page, className: 'tpcowork-login-page', 'aria-labelledby': 'tpcowork-login-title' },
+      h('main', { ref: page, className: 'tpcowork-login-page', 'aria-labelledby': 'tpcowork-login-title', 'aria-describedby': 'tpcowork-login-description' },
       h('div', { className: 'tpcowork-login-drag', 'aria-hidden': true }),
       h('section', { className: 'tpcowork-login-card' },
         h('header', { className: 'tpcowork-login-heading' }, logo,
-          h('h1', { id: 'tpcowork-login-title' }, t('loginTitle'))),
+          h('div', { className: 'tpcowork-login-copy' },
+            h('h1', { id: 'tpcowork-login-title' }, t('loginTitle')),
+            h('p', { id: 'tpcowork-login-description' }, t('loginDescription')))),
         h('div', { className: 'tpcowork-login-actions' },
           message ? h('p', { className: 'tpcowork-login-notice', role: 'alert' }, t(message)) : null,
           h(Button, { variant: 'primary', className: 'tpcowork-login-primary',

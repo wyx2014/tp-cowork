@@ -60,9 +60,9 @@ export async function checkInstalledProductUi(page, { capture = async () => {}, 
   assert.equal(account.phase, 'idle', 'Startup must settle before checking account access')
   if (account.status !== 'signed_in') {
     assert.ok(['signed_out', 'expired'].includes(account.status), 'Fresh account must be signed out, not unavailable or unconfigured')
-    const login = page.getByRole('dialog', { name: /^(欢迎来到 TP Cowork|Welcome to TP Cowork)$/u })
+    const login = page.getByRole('dialog', { name: /^(欢迎来到 TP CoWork|Welcome to TP CoWork)$/u })
     await login.waitFor({ state: 'visible' })
-    assert.equal(await login.getByRole('button', { name: /^(登录|Sign in)$/u }).isEnabled(), true, 'The login action must be available')
+    assert.equal(await login.getByRole('button', { name: /^(开始登录|Get started)$/u }).isEnabled(), true, 'The login action must be available')
     assert.equal(await page.getByRole('button', { name: /^(设置|Settings)$/u }).count(), 0, 'Settings must be inaccessible before login')
     assert.equal(await page.locator('[data-tpcowork-model-trigger]:visible').count(), 0, 'Model controls must be inaccessible before login')
     assert.equal(await page.getByTestId('toolbox-navigation').isVisible(), false, 'Toolbox navigation must be inaccessible before login')

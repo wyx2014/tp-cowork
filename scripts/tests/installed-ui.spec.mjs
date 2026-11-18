@@ -52,7 +52,7 @@ it('checks required login before setup, then authenticated settings and reload i
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('dialog', { name: locale === 'en-US' ? 'Welcome to TP Cowork' : '欢迎来到 TP Cowork' }).waitFor()
+    await page.getByRole('dialog', { name: locale === 'en-US' ? 'Welcome to TP CoWork' : '欢迎来到 TP CoWork' }).waitFor()
     await finishFirstRunGuide(page)
     expect(await checkInstalledProductUi(page, { startup,
       capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })).toEqual({ authenticated: false })
