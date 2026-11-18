@@ -8,7 +8,7 @@ const table = JSON.parse(readFileSync(new URL('../hub-environments.json', import
 describe('hub-environments.json', () => {
   it('maps local runs to the local Hub and installers to the test Hub by default', () => {
     expect(resolveHubEnvironment(table, undefined)).toEqual({ environment: 'local', endpoint: 'http://localhost:8080' })
-    expect(resolveHubEnvironment(table, '', 'test')).toEqual({ environment: 'test', endpoint: 'http://10.17.12.229:20255' })
+    expect(resolveHubEnvironment(table, '', 'test')).toEqual({ environment: 'test', endpoint: 'http://isptest.tpasset.com:54905' })
     expect(resolveHubEnvironment(table, 'local').endpoint).toBe(LOCAL_HUB_ENDPOINT)
   })
   it('refuses to build for an environment without an address, or with an unsafe one', () => {

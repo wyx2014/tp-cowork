@@ -14,6 +14,18 @@ import { assemble } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/te
 import { textEvents } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/mock-server.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
+  it.each([
+    ['local', 'http://localhost:8080'],
+    ['test', 'http://isptest.tpasset.com:54905'],
+    ['production', 'https://hub.example.com'],
+  ])('uses the prefixed website authorization page for %s', async (_environment, endpoint) => {
+    const { service, requests } = await hubFixture({ endpointOverride: endpoint })
+    expect(await service.browserAuth()).toEqual({
+      loginUrl: endpoint + '/tp-cowork/desktop/authorize', timeoutMs: 300000,
+    })
+    expect(requests).toHaveLength(0)
+  })
+
   it('loads the personal gateway after login, streams directly with its key and removes it on logout', async () => {
     const { ctx, login, state, endpoint, service, requests } = await hubFixture()
     const key = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -248,20 +260,20 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     try {
       const { service } = await hubFixture({ endpointOverride: '' })
       // Unbuilt source has no baked address and uses the local Hub, as `npm run dev` does.
-      expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
+      expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/tp-cowork/desktop/authorize')
     } finally { process.env = previous }
   })
   it('ignores the Hub address older release patches wrote into profiles', async () => {
     const { service } = await hubFixture({ endpointOverride: '', endpoint: 'http://10.17.12.229:20255' } as never)
-    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
+    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/tp-cowork/desktop/authorize')
   })
   it('honours a profile override, including a local Hub on localhost', async () => {
     const { service } = await hubFixture({ endpointOverride: 'http://localhost:8080/' })
-    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/desktop/authorize')
+    expect((await service.browserAuth()).loginUrl).toBe('http://localhost:8080/tp-cowork/desktop/authorize')
   })
   it('validates the website session, restores the shared desktop account and clears it on sign-out', async () => {
     const { ctx, endpoint, requests, service, start, attach } = await hubFixture()
-    expect(await service.browserAuth()).toEqual({ loginUrl: endpoint + '/desktop/authorize', timeoutMs: 300000 })
+    expect(await service.browserAuth()).toEqual({ loginUrl: endpoint + '/tp-cowork/desktop/authorize', timeoutMs: 300000 })
     await ctx.typertGateway.invoke({ peer: ownerPeer(ctx),  namespace: 'toolboxTpcoworkHub', method: 'acceptBrowserSession', args: { request: { token: secret } } })
     expect(requests.some(request => (request.body as { path?: string })?.path === 'users:me')).toBe(true)
     const account = await service.account()

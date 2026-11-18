@@ -60,8 +60,8 @@ const server = createServer(async (request, response) => {
       json(user); return
     }
     const pathname = new URL(request.url, 'http://fixture').pathname
-    if (pathname.startsWith('/assets/')) {
-      const file = resolve(webDist, '.' + pathname)
+    if (pathname.startsWith('/tp-cowork/assets/')) {
+      const file = resolve(webDist, '.' + pathname.slice('/tp-cowork'.length))
       assert.equal(file.startsWith(webDist + sep), true)
       const mime = { '.js': 'text/javascript', '.css': 'text/css', '.woff': 'font/woff', '.woff2': 'font/woff2' }
       response.setHeader('content-type', mime[extname(file)] || 'application/octet-stream')
@@ -115,6 +115,7 @@ try {
       if (!url) await new Promise(resolve => setTimeout(resolve, 20))
     }
     assert.ok(url, 'System-browser authorization URL was not published')
+    assert.equal(new URL(url).pathname, '/tp-cowork/desktop/authorize')
     assert.equal(url.includes(secret), false)
     await website.goto(url)
     assert.equal(app.windows().length, 1, 'Authentication must not create a website window inside Electron')
@@ -127,10 +128,12 @@ try {
   await launch()
   await openAuthorization()
   await website.getByRole('button', { name: '登录 tpcoworkhub', exact: true }).waitFor()
+  assert.equal(new URL(website.url()).pathname, '/tp-cowork/login')
   await website.getByRole('textbox', { name: '用户名' }).fill('fixture-user')
   await website.getByLabel('密码', { exact: true }).fill('fixture-password')
   await website.getByRole('button', { name: '登录 tpcoworkhub', exact: true }).click()
   await website.getByRole('button', { name: '确认登录', exact: true }).waitFor()
+  assert.equal(new URL(website.url()).pathname, '/tp-cowork/desktop/authorize')
   assert.equal(await ctx.credentials.readRecord(hub.sessionKey), undefined)
   assert.equal((await confirm()).status, 'signed_in')
   assert.equal(loginCount, 1)
@@ -162,7 +165,7 @@ try {
   assert.equal((await app.evaluate(() => globalThis.loginResult)).error, 'failed')
   assert.equal(await ctx.credentials.readRecord(hub.sessionKey), undefined)
   rejectSession = false
-  await website.goto(`${endpoint}/desktop/authorize?redirect_uri=https://invalid.example/callback&state=${'x'.repeat(43)}`)
+  await website.goto(`${endpoint}/tp-cowork/desktop/authorize?redirect_uri=https://invalid.example/callback&state=${'x'.repeat(43)}`)
   await website.getByRole('alert').filter({ hasText: '登录请求无效' }).waitFor()
   assert.equal(await website.getByRole('button', { name: '确认登录', exact: true }).count(), 0)
   console.log('System-browser password login, existing-session confirmation, shared account, restart, cancellation and rejected sessions passed with real Chrome, Vue and Electron.')

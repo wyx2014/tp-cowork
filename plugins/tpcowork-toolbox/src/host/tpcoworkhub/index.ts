@@ -256,7 +256,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     } catch { throw new TpcoworkHubError('credentials-unavailable') }
   }
   async browserAuth(): ReturnType<TpcoworkHubApi['browserAuth']> {
-    return { loginUrl: this.endpoint() + '/desktop/authorize', timeoutMs: this.config.browserAuthTimeoutMs }
+    return { loginUrl: this.endpoint() + '/tp-cowork/desktop/authorize', timeoutMs: this.config.browserAuthTimeoutMs }
   }
   acceptBrowserSession(request: Parameters<TpcoworkHubApi['acceptBrowserSession']>[0], signal?: AbortSignal): ReturnType<TpcoworkHubApi['acceptBrowserSession']> {
     return this.run(signal, active => {

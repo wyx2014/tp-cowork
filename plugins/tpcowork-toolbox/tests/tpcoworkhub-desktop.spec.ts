@@ -17,7 +17,7 @@ beforeEach(() => {
   loggedIn = false
   native.open.mockResolvedValue()
   invoke = vi.fn(async (method, args) => {
-    if (method === 'browserAuth') return { loginUrl: 'https://hub.example.com/desktop/authorize', timeoutMs: 1000 }
+    if (method === 'browserAuth') return { loginUrl: 'https://hub.example.com/tp-cowork/desktop/authorize', timeoutMs: 1000 }
     if (method === 'acceptBrowserSession') {
       expect(args).toEqual({ request: { token: websiteToken } }); loggedIn = true; return { configured: true }
     }
@@ -46,7 +46,7 @@ async function callback() {
 it('opens the system browser and publishes only the Host-verified account after website confirmation', async () => {
   const pending = auth.start()
   const browser = await callback()
-  expect(browser.url.origin + browser.url.pathname).toBe('https://hub.example.com/desktop/authorize')
+  expect(browser.url.origin + browser.url.pathname).toBe('https://hub.example.com/tp-cowork/desktop/authorize')
   expect(browser.state).toMatch(/^[A-Za-z0-9_-]{43}$/)
   expect(new URL(browser.target).hostname).toBe('127.0.0.1')
   expect(native.open.mock.calls[0]![0]).not.toContain(websiteToken)

@@ -1,5 +1,5 @@
 {
   "local": "http://localhost:8080",
-  "test": "http://10.17.12.229:20255",
-  "production": null
+  "test": "http://isptest.tpasset.com:54905",
+  "production": "https://isp.tpasset.com"
 }
