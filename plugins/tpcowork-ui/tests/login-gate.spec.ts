@@ -2,13 +2,28 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as primitives from '../../../../deepseek-harness/packages/client/ui-primitives/src/index.ts'
+import { OnboardingSurface } from '../../../../deepseek-harness/packages/client/ui-settings-account/src/client/OnboardingSurface.tsx'
 import { createLoginGate } from '../src/login-gate.js'
 
 const LoginGate = createLoginGate(React, primitives, 'data:image/png;base64,')
 const labels = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
-afterEach(cleanup)
+const inertDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'inert')
+beforeEach(() => {
+  // JSDOM does not reflect inert; native Chromium reflects property writes into the attribute.
+  Object.defineProperty(HTMLElement.prototype, 'inert', { configurable: true,
+    get(this: HTMLElement) { return this.hasAttribute('inert') },
+    set(this: HTMLElement, value: boolean) { this.toggleAttribute('inert', value) },
+  })
+})
+afterEach(() => {
+  try { cleanup() }
+  finally {
+    if (inertDescriptor) Object.defineProperty(HTMLElement.prototype, 'inert', inertDescriptor)
+    else Reflect.deleteProperty(HTMLElement.prototype, 'inert')
+  }
+})
 
 function mount(initial: { status: string; phase: string; error?: string }) {
   let state = initial
@@ -78,4 +93,35 @@ it('keeps waiting and failed authentication on the login page with cancel and re
   fireEvent.click(screen.getByRole('button', { name: '重试' }))
   expect(fixture.refreshAccount).toHaveBeenCalledOnce()
   expect(screen.queryByRole('button', { name: 'Private workspace' })).toBeNull()
+})
+
+it.each([
+  ['startup-first', 'startup-first'], ['login-first', 'startup-first'],
+  ['startup-first', 'login-first'], ['login-first', 'login-first'],
+])('shares native onboarding isolation with login (mount: %s, release: %s)', async (order, release) => {
+  const root = document.createElement('div')
+  root.id = 'root'
+  root.inert = false
+  document.body.appendChild(root)
+  try {
+    const startup = order === 'startup-first' ? render(React.createElement(OnboardingSurface, null, 'Startup')) : null
+    const fixture = mount({ status: 'signed_out', phase: 'idle' })
+    const laterStartup = order === 'login-first' ? render(React.createElement(OnboardingSurface, null, 'Startup')) : null
+    expect(root.inert).toBe(true)
+    if (release === 'login-first') {
+      fixture.publish({ status: 'signed_in', phase: 'idle' })
+      expect(root.hidden).toBe(false)
+      expect(root.inert).toBe(true)
+    }
+    startup?.unmount()
+    laterStartup?.unmount()
+    if (release === 'startup-first') {
+      await waitFor(() => expect(root.hidden && root.inert).toBe(true))
+      fixture.publish({ status: 'signed_in', phase: 'idle' })
+    }
+    expect(root.hidden).toBe(false)
+    expect(root.inert).toBe(false)
+  } finally {
+    root.remove()
+  }
 })

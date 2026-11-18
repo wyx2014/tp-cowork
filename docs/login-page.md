@@ -11,3 +11,5 @@
 - 加载、等待、取消、错误、重试及登录屏障沿用现有流程；成功后显示工作台，退出或过期后恢复登录页。
 
 验收：中英文、浅深主题、桌面及窄屏均可阅读且无横向溢出；常态只有一个登录按钮；登录、取消、重试和背景隔离回归通过。
+
+登录屏障、底座启动引导及模型设置引导通过 `acquireOverlayInert` 共享后台交互的禁用状态，任一引导退出都不会提前解除登录限制；最后一个弹层释放后恢复原状态。回归使用真实启动引导组件覆盖两种挂载顺序、登录后的恢复及登出/过期；安装自检继续要求工作台同时具备 `hidden` 与 `inert`。认证约束参考 [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) 和 [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)，本次修改限于弹层交互隔离，不替代 Host 的认证校验。

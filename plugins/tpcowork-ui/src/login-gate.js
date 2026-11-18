@@ -1,7 +1,7 @@
 /** Keep the workbench inaccessible until the shared native SkillHub account has been verified. */
 export function createLoginGate(React, primitives, brandIcon) {
   const h = React.createElement;
-  const { Button, Modal } = primitives;
+  const { acquireOverlayInert, Button, Modal } = primitives;
   const logo = h('div', { className: 'tpcowork-login-logo' },
     h('img', { src: brandIcon, alt: '', width: 64, height: 64, draggable: false }));
   const spinner = h('span', { className: 'tpcowork-login-spinner', 'aria-hidden': true });
@@ -19,9 +19,9 @@ export function createLoginGate(React, primitives, brandIcon) {
       const hideWorkbench = () => {
         for (const element of document.body.children) {
           if (element === overlay || element.matches('script, style, link') || blocked.has(element)) continue;
-          blocked.set(element, ['hidden', 'inert', 'aria-hidden'].map(name => element.getAttribute(name)));
+          blocked.set(element, { values: ['hidden', 'aria-hidden'].map(name => element.getAttribute(name)),
+            releaseInert: acquireOverlayInert(element) });
           element.setAttribute('hidden', '');
-          element.setAttribute('inert', '');
           element.setAttribute('aria-hidden', 'true');
         }
       };
@@ -30,8 +30,9 @@ export function createLoginGate(React, primitives, brandIcon) {
       observer.observe(document.body, { childList: true });
       return () => {
         observer.disconnect();
-        for (const [element, values] of blocked) {
-          ['hidden', 'inert', 'aria-hidden'].forEach((name, index) => {
+        for (const [element, { values, releaseInert }] of blocked) {
+          releaseInert();
+          ['hidden', 'aria-hidden'].forEach((name, index) => {
             if (values[index] === null) element.removeAttribute(name);
             else element.setAttribute(name, values[index]);
           });

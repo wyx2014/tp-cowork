@@ -56,6 +56,8 @@ it('checks required login before setup, then authenticated settings and reload i
     expect(await page.evaluate(() => window.__DSH_DESKTOP_LOGIN_ENTRY__)).toBe('application')
     expect(await page.getByRole('button', { name: /^(添加 API Key|Add API Key)$/u }).count()).toBe(0)
     await finishFirstRunGuide(page)
+    // Let the native account's loading overlay release the root before checking login isolation.
+    await page.waitForFunction(() => document.getElementById('root')?.style.opacity !== '0')
     expect(await checkInstalledProductUi(page, { startup,
       capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })).toEqual({ authenticated: false })
     await page.evaluate(() => window.signInFixture())
