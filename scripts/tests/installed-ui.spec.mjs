@@ -10,7 +10,7 @@ import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup }
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
-it('runs the installed-product checks after real setup confirmation and again after reload in English and Chinese', async () => {
+it('checks required login before setup, then authenticated settings and reload in English and Chinese', async () => {
   const hooks = registerHooks({ resolve(specifier, context, next) {
     return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)
   } })
@@ -30,26 +30,47 @@ it('runs the installed-product checks after real setup confirmation and again af
   for (const locale of ['en-US', 'zh-CN']) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 820 }, locale })
     onTestFinished(() => context.close())
+    await context.addInitScript(() => {
+      const listeners = new Set()
+      let signedIn = sessionStorage.getItem('installed-ui-signed-in') === 'true'
+      const state = () => ({ status: signedIn ? 'signed_in' : 'signed_out', phase: 'idle',
+        ...(signedIn ? { user: { id: 'installed-ui-fixture', username: 'fixture' } } : {}) })
+      window.dshDesktop = { tpcoworkHub: {
+        state: async () => state(),
+        subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) },
+      } }
+      // This browser fixture supplies the same safe account bridge; no product authentication bypass is installed.
+      window.signInFixture = () => {
+        signedIn = true
+        sessionStorage.setItem('installed-ui-signed-in', 'true')
+        for (const listener of listeners) listener(state())
+      }
+    })
     const page = await context.newPage()
     page.setDefaultTimeout(20000)
     let startup = observeInstalledStartup(page)
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(scaffold.authenticatedUrl)
+    await page.getByRole('dialog', { name: locale === 'en-US' ? 'Welcome to TP Cowork' : '欢迎来到 TP Cowork' }).waitFor()
+    await finishFirstRunGuide(page)
+    expect(await checkInstalledProductUi(page, { startup,
+      capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })).toEqual({ authenticated: false })
+    await page.evaluate(() => window.signInFixture())
     const guide = page.locator('.tpcowork-guide[role="dialog"]')
     await guide.waitFor()
     expect(await guide.getAttribute('aria-label')).toBe(locale === 'en-US' ? 'Set up TP Cowork' : '设置 TP Cowork')
     await finishFirstRunGuide(page)
     expect(await guide.count()).toBe(0)
-    await checkInstalledProductUi(page, { startup,
-      capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })
+    expect(await checkInstalledProductUi(page, { startup,
+      capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })).toEqual({ authenticated: true })
     await page.screenshot({ path: join(output, `${locale}-first-launch.png`) })
     startup = observeInstalledStartup(page)
     await page.reload()
     await page.locator('body[data-tpcowork-ui]').waitFor()
     await finishFirstRunGuide(page)
     expect(await guide.count()).toBe(0)
-    await checkInstalledProductUi(page, { startup })
+    expect(await checkInstalledProductUi(page, { startup })).toEqual({ authenticated: true })
     expect(errors).toEqual([])
     await context.close()
   }

@@ -29,7 +29,9 @@ export async function openInstalledSettings(page, startup) {
 /** Dismiss first-run setup through its confirmation; saved profiles go straight to the workspace. */
 export async function finishFirstRunGuide(page) {
   await page.waitForFunction(() => localStorage.getItem('tpcowork.first-run-guide.v1') !== null
-    || document.querySelector('.tpcowork-guide[role="dialog"]') !== null)
+    || document.querySelector('.tpcowork-guide[role="dialog"]') !== null
+    || document.querySelector('.tpcowork-login-modal') !== null)
+  if (await page.locator('.tpcowork-login-modal').isVisible()) return
   const guide = page.locator('.tpcowork-guide[role="dialog"]')
   if (!await guide.isVisible()) return
   await guide.getByRole('button', { name: /^(跳过设置|Skip setup)$/u }).click()
@@ -39,7 +41,7 @@ export async function finishFirstRunGuide(page) {
   assert.equal(await page.evaluate(() => localStorage.getItem('tpcowork.first-run-guide.v1')), 'skipped', 'Setup dismissal must persist for the next launch')
 }
 
-/** Require the shipped Client modules and developer defaults, then return to the workspace. */
+/** Require the shipped Client modules and verify either the login barrier or an authenticated workspace. */
 export async function checkInstalledProductUi(page, { capture = async () => {}, startup,
   clientPlugins = ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage'] } = {}) {
   const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
@@ -47,6 +49,32 @@ export async function checkInstalledProductUi(page, { capture = async () => {}, 
     assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
   }
   console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
+  assert.ok(startup, 'Observe the initial session list before checking the application')
+  await startup
+  const account = await page.evaluate(async () => {
+    const bridge = window.dshDesktop?.tpcoworkHub
+    if (!bridge?.state) return null
+    return bridge.state()
+  })
+  assert.ok(account, 'Installed product must expose its native account state')
+  assert.equal(account.phase, 'idle', 'Startup must settle before checking account access')
+  if (account.status !== 'signed_in') {
+    assert.ok(['signed_out', 'expired'].includes(account.status), 'Fresh account must be signed out, not unavailable or unconfigured')
+    const login = page.getByRole('dialog', { name: /^(欢迎来到 TP Cowork|Welcome to TP Cowork)$/u })
+    await login.waitFor({ state: 'visible' })
+    assert.equal(await login.getByRole('button', { name: /^(登录|Sign in)$/u }).isEnabled(), true, 'The login action must be available')
+    assert.equal(await page.getByRole('button', { name: /^(设置|Settings)$/u }).count(), 0, 'Settings must be inaccessible before login')
+    assert.equal(await page.locator('[data-tpcowork-model-trigger]:visible').count(), 0, 'Model controls must be inaccessible before login')
+    assert.equal(await page.getByTestId('toolbox-navigation').isVisible(), false, 'Toolbox navigation must be inaccessible before login')
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('#root')?.closest('[hidden][inert]'))), true,
+      'The workbench must be hidden and inert before login')
+    await page.keyboard.press('Escape')
+    assert.equal(await login.isVisible(), true, 'Escape must not bypass required login')
+    await capture('login-required')
+    console.log('Installed product requires sign-in; anonymous workspace access is blocked')
+    return { authenticated: false }
+  }
+  assert.equal(await page.locator('.tpcowork-login-modal').count(), 0, 'Successful login must release the workbench')
   const settings = await openInstalledSettings(page, startup)
   const developerMode = settings.getByRole('switch', { name: /^(开发者模式|Developer mode)$/u })
   await developerMode.waitFor()
@@ -88,4 +116,5 @@ export async function checkInstalledProductUi(page, { capture = async () => {}, 
   await capture('settings-usage')
   await settings.getByRole('button', { name: /^(返回工作区|Back to workspace)$/u }).click()
   await settings.waitFor({ state: 'hidden' })
+  return { authenticated: true }
 }

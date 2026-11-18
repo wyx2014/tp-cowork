@@ -134,12 +134,14 @@ try {
       await app.evaluate(({ dialog }, original) => { dialog.showMessageBox = original }, originalDialog)
       await originalDialog.dispose()
     }
-    await checkInstalledProductUi(page, { startup: observed.get(page),
+    const access = await checkInstalledProductUi(page, { startup: observed.get(page),
       clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
       capture: name => capture(`${name}.png`) })
-    await page.getByTestId('toolbox-navigation').click()
-    await page.getByTestId('toolbox-page').waitFor({ state: 'visible' })
-    await capture('toolbox.png')
+    if (access.authenticated) {
+      await page.getByTestId('toolbox-navigation').click()
+      await page.getByTestId('toolbox-page').waitFor({ state: 'visible' })
+      await capture('toolbox.png')
+    }
   }
   await capture(config.bundles.length === 0 ? 'basic-window.png' : 'linux-window.png')
   assert.deepEqual(errors, [], 'Linux renderer must start without errors')

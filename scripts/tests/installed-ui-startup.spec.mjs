@@ -23,7 +23,10 @@ it('waits for a delayed startup baseline before opening settings on an existing 
   page.setDefaultTimeout(10000)
   await page.addInitScript(() => {
     localStorage.setItem('tpcowork.first-run-guide.v1', 'skipped')
-    globalThis.dshDesktop = {}
+    globalThis.dshDesktop = { tpcoworkHub: {
+      state: async () => ({ status: 'signed_in', phase: 'idle', user: { id: 'startup-fixture', username: 'fixture' } }),
+      subscribe: () => () => {},
+    } }
     const entries = performance.getEntriesByType.bind(performance)
     performance.getEntriesByType = type => type === 'resource' ? [] : entries(type)
   })
