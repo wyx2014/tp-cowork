@@ -7,6 +7,7 @@ export async function apply(ctx) {
   const css = styles.join('\n');
   ctx.on('webserver/index-inject', table => {
     table.push(
+      { kind: 'global', name: '__DSH_DESKTOP_LOGIN_ENTRY__', value: 'application' },
       { kind: 'style', text: css },
       { kind: 'script', placement: 'body', text: "document.body.setAttribute('data-tpcowork-ui', '')" },
     );

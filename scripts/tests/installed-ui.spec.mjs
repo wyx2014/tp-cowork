@@ -53,6 +53,8 @@ it('checks required login before setup, then authenticated settings and reload i
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(scaffold.authenticatedUrl)
     await page.getByRole('dialog', { name: locale === 'en-US' ? 'Welcome to TP CoWork' : '欢迎来到 TP CoWork' }).waitFor()
+    expect(await page.evaluate(() => window.__DSH_DESKTOP_LOGIN_ENTRY__)).toBe('application')
+    expect(await page.getByRole('button', { name: /^(添加 API Key|Add API Key)$/u }).count()).toBe(0)
     await finishFirstRunGuide(page)
     expect(await checkInstalledProductUi(page, { startup,
       capture: name => page.screenshot({ path: join(output, `${locale}-${name}.png`) }) })).toEqual({ authenticated: false })

@@ -177,10 +177,10 @@ it('contributes bootstrap styles only for the Host plugin lifetime', async () =>
   const fiber = ctx.plugin({ apply: hostApply })
   await fiber.await()
   cleanups.push(() => fiber.dispose())
-  const rows: { kind: string; text: string }[] = []
+  const rows: { kind: string; text?: string }[] = []
   ctx.emit('webserver/index-inject', rows)
-  expect(rows.map(row => row.kind)).toEqual(['style', 'script'])
-  expect(rows[0].text).toContain('body[data-tpcowork-ui][data-ds-dark-theme]')
+  expect(rows.map(row => row.kind)).toEqual(['global', 'style', 'script'])
+  expect(rows.find(row => row.kind === 'style')?.text).toContain('body[data-tpcowork-ui][data-ds-dark-theme]')
   await fiber.dispose()
   const after: typeof rows = []
   ctx.emit('webserver/index-inject', after)

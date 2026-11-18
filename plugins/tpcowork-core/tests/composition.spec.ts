@@ -46,7 +46,7 @@ it('loads the shipped core and UI entries through a profile and toggles identity
   ctx.systemPrompt.variable('model', () => 'test-model')
   const prompt = async () => renderPrompt(await ctx!.systemPrompt.assemble())
   const appearance = () => {
-    const injections: { kind: string; text: string }[] = []
+    const injections: { kind: string; text?: string }[] = []
     ctx!.emit('webserver/index-inject', injections)
     return injections
   }
@@ -56,7 +56,8 @@ it('loads the shipped core and UI entries through a profile and toggles identity
   const branded = await prompt()
   const styled = appearance()
   expect(branded).toContain('你是 TP Cowork，一位面向日常办公的 AI 助手。')
-  expect(styled.map(row => row.kind)).toEqual(['style', 'script'])
+  expect(styled.map(row => row.kind)).toEqual(['global', 'style', 'script'])
+  expect(styled[0]).toEqual({ kind: 'global', name: '__DSH_DESKTOP_LOGIN_ENTRY__', value: 'application' })
 
   await ui.update({ disabled: true })
   await ctx.loader.await()
