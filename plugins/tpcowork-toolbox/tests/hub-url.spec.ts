@@ -9,15 +9,14 @@ it('accepts HTTPS, local HTTP and the exact configured HTTP test origin', () => 
     expect(ok(url), url).toBe(false)
 })
 
-it('adds only one gateway prefix and only for the exact test Hub API origin', () => {
-  const origin = 'http://isptest.tpasset.com:54905'
+it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('adds one gateway prefix to API requests for %s', (origin) => {
   const request = '/tpcoworkapi/skill-versions/files?path=foo%2Fbar'
   const prefixed = `${origin}/tpcoworkapi${request}`
   for (const [input, expected] of [
     [origin + request, prefixed],
     [prefixed, prefixed],
     [origin + '/tp-cowork/desktop/authorize', origin + '/tp-cowork/desktop/authorize'],
-    ...['http://localhost:8080', 'https://isp.tpasset.com', 'http://isptest.tpasset.com:54906']
+    ...['http://localhost:8080', 'https://hub.example.com', 'http://isptest.tpasset.com:54906', 'https://isp.tpasset.com:8443']
       .map(host => [host + request, host + request]),
   ]) expect(hubApiUrl(input!), input).toBe(expected)
 })

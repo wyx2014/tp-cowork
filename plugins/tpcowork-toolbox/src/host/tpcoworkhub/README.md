@@ -15,7 +15,7 @@
 
 ## 认证与协议边界
 
-桌面首页登录使用系统默认浏览器打开 tpcoworkhub `/tp-cowork/desktop/authorize`；`browserAuth()` 提供该地址与等待超时，local、test、production 都使用这一网页前缀。`hub-environments.json` 和 `endpointOverride` 继续填写不带网页路径的 Hub 地址，API 仍为 `/tpcoworkapi/**`，本机回调仍为 `/callback`。网站复用已有登录态，未登录时跳转现有 `/tp-cowork/login` 并保留授权请求。用户明确确认后，网站将 `localStorage['tpcoworkhub.token']` 通过 JSON POST 交给桌面的临时 `127.0.0.1` 回调。桌面校验网站 Origin、Host、路径与每次新建的随机 state，再调用 `acceptBrowserSession()`。token 不进入授权链接、地址栏或应用渲染进程。
+桌面首页登录使用系统默认浏览器打开 tpcoworkhub `/tp-cowork/desktop/authorize`；`browserAuth()` 提供该地址与等待超时，local、test、production 都使用这一网页前缀。`hub-environments.json` 和 `endpointOverride` 继续填写不带网页路径的 Hub 地址。测试和生产网关接收 `/tpcoworkapi/tpcoworkapi/**`，转发到 Hub 的 `/tpcoworkapi/**`，本机回调路径为 `/callback`。网站复用已有登录态，未登录时跳转现有 `/tp-cowork/login` 并保留授权请求。用户明确确认后，网站将 `localStorage['tpcoworkhub.token']` 通过 JSON POST 交给桌面的临时 `127.0.0.1` 回调。桌面校验网站 Origin、Host、路径与每次新建的随机 state，再调用 `acceptBrowserSession()`。token 不进入授权链接、地址栏或应用渲染进程。
 
 Host 使用该 token 请求 `users:me`，验证用户资料后才写入 `credentialKey('toolbox-tpcoworkhub', 'session')` 的 grant record，绑定 endpoint 并保存安全用户资料。无效的新 token 不覆盖已有登录。网站只有在 Host 确认保存后才显示成功。成功、失败、取消和超时均关闭本机回调监听；提交已开始时等待其完成，退出登录排在提交之后。
 

@@ -86,8 +86,7 @@ describe('skill API relay', () => {
     expect(api.seen.filter(request => request.url.includes('steal'))).toEqual([])
   })
 
-  it('routes built-in Hub requests through the test gateway without changing custom API paths', () => {
-    const origin = 'http://isptest.tpasset.com:54905'
+  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('routes built-in Hub requests through %s without changing custom API paths', (origin) => {
     const apis = new Map([['hub', origin], ['custom', origin]])
     const query = '/tpcoworkapi/convex/query?source=tool'
     expect(relayTarget('/hub' + query, apis)).toEqual({ api: 'hub', url: origin + '/tpcoworkapi' + query })

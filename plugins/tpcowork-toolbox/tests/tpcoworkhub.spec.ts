@@ -17,7 +17,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it.each([
     ['local', 'http://localhost:8080'],
     ['test', 'http://isptest.tpasset.com:54905'],
-    ['production', 'https://hub.example.com'],
+    ['production', 'https://isp.tpasset.com'],
   ])('uses the prefixed website authorization page for %s', async (_environment, endpoint) => {
     const { service, requests } = await hubFixture({ endpointOverride: endpoint })
     expect(await service.browserAuth()).toEqual({
@@ -26,14 +26,13 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(requests).toHaveLength(0)
   })
 
-  it('finishes browser sign-in and loads the model config and skills through a gateway that strips one prefix', async () => {
-    const testOrigin = 'http://isptest.tpasset.com:54905'
-    const { ctx, state, endpoint, service } = await hubFixture({ endpointOverride: testOrigin })
+  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('finishes browser sign-in and loads the model config and skills through %s', async (origin) => {
+    const { ctx, state, endpoint, service } = await hubFixture({ endpointOverride: origin })
     const fetch = globalThis.fetch
     const paths: string[] = []
     const gateway = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = new URL(String(input))
-      if (url.origin !== testOrigin) return fetch(input, init)
+      if (url.origin !== origin) return fetch(input, init)
       paths.push(url.pathname)
       if (!url.pathname.startsWith('/tpcoworkapi/tpcoworkapi/')) return Promise.resolve(new Response(null, { status: 404 }))
       return fetch(endpoint + url.pathname.slice('/tpcoworkapi'.length) + url.search, init)
