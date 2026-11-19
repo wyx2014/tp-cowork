@@ -26,6 +26,36 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(requests).toHaveLength(0)
   })
 
+  it('finishes browser sign-in and loads the model config and skills through a gateway that strips one prefix', async () => {
+    const testOrigin = 'http://isptest.tpasset.com:54905'
+    const { ctx, state, endpoint, service } = await hubFixture({ endpointOverride: testOrigin })
+    const fetch = globalThis.fetch
+    const paths: string[] = []
+    const gateway = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = new URL(String(input))
+      if (url.origin !== testOrigin) return fetch(input, init)
+      paths.push(url.pathname)
+      if (!url.pathname.startsWith('/tpcoworkapi/tpcoworkapi/')) return Promise.resolve(new Response(null, { status: 404 }))
+      return fetch(endpoint + url.pathname.slice('/tpcoworkapi'.length) + url.search, init)
+    })
+    onTestFinished(() => gateway.mockRestore())
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/client-config') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1',
+        apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', defaultModel: 'qwen-chat', models: [{ id: 'qwen-chat' }] }))
+      return true
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    expect(await service.acceptBrowserSession({ token: secret })).toEqual({ configured: true })
+    expect(await service.account()).toMatchObject({ state: 'signed_in' })
+    expect((await service.list({})).items).toHaveLength(2)
+    await vi.waitFor(async () => expect((await ctx.llm.listModels(HubModel.providerId)).map(model => model.id)).toEqual(['qwen-chat']))
+    expect(paths).toContain('/tpcoworkapi/tpcoworkapi/client-config')
+    expect(paths.filter(path => path === '/tpcoworkapi/tpcoworkapi/convex/query')).toHaveLength(3)
+  })
+
   it('loads the personal gateway after login, streams directly with its key and removes it on logout', async () => {
     const { ctx, login, state, endpoint, service, requests } = await hubFixture()
     const key = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'

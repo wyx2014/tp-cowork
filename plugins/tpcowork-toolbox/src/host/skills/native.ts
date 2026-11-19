@@ -1,4 +1,4 @@
-/** Native DSH tool adapters for Yealink control and the managed vision endpoint. */
+/** Native DSH tool adapters for office phones and the managed vision endpoint. */
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -8,8 +8,12 @@ import { z } from 'zod'
 import { loadImageExtractDeployment } from './image-extract-deployment.ts'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
-import { activeCallSettings, directoryExtension, directoryTable, phoneEndpoint } from './call-settings.ts'
-export interface NativeOptions {
+import type {} from '../../host.ts'
+import { activeCallSettings, activePhoneType, directoryExtension, directoryTable, phoneEndpoint } from './call-settings.ts'
+import { ciscoEndpoints, type CiscoDeployment } from './cisco-call.ts'
+import { SkillError } from '../installer/errors.ts'
+import { TpcoworkHubError } from '../tpcoworkhub/errors.ts'
+export interface NativeOptions extends CiscoDeployment {
   requestTimeoutMs: number; imageMaxBytes: number; visionMaxTokens: number
   callUsernameRef: string; callPasswordRef: string; visionKeyRef: string
 }
@@ -20,6 +24,10 @@ async function secret(ctx: Context, ref: string): Promise<string | undefined> {
 /** Presence checks only: readiness never dials or sends user images to an external service. */
 export async function nativeMissing(ctx: Context, name: string, config: NativeOptions): Promise<string[]> {
   if (name === 'call') {
+    if (await activePhoneType(ctx) === 'cisco') {
+      if (!ciscoEndpoints(config)) return [new SkillError('skills/cisco-not-configured').message]
+      return []
+    }
     return (await activeCallSettings(ctx, config)).missing
   }
   if (name === 'image-extract') {
@@ -70,9 +78,17 @@ export const phoneTransport = {
   },
 }
 export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined; name?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
+  if (!['dial', 'hangup'].includes(args.action)) throw new Error('电话操作只能是拨号或挂断。')
+  if (await activePhoneType(ctx) === 'cisco') {
+    if (args.action === 'hangup') throw new Error('Cisco 办公电话暂不支持挂断，请在话机上挂断。')
+    const endpoints = ciscoEndpoints(config)
+    if (!endpoints) throw new SkillError('skills/cisco-not-configured')
+    const account = ctx.get('toolboxTpcoworkHub')
+    if (!account) throw new TpcoworkHubError('login-required')
+    return account.dialCisco(endpoints, args, AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]))
+  }
   const active = await activeCallSettings(ctx, config)
   if (active.missing.length || !active.settings) throw new Error('电话尚未配置；请打开工具箱 → 技能 → call → 设置电话，确认自己的办公分机号。')
-  if (!['dial','hangup'].includes(args.action)) throw new Error('电话操作只能是拨号或挂断。')
   let number = args.number?.replace(/[\s()（）-]/g, '')
   if (args.action === 'dial' && !number && args.name?.trim()) {
     // A name is looked up in this machine's extension table; several or no matches are reported, never guessed.
@@ -136,9 +152,9 @@ export async function extractImage(ctx: Context, args: { image_path: string; pro
 /** Register only when another native adapter does not already own the same tool. */
 export function applyNativeTools(ctx: Context, config: NativeOptions): void {
   if (!ctx.tools.get('call')) ctx.tools.register(defineTool({
-    name: 'call', description: 'Send a dial or hangup command to the user\'s configured Yealink desk phone, only on the user\'s explicit request. Dial a number, or a colleague by name from the local extension table. Delivery is not proof of connection.',
+    name: 'call', description: 'Use the selected office phone on explicit request. Dial an extension or a colleague by name. Cisco also accepts email and only dials 1121xxxx extensions. Yealink supports hangup. Delivery is not proof of connection.',
     parameters: { action: { type: 'string', enum: ['dial','hangup'], required: true }, number: { type: 'string', description: 'Numeric phone number or extension the user gave, for dial.' },
-      name: { type: 'string', description: 'Colleague name the user gave, for dial without a number; looked up in this machine\'s extension table.' } },
+      name: { type: 'string', description: 'Colleague name, or for Cisco an email, as supplied by the user for dial without a number.' } },
     output: { schema: { type: 'string' }, render: (_args, text) => [{ type: 'text', text }] },
     execute: (args, exec) => sendCall(ctx, args, exec.signal, config),
   }))

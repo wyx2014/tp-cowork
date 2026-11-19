@@ -95,6 +95,63 @@ it('keeps waiting and failed authentication on the login page with cancel and re
   expect(screen.queryByRole('button', { name: 'Private workspace' })).toBeNull()
 })
 
+it('keeps the desktop caption menu available when it mounts before or after login', async () => {
+  const root = document.documentElement
+  root.setAttribute('data-windows-titlebar', '')
+  const addMenu = () => {
+    const host = document.createElement('div')
+    host.setAttribute('data-windows-menu', '')
+    const button = document.createElement('button')
+    button.textContent = 'Application'
+    host.attachShadow({ mode: 'open' }).appendChild(button)
+    document.body.appendChild(host)
+    return { host, button }
+  }
+  const { host: firstMenu } = addMenu()
+  const other = document.createElement('div')
+  document.body.appendChild(other)
+  let lateMenu: HTMLElement | undefined
+  try {
+    const fixture = mount({ status: 'signed_out', phase: 'idle' })
+    expect(firstMenu.hidden || firstMenu.inert).toBe(false)
+    firstMenu.remove()
+    const { host, button } = addMenu()
+    lateMenu = host
+    const laterPortal = document.createElement('div')
+    document.body.appendChild(laterPortal)
+    try {
+      await waitFor(() => expect(laterPortal.hidden && laterPortal.inert).toBe(true))
+      expect(host.hidden || host.inert).toBe(false)
+      expect(host.hasAttribute('aria-hidden')).toBe(false)
+      expect(other.hidden && other.inert).toBe(true)
+      const login = screen.getByRole('button', { name: '开始登录' })
+      login.focus()
+      expect(fireEvent.keyDown(login, { key: 'Tab' })).toBe(true)
+      button.focus()
+      expect(document.activeElement).toBe(host)
+      expect(fireEvent.keyDown(button, { key: 'Tab', shiftKey: true })).toBe(true)
+
+      root.setAttribute('data-fullscreen', '')
+      login.focus()
+      expect(fireEvent.keyDown(login, { key: 'Tab' })).toBe(false)
+      root.removeAttribute('data-fullscreen')
+      fixture.publish({ status: 'signed_in', phase: 'idle' })
+      expect(laterPortal.hidden || laterPortal.inert).toBe(false)
+      fixture.publish({ status: 'expired', phase: 'idle' })
+      expect(laterPortal.hidden && laterPortal.inert).toBe(true)
+      expect(host.hidden || host.inert).toBe(false)
+    } finally {
+      laterPortal.remove()
+    }
+  } finally {
+    root.removeAttribute('data-windows-titlebar')
+    root.removeAttribute('data-fullscreen')
+    firstMenu.remove()
+    lateMenu?.remove()
+    other.remove()
+  }
+})
+
 it.each([
   ['startup-first', 'startup-first'], ['login-first', 'startup-first'],
   ['startup-first', 'login-first'], ['login-first', 'login-first'],

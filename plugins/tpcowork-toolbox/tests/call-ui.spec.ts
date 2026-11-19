@@ -10,7 +10,7 @@ it('sets up a phone from the skill card, refreshes readiness and clears the pass
   const api = actions(), current = catalog()
   current.skills.items = [{ ...current.skills.items[0]!, name: 'call' }]
   api.callSetup = vi.fn(async request => ({ ...phoneSetup, ...request, phoneUrl: request.caller ? 'https://phone.test' : '' }))
-  api.saveCallSetup = vi.fn(async request => ({ ...phoneSetup, caller: request.caller, phoneUrl: request.phoneUrl, confirmed: true }))
+  api.saveCallSetup = vi.fn(async request => ({ ...phoneSetup, ...request, confirmed: true }))
   render(React.createElement(Skills, { load: { value: current.skills, loading: false, failed: false }, available: true, query: '', actions: api, t }))
   fireEvent.click(screen.getByRole('button', { name: 'Set up phone' }))
   const caller = await screen.findByLabelText('My desk extension')
@@ -26,4 +26,23 @@ it('sets up a phone from the skill card, refreshes readiness and clears the pass
   expect(screen.getByText(/Phone configured/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Set up phone' })))
+})
+
+it('saves the Cisco type without showing or submitting Yealink fields', async () => {
+  const api = actions(), current = catalog()
+  current.skills.items = [{ ...current.skills.items[0]!, name: 'call' }]
+  api.callSetup = vi.fn(async request => ({ ...phoneSetup, ...request, type: request.type ?? 'cisco' }))
+  render(React.createElement(Skills, { load: { value: current.skills, loading: false, failed: false }, available: true, query: '', actions: api, t }))
+  fireEvent.click(screen.getByRole('button', { name: 'Set up phone' }))
+  const type = await screen.findByLabelText('Phone type')
+  expect((type as HTMLSelectElement).value).toBe('cisco')
+  expect(screen.queryByLabelText('Phone login password')).toBeNull()
+  fireEvent.change(type, { target: { value: 'yealink' } })
+  await screen.findByLabelText('My desk extension')
+  fireEvent.change(screen.getByLabelText('Phone login password'), { target: { value: 'unsaved-password' } })
+  fireEvent.change(type, { target: { value: 'cisco' } })
+  await waitFor(() => expect(screen.queryByLabelText('My desk extension')).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and save' }))
+  await screen.findByText('Cisco selected for office calls.')
+  expect(api.saveCallSetup).toHaveBeenCalledExactlyOnceWith({ type: 'cisco' })
 })

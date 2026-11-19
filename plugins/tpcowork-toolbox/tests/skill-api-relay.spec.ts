@@ -86,6 +86,14 @@ describe('skill API relay', () => {
     expect(api.seen.filter(request => request.url.includes('steal'))).toEqual([])
   })
 
+  it('routes built-in Hub requests through the test gateway without changing custom API paths', () => {
+    const origin = 'http://isptest.tpasset.com:54905'
+    const apis = new Map([['hub', origin], ['custom', origin]])
+    const query = '/tpcoworkapi/convex/query?source=tool'
+    expect(relayTarget('/hub' + query, apis)).toEqual({ api: 'hub', url: origin + '/tpcoworkapi' + query })
+    expect(relayTarget('/custom' + query, apis)).toEqual({ api: 'custom', url: origin + query })
+  })
+
   it('marks the login expired when the Hub rejects it, and passes other APIs\' own errors through', async () => {
     const api = await fakeApi()
     const expired: string[] = []

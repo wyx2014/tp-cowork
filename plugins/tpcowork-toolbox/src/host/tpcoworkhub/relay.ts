@@ -7,6 +7,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { hubApiUrl } from './hub-url.ts'
 
 /** Header carrying the per-run relay key; it is removed before forwarding. */
 export const RELAY_KEY_HEADER = 'x-tpcowork-key'
@@ -66,13 +67,14 @@ export function apiBase(url: string): string {
 /** Where `/<api>/<rest>?<query>` goes, or why it may not. */
 export function relayTarget(rawUrl: string, apis: ReadonlyMap<string, string>): { api: string; url: string } | RelayErrorCode {
   const url = new URL(rawUrl, 'http://relay.invalid')
-  const [, api = '', ...rest] = url.pathname.split('/')
-  const base = apis.get(decodeURIComponent(api))
+  const [, encodedApi = '', ...rest] = url.pathname.split('/')
+  const api = decodeURIComponent(encodedApi)
+  const base = apis.get(api)
   if (!api || base === undefined) return 'unknown-api'
   const target = new URL(`${base}/${rest.join('/')}${url.search}`)
   // Dot segments are resolved by URL; the result must stay under the API's own base path and origin.
   if (target.origin !== new URL(base).origin || !(target.href === base || target.href.startsWith(base + '/') || target.href.startsWith(base + '?'))) return 'bad-path'
-  return { api: decodeURIComponent(api), url: target.href }
+  return { api, url: api === HUB_API ? hubApiUrl(target.href) : target.href }
 }
 
 function fail(response: ServerResponse, code: RelayErrorCode): void {

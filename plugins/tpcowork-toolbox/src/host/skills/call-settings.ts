@@ -6,12 +6,18 @@ import { open, writeFile, mkdir, rename, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { CallSetup, CallSetupRequest, SaveCallSetup } from '../../contracts/call.ts'
+import type { CallSetup, CallSetupRequest, PhoneType, SaveCallSetup } from '../../contracts/call.ts'
+import { ciscoEndpoints, type CiscoDeployment } from './cisco-call.ts'
+import { SkillError } from '../installer/errors.ts'
 import { userSkillsDirectory } from './user-directory.ts'
 
 type Refs = { callUsernameRef: string; callPasswordRef: string }
 const savedSchema = z.object({ caller: z.string(), phoneUrl: z.string(), pbx: z.string(), outgoingPrefix: z.string(), sourceDirectory: z.string() }).strict()
 type Saved = z.infer<typeof savedSchema>
+const phoneSettingsSchema = z.union([
+  savedSchema.extend({ type: z.enum(['cisco', 'yealink']).optional() }),
+  z.object({ type: z.literal('cisco') }).strict(),
+])
 const ownNumber = /^\d{4}$/
 const pbxPattern = /^[a-zA-Z0-9.:-]+$/
 const directoryName = '内部分机信息表.md'
@@ -40,11 +46,11 @@ function settingsPath(ctx: Context): string | undefined {
   const profile = ctx.get('profileContext')
   return profile && join(profile.dir, 'call-phone.json')
 }
-async function savedSettings(ctx: Context): Promise<Saved | undefined> {
+async function savedSettings(ctx: Context): Promise<z.infer<typeof phoneSettingsSchema> | undefined> {
   const path = settingsPath(ctx)
   const raw = path && await readLocal(path)
   if (!raw) return undefined
-  try { return savedSchema.parse(JSON.parse(raw)) }
+  try { return phoneSettingsSchema.parse(JSON.parse(raw)) }
   catch { throw new Error('已保存的电话配置无法读取，请重新设置电话。') }
 }
 async function localSource(directory: string): Promise<Record<string, unknown>> {
@@ -116,6 +122,18 @@ function environment(): Saved | undefined {
   return { caller: process.env.DSH_YEALINK_CALLER.trim(), phoneUrl: process.env.DSH_YEALINK_URL?.trim() ?? '',
     pbx: process.env.DSH_YEALINK_PBX?.trim() ?? '', outgoingPrefix: process.env.DSH_YEALINK_OUTGOING_PREFIX ?? '', sourceDirectory: sourceDirectory() }
 }
+function selectedType(saved: Awaited<ReturnType<typeof savedSettings>>): PhoneType {
+  // Legacy saved profiles and explicit Yealink deployments keep working on upgrade.
+  return saved?.type ?? (saved || environment() ? 'yealink' : 'cisco')
+}
+export async function activePhoneType(ctx: Context): Promise<PhoneType> {
+  return selectedType(await savedSettings(ctx))
+}
+function ciscoSetup(config: CiscoDeployment, confirmed: boolean): CallSetup {
+  return { type: 'cisco', caller: '', phoneUrl: '', pbx: '', outgoingPrefix: '', sourceDirectory: '',
+    usernameConfigured: false, passwordConfigured: false, confirmed,
+    issues: ciscoEndpoints(config) ? [] : [new SkillError('skills/cisco-not-configured').message] }
+}
 function issues(value: Pick<CallSetup, 'caller' | 'phoneUrl' | 'pbx' | 'outgoingPrefix' | 'usernameConfigured' | 'passwordConfigured'>): string[] {
   const result: string[] = []
   if (!ownNumber.test(value.caller)) result.push('请确认自己的四位办公分机号。')
@@ -126,7 +144,8 @@ function issues(value: Pick<CallSetup, 'caller' | 'phoneUrl' | 'pbx' | 'outgoing
   return result
 }
 async function draft(ctx: Context, refs: Refs, request: CallSetupRequest) {
-  const existing = await savedSettings(ctx) ?? environment()
+  const stored = await savedSettings(ctx)
+  const existing = stored && 'caller' in stored ? stored : environment()
   const directory = sourceDirectory(request.sourceDirectory ?? existing?.sourceDirectory)
   const saved = existing?.sourceDirectory === directory ? existing : undefined
   const source = await localSource(directory)
@@ -146,7 +165,7 @@ async function draft(ctx: Context, refs: Refs, request: CallSetupRequest) {
   const username = sameSaved ? storedUsername || sourceUsername : sourceUsername || storedUsername
   const password = sameSaved ? storedPassword || sourcePassword : sourcePassword || storedPassword
   const value: CallSetup = {
-    caller, phoneUrl, pbx: saved?.pbx || field(source, 'pbx_ip') || '12.100.10.9',
+    type: 'yealink', caller, phoneUrl, pbx: saved?.pbx || field(source, 'pbx_ip') || '12.100.10.9',
     outgoingPrefix: saved?.outgoingPrefix ?? (typeof source.outgoing_prefix === 'string' ? source.outgoing_prefix : '9'),
     sourceDirectory: directory, usernameConfigured: !!username, passwordConfigured: !!password,
     confirmed: !!sameSaved, issues: [],
@@ -154,13 +173,27 @@ async function draft(ctx: Context, refs: Refs, request: CallSetupRequest) {
   value.issues = issues(value)
   return { value, username, password }
 }
-export async function getCallSetup(ctx: Context, refs: Refs, request: CallSetupRequest): Promise<CallSetup> {
+export async function getCallSetup(ctx: Context, refs: Refs & CiscoDeployment, request: CallSetupRequest): Promise<CallSetup> {
+  const type = await activePhoneType(ctx)
+  const preview = request.type ?? (request.caller !== undefined || request.sourceDirectory !== undefined ? 'yealink' : type)
+  if (preview === 'cisco') return ciscoSetup(refs, type === 'cisco')
   return (await draft(ctx, refs, request)).value
 }
+async function writeSettings(path: string, settings: z.infer<typeof phoneSettingsSchema>): Promise<void> {
+  const temporary = `${path}.${randomUUID()}.tmp`
+  await mkdir(dirname(path), { recursive: true })
+  try { await writeFile(temporary, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); await rename(temporary, path) }
+  finally { await rm(temporary, { force: true }) }
+}
 /** Called only by the explicit settings form. No phone/network request occurs during setup. */
-export async function saveCallSetup(ctx: Context, refs: Refs, request: SaveCallSetup): Promise<CallSetup> {
+export async function saveCallSetup(ctx: Context, refs: Refs & CiscoDeployment, request: SaveCallSetup): Promise<CallSetup> {
   const path = settingsPath(ctx)
   if (!path) throw new Error('当前桌面配置不可写。')
+  if (request.type === 'cisco') {
+    const existing = await savedSettings(ctx)
+    await writeSettings(path, { ...existing, type: 'cisco' })
+    return ciscoSetup(refs, true)
+  }
   const candidate = await draft(ctx, refs, request)
   const username = request.username?.trim() || candidate.username
   const password = request.password || candidate.password
@@ -177,15 +210,13 @@ export async function saveCallSetup(ctx: Context, refs: Refs, request: SaveCallS
   }
   const settings: Saved = { caller: value.caller, phoneUrl: phoneEndpoint(value.phoneUrl)!.origin, pbx: value.pbx,
     outgoingPrefix: value.outgoingPrefix, sourceDirectory: value.sourceDirectory }
-  const temporary = `${path}.${randomUUID()}.tmp`
-  await mkdir(dirname(path), { recursive: true })
-  try { await writeFile(temporary, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); await rename(temporary, path) }
-  finally { await rm(temporary, { force: true }) }
+  await writeSettings(path, { ...settings, type: 'yealink' })
   return { ...value, ...settings, confirmed: true, issues: [] }
 }
 /** Execution reads only confirmed settings or an explicit deployment, never an unconfirmed suggestion. */
 export async function activeCallSettings(ctx: Context, refs: Refs) {
-  const settings = await savedSettings(ctx) ?? environment()
+  const stored = await savedSettings(ctx)
+  const settings = stored && 'caller' in stored ? stored : environment()
   const username = await credential(ctx, refs.callUsernameRef)
   const password = await credential(ctx, refs.callPasswordRef)
   const missing = !settings ? ['请在“设置电话”中确认自己的办公分机号。']

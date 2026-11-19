@@ -11,9 +11,10 @@ describe('native external-service adapters', () => {
     const ctx = new Context()
     const fetch = vi.spyOn(globalThis, 'fetch')
     vi.stubEnv('DSH_YEALINK_URL', '')
+    vi.stubEnv('DSH_YEALINK_CALLER', '')
     vi.stubEnv('DSH_IMAGE_EXTRACT_URL', '')
     try {
-      expect((await nativeMissing(ctx, 'call', config)).join('')).toContain('设置电话')
+      expect((await nativeMissing(ctx, 'call', config)).join('')).toContain('Cisco 办公电话尚未配置')
       expect(await nativeMissing(ctx, 'image-extract', config)).toContain('VISION_KEY')
       await expect(sendCall(ctx, { action: 'dial', number: '1234' }, new AbortController().signal, config)).rejects.toThrow('尚未配置')
       expect(fetch).not.toHaveBeenCalled()

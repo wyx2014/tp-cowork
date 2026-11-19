@@ -8,6 +8,69 @@ import { observeInstalledStartup, openInstalledSettings } from '../installed-ui-
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
+it('keeps the Windows and Linux caption usable above the signed-out view', async () => {
+  const hooks = registerHooks({ resolve(specifier, context, next) {
+    return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)
+  } })
+  onTestFinished(() => hooks.deregister())
+  const scaffold = await launchWebScaffold({ profile: { hmr: false,
+    packages: [{ dir: join(root, 'plugins/tpcowork-ui'), enabled: true }] } })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME
+    ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ locale: 'en-US' })
+  await page.addInitScript(() => {
+    window.dshDesktop = { tpcoworkHub: {
+      state: async () => ({ status: 'signed_out', phase: 'idle' }),
+      subscribe: () => () => {},
+    } }
+  })
+  const modal = page.locator('.tpcowork-login-modal')
+  const card = page.locator('.tpcowork-login-card')
+  const login = page.getByRole('button', { name: 'Get started' })
+  for (const [colorScheme, width, height] of [['light', 1280, 820], ['dark', 520, 600]]) {
+    await page.setViewportSize({ width, height })
+    await page.emulateMedia({ colorScheme })
+    await page.goto(scaffold.authenticatedUrl)
+    await login.waitFor()
+    await page.evaluate(() => {
+      // Match the shared desktop preload's caption host and shadow DOM focus behavior.
+      document.documentElement.setAttribute('data-windows-titlebar', '')
+      document.documentElement.style.setProperty('--dsh-windows-titlebar-height', '40px')
+      const host = document.createElement('div')
+      host.setAttribute('data-windows-menu', '')
+      host.style.cssText = 'position:fixed;top:0;left:var(--dsh-windows-menu-start);height:40px;z-index:1100;align-content:center'
+      const button = document.createElement('button')
+      button.textContent = 'Application'
+      button.addEventListener('click', () => { host.dataset.testOpened = '' })
+      host.attachShadow({ mode: 'open' }).append(button)
+      document.body.append(host)
+    })
+    const menu = page.getByRole('button', { name: 'Application', exact: true })
+    await expect.poll(async () => (await modal.boundingBox())?.y).toBe(40)
+    expect((await modal.boundingBox())?.height).toBe(height - 40)
+    const rect = await card.boundingBox()
+    expect(rect.y + rect.height / 2).toBeCloseTo((height + 40) / 2, 0)
+    await menu.click()
+    expect(await page.locator('[data-windows-menu][data-test-opened]').count()).toBe(1)
+    await login.focus()
+    await page.keyboard.press('Tab')
+    expect(await menu.evaluate(button => button.getRootNode().activeElement === button)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    expect(await login.evaluate(button => document.activeElement === button)).toBe(true)
+    expect(await page.locator('#root[hidden][inert]').count()).toBe(1)
+
+    await page.evaluate(() => document.documentElement.setAttribute('data-fullscreen', ''))
+    await expect.poll(async () => (await modal.boundingBox())?.y).toBe(0)
+    expect((await modal.boundingBox())?.height).toBe(height)
+    expect(await menu.isVisible()).toBe(false)
+    await page.evaluate(() => document.documentElement.removeAttribute('data-fullscreen'))
+    await expect.poll(async () => (await modal.boundingBox())?.y).toBe(40)
+    expect(await menu.isVisible()).toBe(true)
+  }
+})
+
 it('waits for a delayed startup baseline before opening settings on an existing profile', async () => {
   const hooks = registerHooks({ resolve(specifier, context, next) {
     return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)

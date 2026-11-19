@@ -1,6 +1,8 @@
 /** Phone setup is local to this desktop profile. Secrets are write-only. */
-export interface CallSetupRequest { caller?: string; sourceDirectory?: string }
+export type PhoneType = 'cisco' | 'yealink'
+export interface CallSetupRequest { type?: PhoneType; caller?: string; sourceDirectory?: string }
 export interface CallSetup {
+  type: PhoneType
   caller: string
   phoneUrl: string
   pbx: string
@@ -11,7 +13,9 @@ export interface CallSetup {
   confirmed: boolean
   issues: string[]
 }
-export interface SaveCallSetup extends CallSetupRequest {
+export type SaveCallSetup = { type: 'cisco' } | {
+  type?: 'yealink'
+  sourceDirectory?: string
   caller: string
   phoneUrl: string
   pbx: string

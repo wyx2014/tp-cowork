@@ -1,5 +1,7 @@
 export const callZh = {
-  callSetup: '设置电话', callSetupHint: '确认自己的办公分机，之后可在聊天中要求拨号或挂断。',
+  callSetup: '设置电话', callSetupHint: '选择办公话机类型，在聊天中拨打办公电话。',
+  callType: '电话类型', callCiscoHint: 'Cisco 使用当前 TP CoWork 账号。支持按姓名、邮箱或 1121 开头的八位办公分机号拨打。',
+  callCiscoSaved: '已选择 Cisco 办公电话。',
   callCaller: '我的办公分机号', callCallerHint: '填写自己的四位分机号，不是要拨打的号码。',
   callMatch: '匹配话机', callConfirm: '确认并保存', callConfigured: '电话已配置。可在聊天中输入“拨打 1234”或“挂断电话”。',
   callReadyHint: '保存只确认本机配置，不会拨号；实际通话需要连接办公网络。',
@@ -11,7 +13,9 @@ export const callZh = {
   callCredentialSaved: '已配置，留空保留', callFailure: '电话设置未完成。请检查本机配置目录和凭证服务后重试。',
 } as const
 export const callEn: Record<keyof typeof callZh, string> = {
-  callSetup: 'Set up phone', callSetupHint: 'Confirm your desk extension, then ask to dial or hang up in chat.',
+  callSetup: 'Set up phone', callSetupHint: 'Choose your office phone type to place calls in chat.',
+  callType: 'Phone type', callCiscoHint: 'Cisco uses your TP CoWork account. Dial by name, email, or an eight-digit office extension starting with 1121.',
+  callCiscoSaved: 'Cisco selected for office calls.',
   callCaller: 'My desk extension', callCallerHint: 'Your own four-digit extension, not the number you want to call.',
   callMatch: 'Find phone', callConfirm: 'Confirm and save', callConfigured: 'Phone configured. Ask “dial 1234” or “hang up” in chat.',
   callReadyHint: 'Saving checks local configuration without placing a call. Calling requires the office network.',

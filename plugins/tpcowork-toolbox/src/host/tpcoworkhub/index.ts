@@ -13,13 +13,14 @@ import type { SkillInstaller } from '../installer/index.ts'
 import { parseSkill, sha256, validateFiles, type SkillFile } from '../installer/files.ts'
 import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
-import { allowedHubUrl } from './hub-url.ts'
+import { allowedHubUrl, hubApiUrl } from './hub-url.ts'
 import { decode, detail, fileContentSchema, loginResultSchema, page, remoteCount, websiteUserSchema } from './protocol.ts'
 import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
 import { apiBase, HUB_API, RelayAuthError, startRelay } from './relay.ts'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import { bundledPythonPath } from '../../runtime-paths.ts'
+import { dialCisco, type CiscoContact, type CiscoEndpoints } from '../skills/cisco-call.ts'
 
 export const name = 'toolbox-tpcoworkhub'
 export const inject = ['credentials', 'skills', 'profileContext', 'typert', 'toolboxInstaller']
@@ -218,6 +219,10 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     if (record?.endpoint !== endpoint || !record.token) throw new TpcoworkHubError(record?.endpoint === endpoint && record.expired ? 'session-expired' : 'login-required')
     if (this.rejected.has(sha256(endpoint + '\0' + record.token))) throw new TpcoworkHubError('session-expired')
     return record.token
+  }
+  /** Host-only action. The stored account grant never leaves the request path. */
+  dialCisco(endpoints: CiscoEndpoints, contact: CiscoContact, signal: AbortSignal): Promise<string> {
+    return this.run(signal, async active => dialCisco(endpoints, contact, await this.token(), active))
   }
   /**
    * Ask the Hub whether a same-day desktop grant is still valid upstream. Otherwise a restored account would
@@ -448,7 +453,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     const active = AbortSignal.any([signal, timeout])
     const publishing = path === '/tpcoworkapi/skills/publish'
     try {
-      const response = await fetch(this.endpoint() + path, { ...init, redirect: 'error', signal: active,
+      const response = await fetch(hubApiUrl(this.endpoint() + path), { ...init, redirect: 'error', signal: active,
         headers: { ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
       if (response.status === 401) {

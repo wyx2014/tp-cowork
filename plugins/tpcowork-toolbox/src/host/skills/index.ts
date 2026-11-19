@@ -48,6 +48,7 @@ export const Config = z.object({
   disabledNames: z.array(z.string()).default([]).volatile(), removedBundled: z.array(z.string()).default([]).volatile(),
   requestTimeoutMs: z.number().min(1).default(120000), imageMaxBytes: z.number().min(1).default(25 * 1024 * 1024), visionMaxTokens: z.number().min(1).default(4096),
   callUsernameRef: z.string().default('DSH_YEALINK_USERNAME').role('credential-ref'), callPasswordRef: z.string().default('DSH_YEALINK_PASSWORD').role('credential-ref'), visionKeyRef: z.string().default(imageExtractCredentialRef).role('credential-ref'),
+  ciscoQueryUrl: z.string().default(''), ciscoDialUrl: z.string().default(''),
 })
 /** Stable Host access for T5; the public Remote service exposes only InstallerApi methods. */
 export function requireInstaller(ctx: Context): SkillInstaller {

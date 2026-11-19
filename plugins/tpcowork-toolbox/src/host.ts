@@ -7,6 +7,7 @@ import { hostContribution } from './remote.ts'
 import { watchChanges } from './changes.ts'
 import { Config, composeToolbox } from './composition.ts'
 import { userSkillsDirectory } from './host/skills/user-directory.ts'
+import type { ToolboxTpcoworkHub } from './host/tpcoworkhub/index.ts'
 export { Config } from './composition.ts'
 export type * from './contracts/index.ts'
 
@@ -17,7 +18,7 @@ declare module '@deepseek-ai/cordis' {
     toolboxMcp: McpApi
     toolboxTeams: TeamsApi
     toolboxInstaller: InstallerApi
-    toolboxTpcoworkHub: TpcoworkHubApi
+    toolboxTpcoworkHub: TpcoworkHubApi & Pick<ToolboxTpcoworkHub, 'dialCisco'>
   }
   interface Events { 'toolbox/changed'(change: Change): void }
 }

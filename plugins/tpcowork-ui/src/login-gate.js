@@ -11,14 +11,17 @@ export function createLoginGate(React, primitives, brandIcon) {
     const authenticated = state.status === 'signed_in' && state.phase === 'idle';
     React.useLayoutEffect(() => {
       if (authenticated) return;
-      // Modal portals outside the shell. Hide and disable every other body surface, including later portals.
       const overlay = page.current?.closest('[data-dsh-modal-part="overlay"]');
       if (!overlay) return;
       const document = overlay.ownerDocument;
+      const root = document.documentElement;
+      const captionMenu = '[data-windows-menu]';
       const blocked = new Map();
       const hideWorkbench = () => {
         for (const element of document.body.children) {
           if (element === overlay || element.matches('script, style, link') || blocked.has(element)) continue;
+          // Windows and Linux mount their desktop menus separately from the workbench.
+          if (root.hasAttribute('data-windows-titlebar') && element.matches(captionMenu)) continue;
           blocked.set(element, { values: ['hidden', 'aria-hidden'].map(name => element.getAttribute(name)),
             releaseInert: acquireOverlayInert(element) });
           element.setAttribute('hidden', '');
@@ -28,8 +31,19 @@ export function createLoginGate(React, primitives, brandIcon) {
       hideWorkbench();
       const observer = new MutationObserver(hideWorkbench);
       observer.observe(document.body, { childList: true });
+      // Use native Tab order between the login card and the visible caption menu.
+      // All other body surfaces stay inert while this dialog is open.
+      const allowCaptionTab = event => {
+        if (event.key !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey
+          || !root.hasAttribute('data-windows-titlebar') || root.hasAttribute('data-fullscreen')) return;
+        const active = document.activeElement;
+        const menu = document.body.querySelector(`:scope > ${captionMenu}`);
+        if (menu && (overlay.contains(active) || active === menu)) event.stopPropagation();
+      };
+      document.body.addEventListener('keydown', allowCaptionTab);
       return () => {
         observer.disconnect();
+        document.body.removeEventListener('keydown', allowCaptionTab);
         for (const [element, { values, releaseInert }] of blocked) {
           releaseInert();
           ['hidden', 'aria-hidden'].forEach((name, index) => {

@@ -5,7 +5,7 @@ import { skillCatalog, mcpCatalog, teamCatalog } from '../src/examples.ts'
 import { en, type UiKey } from '../src/ui/locales.ts'
 import type { CallSetup } from '../src/contracts/call.ts'
 
-export const phoneSetup: CallSetup = { caller: '', phoneUrl: '', pbx: 'pbx.test', outgoingPrefix: '9', sourceDirectory: '/local/call', usernameConfigured: true, passwordConfigured: true, confirmed: false, issues: [] }
+export const phoneSetup: CallSetup = { type: 'yealink', caller: '', phoneUrl: '', pbx: 'pbx.test', outgoingPrefix: '9', sourceDirectory: '/local/call', usernameConfigured: true, passwordConfigured: true, confirmed: false, issues: [] }
 
 export const catalog = (): SelectionCatalog => structuredClone({ revision: 8, skills: skillCatalog, mcp: mcpCatalog, teams: teamCatalog })
 export const t = (key: UiKey, params?: Record<string, unknown>): string => en[key].replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))

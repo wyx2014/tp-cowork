@@ -19,6 +19,14 @@ const messages: Partial<Record<SkillFailureCode, string>> = {
   'skills/invalid-frontmatter': 'SKILL.md 的 YAML 元数据格式不正确，请检查 name 和 description。',
   'skills/unsupported-package': '请选择技能目录、ZIP 资源包或 Markdown 技能文件。',
   'skills/import-expired': '资源包检查已过期，请重新检查后安装。',
+  'skills/cisco-not-configured': 'Cisco 办公电话尚未配置，请联系管理员配置查号和拨号服务。',
+  'skills/cisco-invalid-extension': 'Cisco 只支持 1121 开头的八位办公分机号。请提供完整分机号。',
+  'skills/cisco-contact-not-found': '通讯录没有找到有效的 Cisco 办公分机，请核对姓名、邮箱或分机号。',
+  'skills/cisco-contact-ambiguous': '通讯录找到多人，请提供对方的邮箱或完整办公分机号。',
+  'skills/cisco-auth-rejected': 'Cisco 服务拒绝了当前账号凭证，请确认账号具备办公电话权限。',
+  'skills/cisco-lookup-failed': 'Cisco 通讯录查询失败，请检查办公网络或联系管理员。',
+  'skills/cisco-dial-rejected': 'Cisco 服务未接受拨号，请检查分机号或联系管理员。',
+  'skills/cisco-dial-uncertain': '无法确认 Cisco 拨号结果，请先查看话机状态，避免重复拨号。',
 }
 export class SkillError extends RemoteError<SkillFailureCode> {
   constructor(code: SkillFailureCode) { super(code, messages[code] ?? '技能操作未完成，请检查来源、资源完整性及配置后重试。', {}) }

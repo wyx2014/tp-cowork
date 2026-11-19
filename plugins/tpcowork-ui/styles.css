@@ -912,6 +912,25 @@ body[data-tpcowork-ui] .tpcowork-login-modal {
   padding: 0;
   animation: none;
 }
+html[data-windows-titlebar] body[data-tpcowork-ui]:has(.tpcowork-login-modal) {
+  --dsh-windows-menu-start: 48px;
+}
+html[data-windows-titlebar] body[data-tpcowork-ui] .tpcowork-login-modal {
+  inset-block-start: var(--dsh-frame-chrome-top, var(--dsh-windows-titlebar-height, 0px));
+  height: auto;
+}
+html[data-windows-titlebar] body[data-tpcowork-ui] [data-dsh-modal-part="overlay"]:has(> .tpcowork-login-modal)::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--dsh-frame-chrome-top, var(--dsh-windows-titlebar-height, 0px));
+  background: var(--dsw-specific-sidebar-fill);
+  -webkit-app-region: drag;
+}
+html[data-windows-titlebar] body[data-tpcowork-ui] .tpcowork-login-drag,
+html[data-windows-titlebar][data-fullscreen] body[data-tpcowork-ui]:has(.tpcowork-login-modal) > [data-windows-menu] {
+  display: none;
+}
 body[data-tpcowork-ui] .tpcowork-login-page {
   position: relative;
   isolation: isolate;

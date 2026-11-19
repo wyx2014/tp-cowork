@@ -47,7 +47,7 @@ TP Cowork 为技能执行的每条命令提供三个环境变量：
         report: http://10.1.2.3:8000/report     # 内网开发可用 http
 ```
 
-- `hub` 始终指向 TP Cowork Hub 本身，无需登记。
+- `hub` 始终指向 TP Cowork Hub 本身，无需登记。桌面连接 `http://isptest.tpasset.com:54905` 时，会在发往 Hub 的请求前加一层 `/tpcoworkapi` 供测试网关转发。技能脚本继续使用 `/hub/tpcoworkapi/…`。
 - 地址不能包含账号、`?` 查询参数或 `#`。
 - 脚本访问的路径只能在该地址之下，例如 `crm` 只能访问 `https://crm.intra.example.com/api/...`。
 
