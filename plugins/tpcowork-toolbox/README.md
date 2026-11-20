@@ -25,6 +25,8 @@ Cisco 在 Host 内使用当前 TP CoWork 账号会话请求查号和拨号 MCP�
 
 选择 Yealink 后，填写自己的四位办公分机号，软件从旧版个人技能目录下的 `call/内部分机信息表.md` 精确匹配话机 IP；重复或缺失分机不会自动选设备。可读取同目录 `config.json` 中同一主叫的 `caller`、`phone_ip`、`pbx_ip`、`scheme`、`outgoing_prefix` 和登录凭据；仅确认保存后才导入凭据。没有旧配置时，首次填写话机登录账号和密码；匹配不到 IP 时，在“话机与分机表设置”填写话机 HTTP(S) 地址。电话服务器与外线前缀沿用参考实现默认值 `12.100.10.9`、`9`，可在同一页面修改。
 
+Yealink 在普通聊天中直接处理“给张三打电话”“拨打 3737”“挂断电话”等明确指令，也支持 `/call 姓名或号码` 和 `/call 挂断`。本机查号后向已配置的话机发送指令，结果直接显示在会话里。话机请求最多等待 8 秒。
+
 电话配置保存在当前 DSH profile 的 `call-phone.json`，凭据使用 DSH credentials 的 `DSH_YEALINK_USERNAME`、`DSH_YEALINK_PASSWORD` 引用；前端只收到是否已配置，不回读密码。默认复用系统应用数据目录 `tpcowork/workspace/skills/call`，也可在页面指定旧版目录或通过 `TPCOWORK_CALL_DIRECTORY` 部署。原有 `DSH_YEALINK_*` 环境配置仍兼容；用户保存的本机配置优先。匹配、检查和保存不发起话机请求，配置齐全不代表通话已连通；实际拨号需要办公网络及有效的 HTTP(S)/TLS 连接。
 
 `image-extract` 支持随应用部署图片识别配置。构建时读取本插件目录中被 Git 忽略的 `image-extract.local.json`（`apiUrl`、`model`、`apiKey`），或使用 `TPCOWORK_IMAGE_EXTRACT_API_URL`、`TPCOWORK_IMAGE_EXTRACT_MODEL`、`TPCOWORK_IMAGE_EXTRACT_API_KEY` 覆盖；默认服务为内网 `http://192.168.0.228:1025/v1/chat/completions`、模型为 `qwen-vl`。配置写入随插件打包的 `lib/image-extract.local.json`，启动时将 Key 初始化到 DSH 凭证 `DSH_IMAGE_EXTRACT_API_KEY`，已有凭证及自定义引用优先。运行时仍可通过 `DSH_IMAGE_EXTRACT_URL`、`DSH_IMAGE_EXTRACT_MODEL` 和凭证设置覆盖。Key 只在 Host 读取，不进入技能正文、前端、目录或日志。Windows CI 使用同名 Repository Secret 提供 Key，服务地址和模型使用 Repository Variables；未提供 Key 的安装包仍需配置凭证。

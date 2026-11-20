@@ -9,7 +9,7 @@ import { loadImageExtractDeployment } from './image-extract-deployment.ts'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import type {} from '../../host.ts'
-import { activeCallSettings, activePhoneType, directoryExtension, directoryTable, phoneEndpoint } from './call-settings.ts'
+import { activeCallSettings, directoryExtension, directoryTable, phoneEndpoint } from './call-settings.ts'
 import { ciscoEndpoints, type CiscoDeployment } from './cisco-call.ts'
 import { SkillError } from '../installer/errors.ts'
 import { TpcoworkHubError } from '../tpcoworkhub/errors.ts'
@@ -24,11 +24,12 @@ async function secret(ctx: Context, ref: string): Promise<string | undefined> {
 /** Presence checks only: readiness never dials or sends user images to an external service. */
 export async function nativeMissing(ctx: Context, name: string, config: NativeOptions): Promise<string[]> {
   if (name === 'call') {
-    if (await activePhoneType(ctx) === 'cisco') {
+    const active = await activeCallSettings(ctx, config)
+    if (active.type === 'cisco') {
       if (!ciscoEndpoints(config)) return [new SkillError('skills/cisco-not-configured').message]
       return []
     }
-    return (await activeCallSettings(ctx, config)).missing
+    return active.missing
   }
   if (name === 'image-extract') {
     await loadImageExtractDeployment()
@@ -77,9 +78,12 @@ export const phoneTransport = {
     })
   },
 }
-export async function sendCall(ctx: Context, args: { action: string; number?: string | undefined; name?: string | undefined }, signal: AbortSignal, config: NativeOptions): Promise<string> {
+type CallArgs = { action: string; number?: string | undefined; name?: string | undefined }
+
+export async function sendCall(ctx: Context, args: CallArgs, signal: AbortSignal, config: NativeOptions): Promise<string> {
   if (!['dial', 'hangup'].includes(args.action)) throw new Error('电话操作只能是拨号或挂断。')
-  if (await activePhoneType(ctx) === 'cisco') {
+  const active = await activeCallSettings(ctx, config)
+  if (active.type === 'cisco') {
     if (args.action === 'hangup') throw new Error('Cisco 办公电话暂不支持挂断，请在话机上挂断。')
     const endpoints = ciscoEndpoints(config)
     if (!endpoints) throw new SkillError('skills/cisco-not-configured')
@@ -87,7 +91,11 @@ export async function sendCall(ctx: Context, args: { action: string; number?: st
     if (!account) throw new TpcoworkHubError('login-required')
     return account.dialCisco(endpoints, args, AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]))
   }
-  const active = await activeCallSettings(ctx, config)
+  return sendYealinkCall(active, args, signal, config)
+}
+
+export async function sendYealinkCall(active: Awaited<ReturnType<typeof activeCallSettings>>, args: CallArgs, signal: AbortSignal, config: NativeOptions): Promise<string> {
+  if (active.type !== 'yealink') throw new Error('请先在办公电话设置中选择 Yealink 话机。')
   if (active.missing.length || !active.settings) throw new Error('电话尚未配置；请打开工具箱 → 技能 → call → 设置电话，确认自己的办公分机号。')
   let number = args.number?.replace(/[\s()（）-]/g, '')
   if (args.action === 'dial' && !number && args.name?.trim()) {
@@ -107,9 +115,12 @@ export async function sendCall(ctx: Context, args: { action: string; number?: st
   }
   const { username: user, password } = active
   let reply: { status: number; body: string }
+  signal.throwIfAborted()
+  const timeout = AbortSignal.timeout(Math.min(config.requestTimeoutMs, 8000))
   try {
-    reply = await phoneTransport.request(url, `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`, AbortSignal.any([signal, AbortSignal.timeout(config.requestTimeoutMs)]))
+    reply = await phoneTransport.request(url, `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`, AbortSignal.any([signal, timeout]))
   } catch {
+    if (timeout.aborted && !signal.aborted) throw new Error('话机响应超时，请先查看话机状态，避免重复拨号。')
     throw new Error(signal.aborted ? '电话操作已取消。' : `无法连接话机 ${url.host}；请确认电脑在内网，且话机地址正确。`)
   }
   if (reply.status === 401 || reply.status === 403) throw new Error('话机拒绝了登录；请在“设置电话”中重新填写话机登录账号和密码。')

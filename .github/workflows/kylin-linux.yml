@@ -92,7 +92,7 @@ jobs:
           fi
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends \
-            build-essential pkg-config dpkg-dev fakeroot libfuse2 dbus-x11 xvfb xauth \
+            build-essential pkg-config dpkg-dev fakeroot dbus-x11 xvfb xauth \
             libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxshmfence1 \
             libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
             libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
@@ -138,7 +138,7 @@ jobs:
           path: deepseek-harness/apps/desktop/.desktop-build/build-cache
           key: harness-build-linux-x64-${{ steps.harness.outputs.commit }}-
           restore-keys: harness-build-linux-x64-${{ steps.harness.outputs.commit }}-
-      - name: Build and verify AppImage and DEB packages
+      - name: Build and verify the DEB package
         env:
           DSH_DESKTOP_BUILD_CACHE_DIR: ${{ github.workspace }}/deepseek-harness/apps/desktop/.desktop-build/build-cache
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
@@ -168,6 +168,7 @@ jobs:
           const info = JSON.parse(readFileSync('dist/installers/build-info.json', 'utf8'))
           const { version } = info
           if (typeof version !== 'string' || !version || /[\r\n]/u.test(version)) throw new Error('Missing or invalid Linux package version')
+          if (info.installers?.length !== 1 || !info.installers[0].endsWith('.deb')) throw new Error('Expected one DEB installer')
           const basic = info.variant === 'basic'
           const standard = info.variant === 'standard'
           const productName = info.productName
@@ -179,13 +180,13 @@ jobs:
             basic ? '- Basic: Harness defaults only; no TP Cowork product plugins or native adapters.'
               : standard ? `- Standard: ${info.bundles.length} product plugins; browser included; Computer Use excluded; interface zoom and diagnostics retained.` : '- Full product plugin set.',
             ...(info.hub ? [`- TP Cowork Hub: ${info.hub.environment} (${info.hub.endpoint})`] : []),
-            ...(info.guiSmokeVerified ? ['- Both packages passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
+            ...(info.guiSmokeVerified ? ['- The DEB passed real GUI startup with the Chromium sandbox enabled.', '- Independent application data; startup diagnostic script attached.'] : []),
             ...(standard ? ['- Browser automation enabled; Product UI, Memory, Archives, Usage and Toolbox surfaces verified.', '- Toolbox retains its own Chromium and offline Python dependencies.'] : []),
             `- Included product bundles: ${info.bundles.join(', ') || '(none)'}`,
             `- Excluded product bundles: ${(info.excludedBundles ?? []).join(', ') || '(none)'}`,
             `- Product commit: ${info.productCommit}`,
             `- Harness commit: ${info.harnessCommit}`,
-            '- AppImage and DEB (amd64), standalone and unsigned.',
+            '- DEB (amd64), standalone and unsigned.',
             '- Kylin installation and UI verification remains required.', '',
             'Verify downloads with `sha256sum -c <package>.sha256`.', '',
           ].join('\n')
@@ -198,7 +199,6 @@ jobs:
         with:
           name: TPCowork${{ steps.package.outputs.artifact_suffix }}-${{ steps.package.outputs.version }}-linux-x64
           path: |
-            tp-cowork/dist/installers/*.AppImage
             tp-cowork/dist/installers/*.deb
             tp-cowork/dist/installers/*.sha256
             tp-cowork/dist/installers/build-info.json
@@ -215,7 +215,7 @@ jobs:
           PRODUCT_NAME: ${{ steps.package.outputs.product_name }}
         run: |
           set -euo pipefail
-          assets=(dist/installers/*.AppImage dist/installers/*.deb dist/installers/*.sha256 dist/installers/build-info.json)
+          assets=(dist/installers/*.deb dist/installers/*.sha256 dist/installers/build-info.json)
           for helper in dist/installers/*.sh; do
             if [ -f "$helper" ]; then assets+=("$helper"); fi
           done
@@ -250,7 +250,6 @@ jobs:
         with:
           name: unverified-linux-packages-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            deepseek-harness/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/*.AppImage
             deepseek-harness/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/*.deb
             deepseek-harness/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/builder-debug.yml
           if-no-files-found: ignore

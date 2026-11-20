@@ -216,10 +216,13 @@ export async function saveCallSetup(ctx: Context, refs: Refs & CiscoDeployment, 
 /** Execution reads only confirmed settings or an explicit deployment, never an unconfirmed suggestion. */
 export async function activeCallSettings(ctx: Context, refs: Refs) {
   const stored = await savedSettings(ctx)
+  const type = selectedType(stored)
+  if (type === 'cisco') return { type, settings: undefined, username: undefined, password: undefined, missing: [] }
   const settings = stored && 'caller' in stored ? stored : environment()
-  const username = await credential(ctx, refs.callUsernameRef)
-  const password = await credential(ctx, refs.callPasswordRef)
+  const [username, password] = await Promise.all([credential(ctx, refs.callUsernameRef), credential(ctx, refs.callPasswordRef)]).catch(() => {
+    throw new Error('暂时无法读取话机登录凭据，请检查办公电话设置。')
+  })
   const missing = !settings ? ['请在“设置电话”中确认自己的办公分机号。']
     : issues({ ...settings, usernameConfigured: !!username, passwordConfigured: !!password })
-  return { settings, username, password, missing }
+  return { type, settings, username, password, missing }
 }

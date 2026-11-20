@@ -24,6 +24,7 @@ import { applyNativeTools, type NativeOptions } from './native.ts'
 import { imageExtractCredentialRef, initializeImageExtractCredential, loadImageExtractDeployment } from './image-extract-deployment.ts'
 import { userSkillsDirectory } from './user-directory.ts'
 import { getCallSetup, saveCallSetup } from './call-settings.ts'
+import { applyCallCommands } from './call-command.ts'
 import type { CallSetupRequest, SaveCallSetup } from '../../contracts/call.ts'
 
 export const name = 'toolbox-skills'
@@ -229,6 +230,7 @@ export function applySkillsModule(ctx: Context, config: Config): void {
     invalidatePolicy()
   })
   ctx.on('skills/change', () => service?.changed())
+  ctx.inject(['commands', 'credentials'], inner => applyCallCommands(inner, config))
   ctx.inject(['tools', 'credentials'], async inner => {
     await initializeImageExtractCredential(inner.credentials, config.visionKeyRef, await loadImageExtractDeployment())
     applyNativeTools(inner, config)

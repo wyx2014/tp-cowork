@@ -1,6 +1,6 @@
 # Linux GitHub Actions 打包
 
-沿用 `nanobot-gui` 的 Linux 流水线：GitHub 托管的 **Ubuntu 22.04 x64** 原生构建，校验 **AppImage 和 DEB（amd64）** 的内置运行时，上传产物及校验文件，并支持发布 GitHub 预发行版。目前仅提供 `standalone` 未签名独立测试包；麒麟桌面系统的 x86_64 安装和 UI 兼容性仍需实机验证。
+沿用 `nanobot-gui` 的 Linux 流水线：GitHub 托管的 **Ubuntu 22.04 x64** 原生构建，校验 **DEB（amd64）** 的内置运行时，上传产物及校验文件，并支持发布 GitHub 预发行版。目前仅提供 `standalone` 未签名独立测试包；麒麟桌面系统的 x86_64 安装和 UI 兼容性仍需实机验证。
 
 ## 运行流水线
 
@@ -9,11 +9,11 @@
 3. `build_version` 保持 `auto`，按日期、运行编号和重试次数生成版本。
    `variant` 默认 `standard`（包含浏览器在内的 11 个产品插件，仅排除 Computer Use）；也可选 `full`（全部 12 个产品插件）或 `basic`（仅底座默认界面）。
 4. `publish_release` 默认勾选，成功后会发布 `linux-standard-packages-<version>`（standard）、`linux-basic-packages-<version>`（basic）或 `linux-packages-<version>`（full）预发行版。只需要 Actions 下载时取消勾选。手动填写 `build_version` 时使用尚未发布的新版本。
-5. 成功后从 **Artifacts → TPCowork-standard-<version>-linux-x64**（standard）或仓库 **Releases** 下载 `.AppImage`、`.deb`、各自的 `.sha256` 和 `build-info.json`。Artifacts 保留 30 天，打包日志保留 14 天；失败时另外保留未验证的安装包供排查，保留 7 天。
+5. 成功后从 **Artifacts → TPCowork-standard-<version>-linux-x64**（standard）或仓库 **Releases** 下载 `.deb`、对应的 `.sha256` 和 `build-info.json`。Artifacts 保留 30 天，打包日志保留 14 天；失败时另外保留未验证的安装包供排查，保留 7 天。
 
 工作流使用 Node.js 24、锁定的 pnpm 和原生编译工具，构建底座、所选产品插件、Linux Chromium 和独立 Python 3.12；工具箱复用底座已验证的解释器，再安装经 SHA-256 锁定的 PyYAML wheel。运行环境不依赖目标机器预装 Node.js 或 Python。依赖、运行时下载及底座编译结果均有缓存；底座会核对源码、工具链、平台和公开构建参数，不匹配时重新编译。
 
-上传前先执行底座完整运行时检查，再分别解压 AppImage 和 DEB，从各自的应用目录运行 Electron，验证产品插件可解析、浏览器归档校验和一致、离线 Python 可以导入文档处理依赖。测试临时目录带空格，并在结束后删除。只收集本次构建的两种安装包，并重新校验 SHA-256；缺失、重复或检查失败都会阻止正式产物上传及预发行版发布。
+上传前先执行底座完整运行时检查，再解压 DEB，从解压后的应用目录运行 Electron，验证产品插件可解析、浏览器归档校验和一致、离线 Python 可以导入文档处理依赖。测试临时目录带空格，并在结束后删除。只收集本次构建的 DEB，并重新校验 SHA-256；缺失、重复或检查失败都会阻止正式产物上传及预发行版发布。
 
 模型配置沿用 Windows 流水线的仓库 Variables 和 Secrets。不配置模型密钥也可以打包，用户安装后在应用内配置。底座仓库改为私有时，需要只读的 `HARNESS_READ_TOKEN`。预发行版使用流水线自带的 `GITHUB_TOKEN` 和 `contents: write` 权限，不需要额外的个人令牌；版本及两个仓库的精确 commit 会写入运行摘要和发布说明。
 
@@ -32,7 +32,7 @@ gh workflow run kylin-linux.yml --ref main \
 
 选择 `variant=basic` 后，应用名为 **TP Cowork Basic**，DEB 包名与命令为 `tpcowork-basic`，发布标签为 `linux-basic-packages-<version>`。它不打包 TP Cowork 的外观、浏览器、工具箱、自动化、记忆、归档、统计、诊断、Computer Use 或专家插件，也不构建它们的原生适配器、Chromium 和额外 Python 依赖；聊天、模型设置和桌面运行时使用底座默认实现。基础版默认将 Harness 数据放在自己的应用数据目录，首次启动需要自行配置模型；显式设置 `DSH_HOME` 时遵循该路径。
 
-基础版继续生成 AppImage 和 DEB，并分别从解压后的应用目录启动真实图形窗口，要求加载完成、无渲染错误、无产品客户端模块且 Chromium 沙箱开启。截图和报告保存在 `linux-basic-startup-<run_id>` Artifact，`build-info.json` 记录 `variant=basic`、空产品插件列表和 GUI 检查结果。这些检查在 Ubuntu 22.04 执行，麒麟 V10 SP1 仍由目标机器试装确认。
+基础版生成 DEB，并从解压后的应用目录启动真实图形窗口，要求加载完成、无渲染错误、无产品客户端模块且 Chromium 沙箱开启。截图和报告保存在 `linux-basic-startup-<run_id>` Artifact，`build-info.json` 记录 `variant=basic`、空产品插件列表和 GUI 检查结果。这些检查在 Ubuntu 22.04 执行，麒麟 V10 SP1 仍由目标机器试装确认。
 
 建议先安装名称以 `tpcowork-basic-` 开头的 DEB。若点击后仍打不开，从同一 Release 下载 `diagnose-linux-basic.sh`，在图形桌面的终端运行：
 
@@ -40,7 +40,7 @@ gh workflow run kylin-linux.yml --ref main \
 bash diagnose-linux-basic.sh
 ```
 
-脚本记录架构、麒麟版本、glibc、缺失的动态库、`chrome-sandbox` 权限及 Electron 启动输出，并打印日志位置。不要用 `sudo` 启动桌面应用。怀疑显卡驱动时可运行 `bash diagnose-linux-basic.sh --software-rendering`，以软件渲染和 X11 方式再试；该选项保留 Chromium 沙箱。AppImage 解压后可传入 `--executable "$PWD/squashfs-root/tpcowork-basic"`，无需 FUSE 挂载。
+脚本记录架构、麒麟版本、glibc、缺失的动态库、`chrome-sandbox` 权限及 Electron 启动输出，并打印日志位置。不要用 `sudo` 启动桌面应用。怀疑显卡驱动时可运行 `bash diagnose-linux-basic.sh --software-rendering`，以软件渲染和 X11 方式再试；该选项保留 Chromium 沙箱。
 
 ## 在麒麟机器验证
 
@@ -50,9 +50,9 @@ bash diagnose-linux-basic.sh
 
 界面缩放和诊断导出此前共用浏览器的桌面通信入口；标准版在该兼容入口下只安装独立的通用工具实现，不接受浏览器或客体视图操作。`utilities.json` 记录编译输入，构建及安装包检查均禁止引入浏览器、Computer Use 源码或额外浏览器资源；真实 GUI 还验证缩放可用、浏览器关闭及诊断导出的取消流程。
 
-标准版使用自己的应用数据目录；显式 `DSH_HOME` 仍优先。两种安装包均验证实际产品包清单和运行时解析，随后在开启 Chromium 沙箱的真实图形窗口内完成首次启动，确认浏览器自动化已启用，并检查产品界面、记忆、归档、统计和工具箱页面。截图与报告位于 `linux-standard-startup-<run_id>` Artifact。发布附带 `diagnose-linux.sh`，默认启动 `/opt/TP Cowork Linux/tpcowork-linux`。
+标准版使用自己的应用数据目录；显式 `DSH_HOME` 仍优先。DEB 验证实际产品包清单和运行时解析，随后在开启 Chromium 沙箱的真实图形窗口内完成首次启动，确认浏览器自动化已启用，并检查产品界面、记忆、归档、统计和工具箱页面。截图与报告位于 `linux-standard-startup-<run_id>` Artifact。发布附带 `diagnose-linux.sh`，默认启动 `/opt/TP Cowork Linux/tpcowork-linux`。
 
-Linux GUI 验收从窗口创建时监听首次会话列表响应，并把启动完成状态传入共享设置检查，确保打开设置前已完成会话初始化。AppImage 和 DEB 均使用这一检查入口。
+Linux GUI 验收从窗口创建时监听首次会话列表响应，并把启动完成状态传入共享设置检查，确保打开设置前已完成会话初始化。
 
 ### 验证范围
 
@@ -65,24 +65,16 @@ uname -m
 cat /etc/os-release
 ```
 
-在安装包所在目录校验文件，再选择一种方式安装或运行：
+在安装包所在目录校验并安装 DEB：
 
 ```sh
 sha256sum -c tpcowork-实际文件名.deb.sha256
 sudo apt install ./tpcowork-实际文件名.deb
 ```
 
-或者：
+DEB 安装后，应用菜单显示 **TP CoWork** 及应用图标（各标准尺寸的 hicolor 图标），并为 `/home` 下已有桌面文件夹的用户各放一个桌面快捷方式（按 `xdg-user-dir DESKTOP`，否则用 `Desktop` 或 `桌面`）。快捷方式以该用户身份创建；用户删除后，升级不会再放回；卸载时一并删除。应用数据目录仍按产品名 `~/.config/TP Cowork Linux`，菜单改名不影响已有数据。
 
-```sh
-sha256sum -c tpcowork-实际文件名.AppImage.sha256
-chmod +x ./tpcowork-实际文件名.AppImage
-./tpcowork-实际文件名.AppImage
-```
-
-DEB 安装后，应用菜单显示 **TP CoWork** 及应用图标（各标准尺寸的 hicolor 图标），并为 `/home` 下已有桌面文件夹的用户各放一个桌面快捷方式（按 `xdg-user-dir DESKTOP`，否则用 `Desktop` 或 `桌面`）。快捷方式以该用户身份创建；用户删除后，升级不会再放回；卸载时一并删除。应用数据目录仍按产品名 `~/.config/TP Cowork Linux`，菜单改名不影响已有数据。AppImage 不安装菜单项和快捷方式。
-
-AppImage 运行依赖系统 FUSE 支持；需要时可先用 `--appimage-extract` 解压，再运行 `squashfs-root/AppRun`。实机验收至少检查应用启动、登录、浏览器打开、工具箱文档处理和退出重启。
+实机验收至少检查应用启动、登录、浏览器打开、工具箱文档处理和退出重启。
 
 ## 本地 Linux 构建
 

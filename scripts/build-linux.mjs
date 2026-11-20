@@ -1,4 +1,4 @@
-/** Build standalone Linux x64 AppImage/DEB packages on a native Linux host. */
+/** Build a standalone Linux x64 Debian package on a native Linux host. */
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -13,11 +13,9 @@ import { prepareDesktopBranding } from './desktop-branding.mjs'
 /** Refuse incomplete or ambiguous output so an old package cannot masquerade as this build. */
 export async function linuxInstallerNames(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
-  return ['.AppImage', '.deb'].map(extension => {
-    const names = entries.filter(entry => entry.isFile() && entry.name.endsWith(extension)).map(entry => entry.name)
-    if (names.length !== 1) throw new Error(`TP Cowork: expected one ${extension} package, found ${names.length}`)
-    return names[0]
-  })
+  const names = entries.filter(entry => entry.isFile() && entry.name.endsWith('.deb')).map(entry => entry.name)
+  if (names.length !== 1) throw new Error(`TP Cowork: expected one .deb package, found ${names.length}`)
+  return names
 }
 
 /** Copy verified packages with streaming checksums and the exact source revisions. */
@@ -34,11 +32,11 @@ export async function collectLinuxInstallers(source, output, revisions) {
   return names
 }
 
-/** Extract both deliverables and execute their own bundled runtime before collecting them. */
+/** Extract the Debian package and execute its bundled runtime before collecting it. */
 async function verifyLinuxInstallers(source, product, env, variant) {
-  const [appimage, deb] = await linuxInstallerNames(source)
+  const [deb] = await linuxInstallerNames(source)
   const scratch = await mkdtemp(join(tmpdir(), 'TP Cowork Linux '))
-  const smoke = async (application, format) => {
+  const smoke = async application => {
     await runCommand(join(application, product.artifactPrefix), ['--expose-internals',
       join(productRoot, variant === 'basic' ? 'scripts/smoke-linux-basic-product.mjs' : 'scripts/smoke-windows-product.mjs'), join(application, 'resources'),
       join(productRoot, variant === 'standard' ? 'desktop-product.linux.json' : 'desktop-product.json')], {
@@ -46,15 +44,12 @@ async function verifyLinuxInstallers(source, product, env, variant) {
     })
     if (variant !== 'full') {
       await runCommand(process.execPath, [join(productRoot, 'scripts/smoke-linux-ui.mjs'),
-        join(application, product.artifactPrefix), join(scratch, `${format}-home`),
-        join(productRoot, '.desktop-build/linux-ui', format),
+        join(application, product.artifactPrefix), join(scratch, 'deb-home'),
+        join(productRoot, '.desktop-build/linux-ui', 'deb'),
         join(productRoot, variant === 'basic' ? 'desktop-product.linux-basic.json' : 'desktop-product.linux.json')], { env })
     }
   }
   try {
-    // Extraction avoids a FUSE requirement on the hosted runner.
-    await runCommand(join(source, appimage), ['--appimage-extract'], { cwd: scratch, env, capture: true })
-    await smoke(join(scratch, 'squashfs-root'), 'appimage')
     const architecture = (await runCommand('dpkg-deb', ['--field', join(source, deb), 'Architecture'], { env, capture: true })).trim()
     if (architecture !== 'amd64') throw new Error(`TP Cowork: unexpected DEB architecture ${architecture}`)
     const packageName = (await runCommand('dpkg-deb', ['--field', join(source, deb), 'Package'], { env, capture: true })).trim()
@@ -88,7 +83,7 @@ async function verifyLinuxInstallers(source, product, env, variant) {
         throw new Error(`${product.productName}: DEB does not create the desktop shortcut`)
       }
     }
-    await smoke(applications[0], 'deb')
+    await smoke(applications[0])
   } finally {
     await rm(scratch, { recursive: true, force: true })
   }
@@ -108,10 +103,10 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   if (values.plan) {
     console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, excludedBundles, appId: product.appId,
       target: 'linux-x64', runner: 'ubuntu-22.04',
-      formats: ['AppImage', 'deb'], output: 'dist/installers', deployment: 'standalone',
+      formats: ['deb'], output: 'dist/installers', deployment: 'standalone',
       verification: variant !== 'full'
-        ? 'Extract both packages, verify the exact selected plugins, launch the real GUI with Chromium sandbox enabled and capture screenshots'
-        : 'Extract both packages and execute bundled Electron, product bundles and offline Python',
+        ? 'Extract the DEB, verify the exact selected plugins, launch the real GUI with Chromium sandbox enabled and capture screenshots'
+        : 'Extract the DEB and execute bundled Electron, product bundles and offline Python',
       compatibility: 'Kylin Desktop x86_64 requires installation and UI verification on the actual OS' }, null, 2))
     return
   }
@@ -134,7 +129,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
     await rm(artifacts, { recursive: true, force: true })
     await rm(output, { recursive: true, force: true })
   }
-  await runCommand('pnpm', ['run', 'package:desktop:linux:x64:unsigned', '--product', config, '--standalone',
+  await runCommand('pnpm', ['run', 'package:desktop:linux:x64:unsigned', '--product', config, '--standalone', '--deb-only',
     '--build-version', version, ...(values.check ? ['--check'] : [])], { cwd: harnessRoot, env })
   if (values.check) return
   await verifyLinuxInstallers(artifacts, product, env, variant)

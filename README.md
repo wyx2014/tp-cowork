@@ -39,9 +39,9 @@ npm run dev
 
 ## Linux 安装包
 
-进入 **Actions → Build Linux Packages → Run workflow**，由 Ubuntu 22.04 x64 Runner 构建并校验 AppImage 和 DEB，生成 SHA-256 和构建来源记录。默认同时上传 Actions Artifacts 并发布 GitHub 预发行版；取消 `publish_release` 则只上传 Artifacts。操作、参数和麒麟实机验证范围见 [Linux 云端打包](docs/kylin-linux-github-actions.md)。
+进入 **Actions → Build Linux Packages → Run workflow**，由 Ubuntu 22.04 x64 Runner 构建并校验 DEB，生成 SHA-256 和构建来源记录。默认同时上传 Actions Artifacts 并发布 GitHub 预发行版；取消 `publish_release` 则只上传 Artifacts。操作、参数和麒麟实机验证范围见 [Linux 云端打包](docs/kylin-linux-github-actions.md)。
 
-麒麟上排查启动问题时，选择 `variant=basic` 构建 **TP Cowork Basic**：排除全部 TP Cowork 产品插件，保留底座默认界面，使用独立的应用数据目录，并验证 AppImage 和 DEB 的真实图形窗口启动。基础版发布在 `linux-basic-packages-<version>`，附带启动诊断脚本。
+麒麟上排查启动问题时，选择 `variant=basic` 构建 **TP Cowork Basic**：排除全部 TP Cowork 产品插件，保留底座默认界面，使用独立的应用数据目录，并验证 DEB 的真实图形窗口启动。基础版发布在 `linux-basic-packages-<version>`，附带启动诊断脚本。
 
 Linux 默认选择 `variant=standard` 构建 **TP Cowork Linux**：包含浏览器在内的 11 个产品插件，仅排除 Computer Use。浏览器自动化、界面缩放与诊断导出随包交付，工具箱保留自己的 Chromium 和离线 Python 依赖。该版本使用独立数据目录，发布在 `linux-standard-packages-<version>`，并验证真实窗口、浏览器启用状态、产品界面、记忆、归档、统计和工具箱页面；`full` 仍可构建全部 12 个插件。
 

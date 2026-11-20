@@ -10,13 +10,14 @@ import { buildLinux, collectLinuxInstallers, linuxInstallerNames } from '../buil
 import { prepareDesktopBasic } from '../prepare-desktop-basic.mjs'
 import { prepareLinuxDesktopUtilities } from '../prepare-linux-desktop-utilities.mjs'
 
-test('collects both Linux formats with their exact bytes, checksums and source revisions', async t => {
+test('collects the DEB with its exact bytes, checksum and source revisions', async t => {
   const root = await mkdtemp(join(tmpdir(), 'TP Linux packages '))
   t.after(() => rm(root, { recursive: true, force: true }))
   const source = join(root, 'source')
   await mkdir(source)
-  const names = ['tpcowork-linux-x64.AppImage', 'tpcowork-linux-x64.deb']
+  const names = ['tpcowork-linux-x64.deb']
   for (const name of names) await writeFile(join(source, name), Buffer.from(`package bytes: ${name}`))
+  await writeFile(join(source, 'old.AppImage'), 'stale installer')
   await writeFile(join(source, 'builder-debug.yml'), 'not a deliverable')
   const output = join(root, 'output')
   const revisions = { productCommit: 'product-sha', harnessCommit: 'harness-sha', kylinMachineVerified: false }
@@ -27,18 +28,17 @@ test('collects both Linux formats with their exact bytes, checksums and source r
     assert.equal(await readFile(join(output, `${name}.sha256`), 'utf8'), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`)
   }
   assert.deepEqual(JSON.parse(await readFile(join(output, 'build-info.json'), 'utf8')), { schemaVersion: 1, ...revisions, installers: names })
-  assert.equal((await readdir(output)).length, 5)
+  assert.equal((await readdir(output)).length, 3)
 })
 
 test('rejects missing and ambiguous Linux formats before writing deliverables', async t => {
   const root = await mkdtemp(join(tmpdir(), 'tp-linux-incomplete-'))
   t.after(() => rm(root, { recursive: true, force: true }))
-  await assert.rejects(linuxInstallerNames(root), /one .AppImage package, found 0/u)
   await writeFile(join(root, 'app.AppImage'), '')
   await assert.rejects(linuxInstallerNames(root), /one .deb package, found 0/u)
   await writeFile(join(root, 'app.deb'), '')
   await mkdir(join(root, 'directory.deb'))
-  assert.deepEqual(await linuxInstallerNames(root), ['app.AppImage', 'app.deb'])
+  assert.deepEqual(await linuxInstallerNames(root), ['app.deb'])
   await writeFile(join(root, 'old.deb'), '')
   const output = join(root, 'out')
   await assert.rejects(collectLinuxInstallers(root, output, {}), /one .deb package, found 2/u)
@@ -54,10 +54,12 @@ test('Basic plan selects an independent identity and no product plugins', async 
   const basic = JSON.parse(stdout)
   assert.equal(basic.product, 'TP Cowork Basic')
   assert.equal(basic.variant, 'basic')
+  assert.deepEqual(basic.formats, ['deb'])
   assert.deepEqual(basic.bundles, [])
   assert.equal(basic.appId, 'com.tparuyi.tpcowork.dsh.basic')
   const { stdout: fullOutput } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--variant', 'full', '--plan'])
   const full = JSON.parse(fullOutput)
+  assert.deepEqual(full.formats, ['deb'])
   assert.ok(full.bundles.length > 0)
   assert.notEqual(full.appId, basic.appId)
   await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be standard, full or basic/u)
@@ -72,6 +74,7 @@ test('default Linux product includes the browser and every full-product bundle e
   const basic = JSON.parse(await readFile(new URL('../../desktop-product.linux-basic.json', import.meta.url), 'utf8'))
   assert.equal(standard.product, 'TP Cowork Linux')
   assert.equal(standard.variant, 'standard')
+  assert.deepEqual(standard.formats, ['deb'])
   assert.deepEqual(standard.bundles, full.bundles.filter(name => name !== '@tpcowork/dsh-computer-use'))
   assert.equal(standard.bundles.length, 11)
   assert.deepEqual(standard.excludedBundles, ['@tpcowork/dsh-computer-use'])
