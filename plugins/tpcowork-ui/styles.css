@@ -709,6 +709,7 @@ html body[data-tpcowork-ui] .tpcowork-provider-key input::placeholder { color:va
 .tpcowork-model-list-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 html body[data-tpcowork-ui] .tpcowork-model-add-inline { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:0; border-radius:8px; background:var(--dsw-alias-interactive-bg-hover); color:var(--dsw-alias-label-primary); font:inherit; cursor:pointer; }
 .tpcowork-provider-model-list { border:1px solid var(--dsw-alias-border-l3); border-radius:9px; overflow:hidden; }
+.tpcowork-gateway-model-list { margin:0; padding:0; list-style:none; overflow-wrap:anywhere; }
 .tpcowork-provider-model-row { display:flex; align-items:center; gap:8px; padding:10px 12px; min-height:42px; }
 .tpcowork-provider-model-row + .tpcowork-provider-model-row { border-top:1px solid var(--dsw-alias-border-l3); }
 .tpcowork-provider-model-id { font-family:var(--ds-font-family-code); overflow-wrap:anywhere; min-width:0; }
@@ -997,7 +998,48 @@ body[data-tpcowork-ui] .tpcowork-login-copy { display: flex; flex-direction: col
 body[data-tpcowork-ui] .tpcowork-login-card h1 { margin: 0; font-size: 30px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; text-wrap: balance; }
 body[data-tpcowork-ui] .tpcowork-login-copy p { margin: 0; color: var(--tpcowork-login-description); font-size: 14px; line-height: 24px; text-wrap: balance; }
 body[data-tpcowork-ui] .tpcowork-login-actions { display: flex; flex-direction: column; gap: 12px; }
-body[data-tpcowork-ui] .tpcowork-login-actions button { width: 100%; min-height: 40px; height: auto; padding-block: 8px; border-radius: 8px; }
+body[data-tpcowork-ui] .tpcowork-login-channels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-secondary, rgb(127 127 127 / 8%));
+}
+body[data-tpcowork-ui] .tpcowork-login-channel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tpcowork-login-description);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+body[data-tpcowork-ui] .tpcowork-login-channel[data-selected="true"] {
+  background: var(--tpcowork-login-card);
+  color: var(--tpcowork-login-heading);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+body[data-tpcowork-ui] .tpcowork-login-channel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+body[data-tpcowork-ui] .tpcowork-login-channel:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, currentColor);
+  outline-offset: 1px;
+}
+body[data-tpcowork-ui] .tpcowork-login-actions > button { width: 100%; min-height: 40px; height: auto; padding-block: 8px; border-radius: 8px; }
 body[data-tpcowork-ui] .tpcowork-login-primary { gap: 8px; }
 body[data-tpcowork-ui] .tpcowork-login-notice { margin: 0 0 4px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.6; }
 body[data-tpcowork-ui] .tpcowork-login-spinner { width: 14px; height: 14px; box-sizing: border-box; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: tpcowork-login-spin 800ms linear infinite; }

@@ -1,10 +1,11 @@
-/** Host-only model configuration; neither the renderer nor profile settings receive a usable API key. */
+/** In-memory gateway configuration and the key for the current Hub grant. */
+import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { PiAiAdapter, type ResolvedPiAiProviderProfile, type Options } from '@deepseek-ai/dsh-llm-pi-ai'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import { resolveProfiles } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/src/config.ts'
 import { authContextFrom, credentialStoreFrom } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/src/auth.ts'
-import type {} from './gateway-contract.ts'
+import type { GatewayModelConnection } from './gateway-contract.ts'
 
 export const name = 'tpcowork-hub-model'
 export const inject = ['llm', 'credentials']
@@ -18,8 +19,10 @@ interface DefaultModel {
 export class GatewayModels extends Service {
   private profiles = new Map<string, ResolvedPiAiProviderProfile>()
   private key = ''
+  private grantId: string | undefined
   private expiresAt = 0
-  private registration?: ReturnType<Context['llm']['registerAdapter']>
+  private registration: ReturnType<Context['llm']['registerAdapter']> | undefined
+  private readonly registerGatewayAdapter: () => ReturnType<Context['llm']['registerAdapter']>
   private readonly adapter: PiAiAdapter
   private preferred = ''
   private modelIds: string[] = []
@@ -36,7 +39,12 @@ export class GatewayModels extends Service {
       },
       auth: { credentials: credentialStoreFrom(ctx), authContext: authContextFrom(ctx) },
     })
-    ctx.effect(() => () => this.clear())
+    // Cordis binds service effects to the caller. Own this adapter in the model plugin.
+    this.registerGatewayAdapter = () => ctx.llm.registerAdapter([providerId], this.adapter)
+    ctx.effect(() => () => {
+      this.registration = undefined
+      this.clear()
+    })
     // UI routing is not an authorization boundary: even a manually configured provider requires a live Hub grant.
     ctx.on('llm/stream', (_options, next) => {
       if (this.key && Date.now() >= this.expiresAt) this.clear('expired')
@@ -48,9 +56,21 @@ export class GatewayModels extends Service {
     })
   }
 
+  modelConnection(): GatewayModelConnection | null {
+    const grantId = this.grantId
+    if (!grantId || this.status !== 'active' || Date.now() >= this.expiresAt) return null
+    const profile = this.profiles.get(providerId)
+    return profile?.baseURL && profile.api ? { baseURL: profile.baseURL, api: profile.api, grantId } : null
+  }
+
+  readModelKey(grantId: string): string | undefined {
+    if (this.grantId === grantId && this.status === 'active' && Date.now() < this.expiresAt) return this.key
+  }
+
   clear(status = 'signed_out'): void {
     this.status = status
     this.key = ''
+    this.grantId = undefined
     this.expiresAt = 0
     this.preferred = ''
     this.modelIds = []
@@ -89,10 +109,11 @@ export class GatewayModels extends Service {
       compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' },
     } } as Options['providers'])
     this.key = config.apiKey
+    this.grantId = randomUUID()
     this.expiresAt = expiresAt
     this.profiles = profiles
     if (this.registration) this.registration.replace([providerId])
-    else this.registration = this.ctx.llm.registerAdapter([providerId], this.adapter)
+    else this.registration = this.registerGatewayAdapter()
     this.status = 'active'
     this.preferred = models.some(model => model.id === config.defaultModel) ? config.defaultModel as string : models[0]!.id
     this.modelIds = models.map(model => model.id)

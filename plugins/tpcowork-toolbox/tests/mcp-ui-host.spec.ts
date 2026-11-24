@@ -6,7 +6,7 @@ import TypertGateway from '@deepseek-ai/dsh-api-gateway'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../../../deepseek-harness/node_modules/@testing-library/react/dist/index.js'
-import { ToolboxMcp, defaultMcpDefinitions, type McpRecord } from '../src/host/mcp/index.ts'
+import { ToolboxMcp, type McpRecord } from '../src/host/mcp/index.ts'
 import { hostContribution } from '../src/host/mcp/remote.ts'
 import { managementContribution } from '../src/client/remote.ts'
 import { Mcp } from '../src/ui/Mcp.tsx'
@@ -117,9 +117,9 @@ describe('MCP UI → Client codecs → Gateway → actual T3 Host', () => {
     await operate(operation)
     await expectChanged(service, operation)
   })
-  it('opens the real needs_configuration Playwright definition, requires a command and saves the completed configuration', async () => {
-    const playwright = defaultMcpDefinitions().find(row => row.id === 'playwright')!
-    const { service, initial } = await setup(playwright)
+  it('opens an incomplete custom local definition, requires a command and saves the completed configuration', async () => {
+    const definition: McpDefinition = { id: 'local', label: 'Local MCP', origin: 'custom', enabled: true, transport: 'stdio', command: '', args: [], credentials: [] }
+    const { service, initial } = await setup(definition)
     expect(initial.items[0]!.readiness.reasons).toContainEqual(expect.objectContaining({ code: 'needs_configuration' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     const command = await screen.findByLabelText('Executable')
@@ -127,10 +127,10 @@ describe('MCP UI → Client codecs → Gateway → actual T3 Host', () => {
     expect((command as HTMLInputElement).value).toBe('')
     fireEvent.click(screen.getByRole('button', { name: 'Save and connect' }))
     expect(screen.getByRole('button', { name: 'Save and connect' }).hasAttribute('disabled')).toBe(true)
-    expect((await service.definition({ id: 'playwright' }))).toEqual(playwright)
+    expect(await service.definition({ id: definition.id })).toEqual(definition)
     fireEvent.change(command, { target: { value: 'node' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save and connect' }))
-    await waitFor(async () => expect(await service.definition({ id: 'playwright' })).toMatchObject({ command: 'node' }))
+    await waitFor(async () => expect(await service.definition({ id: definition.id })).toMatchObject({ command: 'node' }))
     expect((await service.inventory()).items[0]!.readiness.reasons).not.toContainEqual(expect.objectContaining({ code: 'needs_configuration' }))
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull())
   })

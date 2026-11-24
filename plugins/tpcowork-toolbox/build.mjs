@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { readdir, readFile, writeFile, mkdir, cp, rm, access, chmod } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname } from 'node:path'
+import { loadCiscoDeployment } from './src/host/skills/cisco-deployment.ts'
 import { loadImageExtractDeployment } from './src/host/skills/image-extract-deployment.ts'
 import { resolveHubEnvironment } from './src/host/tpcoworkhub/hub-environment.ts'
 const root = dirname(fileURLToPath(import.meta.url))
@@ -61,13 +62,21 @@ const imageExtractDeployment = await loadImageExtractDeployment(new URL('./', im
 const imageExtractFile = resolve(output, 'image-extract.local.json')
 await writeFile(imageExtractFile, JSON.stringify(imageExtractDeployment, null, 2) + '\n', { mode: 0o600 })
 await chmod(imageExtractFile, 0o600)
+const ciscoDeployment = await loadCiscoDeployment(new URL('./', import.meta.url))
+const ciscoFile = resolve(output, 'cisco-call.local.json')
+await writeFile(ciscoFile, JSON.stringify(ciscoDeployment, null, 2) + '\n', { mode: 0o600 })
+await chmod(ciscoFile, 0o600)
+console.log(`Toolbox: Cisco office phone ${ciscoDeployment.ciscoQueryUrl && ciscoDeployment.ciscoDialUrl ? 'configured' : 'not configured'}`)
 // The Hub this build talks to; installers pass TPCOWORK_HUB_ENV (default test), local runs use the local Hub.
 const hub = resolveHubEnvironment(JSON.parse(await readFile(resolve(root, 'hub-environments.json'), 'utf8')), process.env.TPCOWORK_HUB_ENV)
-console.log(`Toolbox: TP Cowork Hub ${hub.environment} (${hub.endpoint})`)
+console.log(`Toolbox: TP Cowork Hub ${hub.environment} (${hub.endpoint}${hub.outsourceEndpoint ? `, outsource: ${hub.outsourceEndpoint}` : ''})`)
 await writeFile(resolve(output, 'hub.json'), JSON.stringify(hub, null, 2) + '\n')
 const common = {
   bundle: true, format: 'esm', platform: 'node', target: 'node22',
-  define: { __TPCOWORK_HUB_ENDPOINT__: JSON.stringify(hub.endpoint) },
+  define: {
+    __TPCOWORK_HUB_ENDPOINT__: JSON.stringify(hub.endpoint),
+    __TPCOWORK_HUB_OUTSOURCE_ENDPOINT__: JSON.stringify(hub.outsourceEndpoint ?? hub.endpoint),
+  },
   nodePaths: [resolve(harness, 'node_modules')], external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/*'],
   tsconfig: resolve(root, 'tsconfig.base.json'), logLevel: 'warning',
   alias: { zod: requireHarness.resolve('zod') },

@@ -6,7 +6,7 @@ import type { McpConnectionStatus, Config as NativeConfig } from '@deepseek-ai/d
 import type { McpDefinition } from '../../contracts/mcp.ts'
 
 /** Resolve only inside Host memory, once per operation; never persist the native config. */
-async function nativeConfig(ctx: Context, definition: McpDefinition, secretValues: Record<string, string>): Promise<NativeConfig> {
+async function nativeConfig(ctx: Context, definition: McpDefinition, secretValues: Record<string, string>, upstreamToken?: string): Promise<NativeConfig> {
   const env: Record<string, string> = {}; const headers: Record<string, string> = {}
   const url = definition.transport === 'streamable-http' ? new URL(definition.endpoint) : undefined
   for (const binding of definition.credentials) {
@@ -18,17 +18,22 @@ async function nativeConfig(ctx: Context, definition: McpDefinition, secretValue
     else if (binding.target === 'header') headers[binding.key] = value
     else url!.searchParams.set(binding.key, value)
   }
+  if (upstreamToken) url?.searchParams.set('token', upstreamToken)
   const base = { serverName: definition.id, toolCallTimeoutMs: (definition.toolTimeout ?? 60) * 1000, failOnStartupError: true, reconnect: { enabled: false } }
   return definition.transport === 'stdio'
     ? { ...base, transport: 'stdio', command: definition.command, args: [...definition.args], cwd: definition.cwd ?? '', env }
-    : { ...base, transport: 'streamable-http', url: url!.toString(), headers }
+    : {
+        ...base, transport: 'streamable-http', url: url!.toString(), headers,
+        // Juyuan omits required tool-list metadata when the modern protocol is negotiated.
+        ...(upstreamToken ? { versionNegotiation: 'legacy' as const } : {}),
+      }
 }
 
 /** A disposable native DSH connection in an explicit registration scope. */
 export async function connect(ctx: Context, definition: McpDefinition, signal: AbortSignal, timeoutMs: number,
-  status: (snapshot: McpConnectionStatus) => void, secretValues: Record<string, string> = {}): Promise<{ close(): Promise<void> }> {
+  status: (snapshot: McpConnectionStatus) => void, secretValues: Record<string, string> = {}, upstreamToken?: string): Promise<{ close(): Promise<void> }> {
   signal.throwIfAborted()
-  const config = await nativeConfig(ctx, definition, secretValues)
+  const config = await nativeConfig(ctx, definition, secretValues, upstreamToken)
   signal.throwIfAborted()
   const scope = createScope(ctx, scopeOf(ctx) ?? {})
   let latest: McpConnectionStatus = { serverName: definition.id, state: 'connecting', generation: 0, toolCount: 0, observedAt: Date.now() }

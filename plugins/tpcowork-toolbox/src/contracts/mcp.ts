@@ -16,6 +16,7 @@ export interface McpItem {
   id: string
   label: string
   origin: 'bundled' | 'custom'
+  managed?: true
   configRevision: number
   installed: boolean
   enabled: boolean

@@ -11,7 +11,7 @@ import * as client from '../src/client.ts'
 import { descriptionSchema } from '../src/remote.ts'
 import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 
-const description = { contractVersion: 1, initialization: { state: 'pending', issues: [] }, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
+const description = { contractVersion: 1, initialization: { state: 'pending', issues: [] }, modules: { skills: false, mcp: false, teams: false, installer: false, tpcoworkhub: false }, defaultMcpIds: [] }
 describe('DSH plugin seam', () => {
   it('announces teams only while both the catalog and task services are available', async () => {
     const ctx = new Context()

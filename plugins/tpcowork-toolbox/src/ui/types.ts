@@ -7,6 +7,7 @@ export type UiActions = {
   refresh(): Promise<void>
   retryInitialization(): Promise<void>
   refreshSkills(): Promise<void>
+  refreshMcp(): Promise<void>
   setTab(tab: Tab): void
   skillDetail: SkillsClientApi['detail']
   skillEnable: SkillsClientApi['setEnabled']

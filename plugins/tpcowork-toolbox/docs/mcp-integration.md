@@ -40,19 +40,13 @@ try {
 
 运行结束、取消、异常断开、Agent scope 销毁、配置/凭证变化及模块卸载都会关闭连接并撤销能力；`close()` 幂等且等待清理。运行器必须观察 `lease.signal`，不能在 MCP 异常撤销后继续把任务记为成功。TaskContext 的持久化、重启 interrupted 状态和首次提交事务由 T6 负责；重启不自动重新建立旧任务连接。
 
-## T7 默认接入契约
+## 登录后的聚源连接
 
-`defaultMcpDefinitions()` 仅返回以下三个描述，无安装/连接副作用：
+新版工具箱启动时清理旧版随包注册的 MCP，本地用户自建的连接继续由 DSH settings 管理。`defaultMcpDefinitions()` 仍可用于构造旧版定义以验证升级兼容。
 
-| id | 传输与端点 | DSH 凭证引用 | 注入位置 |
-| --- | --- | --- | --- |
-| juyuan | Streamable HTTP，`https://api.gildata.com/mcp-servers/aidata-assistant-srv-api` | JUYUAN_MCP_TOKEN | URL query `token`，Host 内存中编码 |
-| caihui_mcp | Streamable HTTP，`https://mcp.finchina.com/finchina-data-mcp-server/mcp` | CAIHUI_MCP_API_KEY | header `x-api-key` |
-| playwright | stdio | 无 | T7 注入核对后的 command/args/cwd |
+Host 根据 SkillHub 下发的模型地址找到 New API 的 `/api/mcp/my-servers/:name/direct-config`，以当前个人 Key 查询 `juyuan_api` 或 `juyuan` 的已授权配置。New API 和桌面 Host 都校验聚源的 HTTPS 端点与 Streamable HTTP 协议。桌面 Host 使用配置中的聚源令牌直接连接上游，执行探测、工具发现和任务中的工具调用。公开目录提供 `managed: true` 和连接状态，令牌保留在 Host 内存中。退出、账号切换和登录过期会撤下受管项并终止相关连接。New API 控制后续配置领取权限，聚源负责上游令牌的有效期与撤销。
 
-端点可用函数参数 `juyuanEndpoint` / `caihuiEndpoint` 覆盖。Playwright 必须由 T7 传 `playwright: { command, args, cwd? }`；未传时 command 为空，显示 needs_configuration，不执行 npx 下载。源项目候选为 `@playwright/mcp@0.0.78`，兼容版本及本地 launcher 的固定由 T7 核对，不能从描述器直接盲装。该工厂不包含其他默认接入，不筛除或删除用户手动配置的服务器。
-
-凭证每次操作由 DSH credentials.resolve 读取，远端只收到 configured/writable 标志。query/header/env 实值及编码形式会从底层诊断错误移除，stdio 子进程 stderr 不继承到 Host 日志；默认资源、profile patch、事件和任务选择均不保存解析后的值。当前未获取聚源/财汇部署凭证，也未安装并运行 T7 尚未核定版本的 Playwright，因此这三个默认服务的真实部署联通留给 T7/T8，不能用本地协议 fixture 测试替代。
+本地自定义项的凭证由 DSH credentials.resolve 读取，远端只收到 configured/writable 标志。query/header/env 实值及编码形式会从底层诊断错误移除。受管项和本地自定义项的解析后凭证均只在 Host 工具作用域使用。
 
 ## 验证
 

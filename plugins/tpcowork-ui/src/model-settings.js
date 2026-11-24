@@ -2,6 +2,8 @@
 export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
   const h = React.createElement;
   const tp = ctx.locale.bind('tpcowork');
+  const gatewayId = 'tpcowork-newapi';
+  const maskedKey = '••••••••••••••••••••••••';
   // Lucide Unplug / LoaderCircle, ISC; see assets/settings-icons/LICENSE.
   const unplugPaths = ['m19 5 3-3', 'm2 22 3-3', 'M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z', 'M7.5 13.5 10 11', 'M10.5 16.5 13 14', 'm12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z'];
   const testIcon = busy => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', className: busy ? 'tpcowork-spin' : undefined, 'data-icon': busy ? 'loader-circle' : 'unplug', 'aria-hidden': true }, ...(busy ? ['M21 12a9 9 0 1 1-6.219-8.56'] : unplugPaths).map(d => h('path', { key: d, d })));
@@ -20,9 +22,9 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
     return h('label', { className: classes.field }, h('span', { className: classes.fieldLabel }, label),
       h('input', { className: classes.input, 'aria-label': label, ...props }));
   }
-  function ProviderProtocol({ value, readOnly, onChange }) {
+  function ProviderProtocol({ value, readOnly, onChange, emptyLabel = '默认协议' }) {
     const options = [['openai-completions', 'OpenAI Chat Completions'], ['openai-responses', 'OpenAI Responses'], ['anthropic-messages', 'Anthropic Messages']];
-    if (!options.some(([id]) => id === value)) options.unshift([value || '', value || '默认协议']);
+    if (!options.some(([id]) => id === value)) options.unshift([value || '', value || emptyLabel]);
     return h('label', { className: classes.field }, h('span', { className: classes.fieldLabel }, 'API 协议'),
       h('select', { className: `${classes.input} ${classes.selectInput} tpcowork-provider-protocol`, 'aria-label': 'API 协议', disabled: !!readOnly, value: value || '', onChange: event => onChange?.(event.target.value) },
         ...options.map(([id, label]) => h('option', { key: id, value: id }, label))));
@@ -37,6 +39,44 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
       capacity ? h('span', { className: 'tpcowork-managed-badge', title: `上下文窗口 ${capacity.toLocaleString()}` }, capacity >= 1000000 ? `${+(capacity / 1000000).toFixed(1)}M` : `${Math.round(capacity / 1000)}K`) : null,
       (model.input ?? profile.defaultInput ?? []).includes('image') ? h('span', { className: 'tpcowork-managed-badge' }, '视觉') : null);
   }
+  async function revealGatewayKey(grantId) {
+    const remote = ctx.get('remote.toolboxTpcoworkHub');
+    const subtle = globalThis.crypto.subtle;
+    const pair = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveKey']);
+    const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
+    const publicKey = btoa(String.fromCharCode(...new Uint8Array(await subtle.exportKey('spki', pair.publicKey))));
+    const result = await remote.revealModelKey({ grantId, publicKey });
+    if (!result.ok) throw new Error('Cannot reveal gateway key');
+    const envelope = result.value;
+    const peer = await subtle.importKey('spki', decode(envelope.publicKey), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    const key = await subtle.deriveKey({ name: 'ECDH', public: peer }, pair.privateKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const value = await subtle.decrypt({ name: 'AES-GCM', iv: decode(envelope.iv), additionalData: new TextEncoder().encode(grantId) }, key, decode(envelope.ciphertext));
+    return new TextDecoder().decode(value);
+  }
+  function GatewayDetails({ row, gateway }) {
+    const { connection, models, status } = gateway;
+    return h('section', { className: 'tpcowork-managed-details tpcowork-readonly-provider', 'aria-label': row.entry.displayName },
+      h(ProviderHeading, { row }, models.length > 0
+        ? h('span', { className: 'tpcowork-managed-badge', role: 'status' }, tp('modelSettingsGatewayAuthorized'))
+        : null),
+      h(ProviderField, { label: 'API 地址', value: connection?.baseURL ?? '', readOnly: true, placeholder: '—' }),
+      h(ProviderProtocol, { value: connection?.api, readOnly: true, emptyLabel: '—' }),
+      h(CredentialField, { key: connection?.grantId ?? 'no-grant', managed: {
+        configured: models.length > 0,
+        reveal: connection?.grantId ? () => revealGatewayKey(connection.grantId) : undefined,
+      } }),
+      models.length > 0 && !connection ? h('p', { className: 'tpcowork-provider-model-empty', role: 'status' }, tp('modelSettingsGatewayConnectionError')) : null,
+      h('div', { className: 'tpcowork-managed-models' },
+        h(ModelListHeading),
+        models.length > 0
+          ? h('ul', { className: 'tpcowork-provider-model-list tpcowork-gateway-model-list' },
+            models.map(model => h('li', { key: model.id, className: 'tpcowork-provider-model-row', title: model.id }, model.name)))
+          : h('p', { className: 'tpcowork-provider-model-empty', role: 'status' }, tp({
+            loading: 'modelSettingsGatewayLoading',
+            error: 'modelSettingsGatewayError',
+            ready: 'modelSettingsGatewayEmpty',
+          }[status]))));
+  }
   function ModelFeedback({ feedback, onClose, anchor }) {
     const [target, setTarget] = React.useState(null);
     React.useLayoutEffect(() => {
@@ -49,15 +89,20 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
         h('span', { title: feedback.message }, feedback.message), feedback.onRetry ? h('button', { type: 'button', onMouseDown: event => event.preventDefault(), onClick: feedback.onRetry }, '重试') : null, feedback.state !== 'pending' ? h('button', { type: 'button', 'aria-label': feedback.kind === 'save' ? '关闭保存提示' : '关闭测试提示', onClick: onClose },
           h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, 'aria-hidden': true }, h('path', { d: 'm18 6-12 12M6 6l12 12' }))) : null)), target);
   }
-  function CredentialField({ row, profile, operations, onChange, onBlur, disabled = false }) {
+  function CredentialField({ row, profile, operations, onChange, onBlur, disabled = false, managed }) {
     const [typed, setTyped] = React.useState('');
     const [revealed, setRevealed] = React.useState('');
     const [visible, setVisible] = React.useState(false);
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState('');
     const generation = React.useRef(0);
-    const ref = profile.apiKeyEnv || row.apiKeyEnv || Object.entries(row.credentialChecks ?? {}).find(([, info]) => info.configured)?.[0] || `${row.entry.provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
-    const configured = row.credential?.configured || row.derivedCredential?.configured || Object.values(row.credentialChecks ?? {}).some(info => info.configured);
+    const configured = managed ? managed.configured
+      : row.credential?.configured || row.derivedCredential?.configured || Object.values(row.credentialChecks ?? {}).some(info => info.configured);
+    const read = managed ? managed.reveal : () => {
+      const ref = profile.apiKeyEnv || row.apiKeyEnv || Object.entries(row.credentialChecks ?? {}).find(([, info]) => info.configured)?.[0] || `${row.entry.provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+      if (!operations.revealCredential) throw new Error('请重启应用以加载密钥查看接口');
+      return operations.revealCredential(ref);
+    };
     const hide = () => { generation.current++; setRevealed(''); setVisible(false); setBusy(false); };
     React.useEffect(() => {
       const hidden = () => { if (document.hidden) hide(); };
@@ -71,11 +116,12 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
       const request = ++generation.current;
       setBusy(true); setError('');
       try {
-        if (!operations.revealCredential) throw new Error('请重启应用以加载密钥查看接口');
-        const value = await operations.revealCredential(ref);
+        const value = await read();
         if (request !== generation.current) return;
         setRevealed(value); setVisible(true);
-      } catch (failure) { if (request === generation.current) setError(failure.message || '读取密钥失败'); }
+      } catch (failure) {
+        if (request === generation.current) setError(managed ? tp('modelSettingsGatewayKeyError') : failure.message || '读取密钥失败');
+      }
       finally { if (request === generation.current) setBusy(false); }
     };
     return h('div', { className: classes.field },
@@ -83,11 +129,11 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
       h('div', { className: 'tpcowork-provider-key' },
         h('input', { className: classes.input, 'aria-label': 'API 密钥', autoComplete: 'off', spellCheck: false,
           readOnly: !onChange, disabled, type: visible ? 'text' : 'password', value: typed || revealed,
-          placeholder: configured ? '••••••••••••••••••••••••' : '输入 API 密钥',
+          placeholder: configured ? maskedKey : managed ? '—' : '输入 API 密钥',
           onChange: event => { setTyped(event.target.value); setRevealed(''); onChange?.(event.target.value); },
           onBlur, onKeyDown: event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) onBlur?.(); } }),
         h('button', { type: 'button', className: 'tpcowork-provider-eye', 'aria-label': visible ? '隐藏 API 密钥' : '显示 API 密钥', 'aria-pressed': visible,
-          disabled: disabled || busy || (!typed && !configured), onClick: () => void toggle() },
+          disabled: disabled || busy || (!typed && (!configured || !read)), onClick: () => void toggle() },
           h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
             h('path', { d: visible ? 'm3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.8 4.3A11 11 0 0 1 12 4c7 0 10 8 10 8a17 17 0 0 1-3 4M6 6a20 20 0 0 0-4 6s3 8 10 8a11 11 0 0 0 5-1' : 'M2 12s3-8 10-8 10 8 10 8-3 8-10 8S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' })))),
       error ? h('span', { role: 'alert' }, error) : null);
@@ -442,8 +488,12 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
     if (!entry) return () => {};
     function Navigator(props) {
       const state = props.useSnapshot(value => value);
-      const rows = state.rows.filter(row => row.configured)
+      const rows = state.rows.filter(row => row.configured && row.entry.provider !== gatewayId)
         .sort((left, right) => Number(right.entry.provider === 'asset-deepseek') - Number(left.entry.provider === 'asset-deepseek'));
+      const gatewayRow = { entry: { provider: gatewayId, displayName: tp('modelSettingsGateway') } };
+      const [gateway, setGateway] = React.useState({ status: 'loading', models: [] });
+      const gatewayStatus = gateway.models.length > 0 ? tp('modelSettingsGatewayRunning') : undefined;
+      const [gatewayRefresh, setGatewayRefresh] = React.useState(0);
       const [selected, setSelected] = React.useState(null);
       const [adding, setAdding] = React.useState(false);
       const [targets, setTargets] = React.useState(null);
@@ -451,6 +501,30 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
       const saveRef = React.useRef(null);
       const root = React.useRef(null);
       const chosen = rows.find(row => row.entry.provider === selected) ?? rows[0];
+      const gatewaySelected = !adding && (selected === null || selected === gatewayId || !chosen);
+      React.useEffect(() => {
+        let revision = 0;
+        const load = async () => {
+          const request = ++revision;
+          setGateway({ status: 'loading', models: [] });
+          try {
+            const result = await ctx.remote.session.modelCatalog();
+            if (!result.ok || result.value.failures.some(provider => provider.id === gatewayId)) throw new Error('Cannot load gateway models');
+            if (request !== revision) return;
+            const models = result.value.groups.find(provider => provider.id === gatewayId)?.models ?? [];
+            const metadata = models.length > 0
+              ? await ctx.get('remote.toolboxTpcoworkHub')?.modelConnection?.().catch(() => null)
+              : null;
+            if (request === revision) setGateway({ status: 'ready', models, connection: metadata?.ok ? metadata.value : null });
+          } catch {
+            if (request === revision) setGateway({ status: 'error', models: [] });
+          }
+        };
+        const offAdapters = ctx.remote.$on('llm/adapters-updated', load);
+        const offConnection = ctx.on('connection/reset', load);
+        void load();
+        return () => { revision++; offAdapters(); offConnection(); };
+      }, [gatewayRefresh]);
       const openProvider = row => {
         const cards = [...(root.current?.querySelectorAll(`.${classes.rowCard}`) ?? [])];
         const identity = row.entry.provider === row.entry.displayName ? row.entry.provider : `${row.entry.displayName} (${row.entry.provider})`;
@@ -512,13 +586,13 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
         };
       }, []);
       React.useEffect(() => {
-        if (targets && !adding && chosen && state.status === 'ready') openProvider(chosen);
-      }, [targets, chosen?.entry.provider, state.status, adding]);
-      const managedSelected = !adding && chosen?.entry.provider === 'asset-deepseek';
-      const editableSelected = !adding && chosen?.entry.settingsNs === 'llm-pi-ai' && !managedSelected;
+        if (targets && !adding && !gatewaySelected && chosen && state.status === 'ready') openProvider(chosen);
+      }, [targets, chosen?.entry.provider, state.status, adding, gatewaySelected]);
+      const managedSelected = !adding && !gatewaySelected && chosen?.entry.provider === 'asset-deepseek';
+      const editableSelected = !adding && !gatewaySelected && chosen?.entry.settingsNs === 'llm-pi-ai' && !managedSelected;
       React.useEffect(() => {
-        if (root.current) { root.current.dataset.managed = String(adding || managedSelected || editableSelected); root.current.dataset.adding = String(adding); }
-      }, [adding, managedSelected, editableSelected, targets]);
+        if (root.current) { root.current.dataset.managed = String(adding || gatewaySelected || managedSelected || editableSelected); root.current.dataset.adding = String(adding); }
+      }, [adding, gatewaySelected, managedSelected, editableSelected, targets]);
       const namespace = chosen && state.namespaces.get(chosen.entry.settingsNs);
       const profile = namespace && props.schema.getPath(namespace.value, chosen.entry.settingsPath);
       const configured = profile && typeof profile === 'object' ? profile : {};
@@ -533,20 +607,30 @@ export function adaptModelSettings(ctx, React, ReactDOM, primitives, classes) {
             ...(Array.isArray(configured.models) ? configured.models : []).map(model => h('div', { key: model.id, className: 'tpcowork-provider-model-entry' },
               h('div', { className: 'tpcowork-provider-model-row' }, h(ModelSummary, { model, profile: configured }), h('div', { className: 'tpcowork-provider-model-actions', 'aria-hidden': true }))))))) : null;
       const svg = path => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: path }));
+      const providerDetails = gatewaySelected ? h(GatewayDetails, { row: gatewayRow, gateway })
+        : managedSelected ? managedDetails
+        : editableSelected && namespace ? h(ProviderDetails, { key: chosen.entry.provider, row: chosen, namespace, operations: props.operations, schema: props.schema, controller: props.controller, saveRef })
+        : null;
       return h(React.Fragment, null,
         h('span', { ref: anchor, hidden: true }),
-        targets ? ReactDOM.createPortal(adding ? h(NewProvider, { namespace: state.namespaces.get('llm-pi-ai'), operations: props.operations, controller: props.controller, onCancel: () => setAdding(false), onCreated: id => { setSelected(id); setAdding(false); } }) : managedSelected ? managedDetails : editableSelected && namespace ? h(ProviderDetails, { key: chosen.entry.provider, row: chosen, namespace, operations: props.operations, schema: props.schema, controller: props.controller, saveRef }) : null, targets.managed) : null,
+        targets ? ReactDOM.createPortal(adding ? h(NewProvider, { namespace: state.namespaces.get('llm-pi-ai'), operations: props.operations, controller: props.controller, onCancel: () => setAdding(false), onCreated: id => { setSelected(id); setAdding(false); } }) : providerDetails, targets.managed) : null,
         targets ? ReactDOM.createPortal(h('div', { className: 'tpcowork-model-toolbar' },
           h('p', null, tp('modelSettingsIntro')),
           h('div', { className: 'tpcowork-model-toolbar-actions' },
-            h('button', { type: 'button', className: 'tpcowork-model-refresh', 'aria-label': tp('modelSettingsRefresh'), disabled: state.status === 'loading', onClick: () => void props.controller.load() },
+            h('button', { type: 'button', className: 'tpcowork-model-refresh', 'aria-label': tp('modelSettingsRefresh'), disabled: state.status === 'loading', onClick: () => { setGatewayRefresh(value => value + 1); void props.controller.load(); } },
               svg('M3 11a9 9 0 0 1 15-6l3 3M21 3v5h-5M21 13a9 9 0 0 1-15 6l-3-3M3 21v-5h5')),
             h('button', { type: 'button', className: 'tpcowork-model-add', disabled: !state.writable || state.status !== 'ready', onClick: async () => { if (saveRef.current && !await saveRef.current()) return; setAdding(true); } },
               h(primitives.IconPlusOutlineRegular, { size: 16 }), tp('modelSettingsAdd')))), targets.toolbar) : null,
         targets ? ReactDOM.createPortal(h('nav', { className: 'tpcowork-model-providers', 'aria-label': tp('modelSettingsProviders') },
+          h('button', { type: 'button', className: 'tpcowork-model-provider', 'aria-current': gatewaySelected ? 'true' : undefined,
+            'aria-description': gatewayStatus,
+            onClick: async () => { if (saveRef.current && !await saveRef.current()) return; setAdding(false); setSelected(gatewayId); } },
+            h(ProviderLogo, { row: gatewayRow }),
+            h('span', { className: 'tpcowork-model-provider-name' }, gatewayRow.entry.displayName),
+            gatewayStatus ? h('span', { className: 'tpcowork-model-status', 'data-configured': true, title: gatewayStatus, 'aria-hidden': true }) : null),
           h('p', { className: 'tpcowork-model-group' }, tp('modelSettingsProviders')),
           rows.map(row => h('button', { key: row.entry.provider, type: 'button', className: 'tpcowork-model-provider',
-            'aria-label': tp('modelSettingsSelect', { name: row.entry.displayName }), 'aria-current': !adding && chosen?.entry.provider === row.entry.provider ? 'true' : undefined,
+            'aria-label': tp('modelSettingsSelect', { name: row.entry.displayName }), 'aria-current': !adding && !gatewaySelected && chosen?.entry.provider === row.entry.provider ? 'true' : undefined,
             onClick: async () => { if (saveRef.current && !await saveRef.current()) return; setAdding(false); setSelected(row.entry.provider); openProvider(row); } },
             h(ProviderLogo, { row }),
             h('span', { className: 'tpcowork-model-provider-name' }, row.entry.displayName),

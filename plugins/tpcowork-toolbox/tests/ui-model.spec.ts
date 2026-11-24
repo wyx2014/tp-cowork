@@ -8,7 +8,7 @@ import { mcpForm, parseMcp } from '../src/ui/mcp-form.ts'
 import type { FirstSubmissionRequest } from '../src/contracts/index.ts'
 
 const ok = <T>(value: T) => ({ ok: true as const, value })
-const description = { contractVersion: 1 as const, initialization: { state: 'ready' as const, issues: [] }, modules: { skills: true, mcp: true, teams: true, installer: true, tpcoworkhub: true }, defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'] }
+const description = { contractVersion: 1 as const, initialization: { state: 'ready' as const, issues: [] }, modules: { skills: true, mcp: true, teams: true, installer: true, tpcoworkhub: true }, defaultMcpIds: [] }
 function bench() {
   const current = catalog()
   const remote = {
@@ -342,11 +342,12 @@ describe('public MCP configuration', () => {
     form.endpoint = 'https://example.test/mcp'; form.credentials = [{ ref: 'DSH_TOKEN', key: 'Authorization', target: 'header' }]
     expect(parseMcp(form)).toMatchObject({ credentials: [{ ref: 'DSH_TOKEN' }] })
   })
-  it('hides excluded bundled entries while preserving user-owned entries with the same name', () => {
+  it('shows managed or custom MCPs and hides legacy bundled entries', () => {
     const item = catalog().mcp.items[0]!
-    expect(visibleMcp({ ...item, id: 'anysearch' })).toBe(false)
-    expect(visibleMcp({ ...item, id: 'ifind-company' })).toBe(false)
+    expect(visibleMcp({ ...item, id: 'anysearch', origin: 'bundled' })).toBe(false)
+    expect(visibleMcp({ ...item, id: 'ifind-company', origin: 'bundled' })).toBe(false)
     expect(visibleMcp({ ...item, id: 'ifind-company', origin: 'custom' })).toBe(true)
     expect(visibleMcp(item)).toBe(true)
+    expect(visibleMcp({ ...item, origin: 'bundled', managed: true })).toBe(true)
   })
 })

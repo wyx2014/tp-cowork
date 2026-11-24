@@ -125,7 +125,7 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       installAppearanceSettings(ctx, React, primitives);
       // 界面字号: the text size setting moves all interface text, as in the reference product, not only chat content.
       ctx.effect(() => scaleInterfaceText(), 'tpcowork: interface font size');
-      adaptModelSettings(ctx, React, ReactDOM, primitives, classes.models);
+      ctx.inject(['remote', 'remote.session'], scope => adaptModelSettings(scope, React, ReactDOM, primitives, classes.models));
       ctx.slots.inject('settings.close', () => ctx.slots.register({
         name: 'settings.close', priority: -10, locale: 'tpcowork',
       }, BackToWorkspace));
@@ -172,7 +172,8 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
           inject: () => ({ navigation, shortcuts: scope.shortcuts }),
         }, NavigationControls));
       });
-      const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub);
+      const account = createTpcoworkHubAccount(window.dshDesktop?.tpcoworkHub,
+        channel => ctx.get('remote.toolboxTpcoworkHub')?.selectLoginChannel?.({ channel }));
       ctx.effect(() => () => account.dispose(), 'tpcowork: TpcoworkHub account lifetime');
       // The shell owns the root and its child seats. Use its supported overlay with the existing account source.
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({

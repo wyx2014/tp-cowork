@@ -1,12 +1,9 @@
 /** One-shot Host client for the Cisco proxy, which uses three POSTs per tool call. */
 import { z } from 'zod'
 import { SkillError } from '../installer/errors.ts'
+import { ciscoEndpointUrl, readBundledCiscoDeployment, type CiscoDeployment, type CiscoEndpoints } from './cisco-deployment.ts'
 
-export interface CiscoDeployment {
-  ciscoQueryUrl?: string
-  ciscoDialUrl?: string
-}
-export interface CiscoEndpoints { query: URL; dial: URL }
+export type { CiscoDeployment, CiscoEndpoints }
 export interface CiscoContact { number?: string | undefined; name?: string | undefined }
 
 const extension = /^1121\d{4}$/
@@ -19,18 +16,10 @@ const rpcResult = z.object({
 const directoryResult = z.object({ data: z.array(z.object({ VC_IP_PHONE: z.union([z.string(), z.number()]).nullish() })).nullish() })
 const resultCode = z.object({ code: z.number() })
 
-function endpoint(value: string | undefined): URL | undefined {
-  try {
-    const url = new URL(value?.trim() ?? '')
-    if (url.protocol === 'https:' && !url.username && !url.password && !url.hash) return url
-  } catch { /* A missing or invalid URL is reported as a deployment issue. */ }
-  return undefined
-}
-
-/** Resolve Host-only endpoints. Never send an account token to an HTTP URL or a redirect. */
-export function ciscoEndpoints(config: CiscoDeployment): CiscoEndpoints | undefined {
-  const query = endpoint(config.ciscoQueryUrl || process.env.TPCOWORK_CISCO_QUERY_URL)
-  const dial = endpoint(config.ciscoDialUrl || process.env.TPCOWORK_CISCO_DIAL_URL)
+/** Resolve Host-only endpoints: explicit config > runtime env > build-time bundled file. */
+export function ciscoEndpoints(config: CiscoDeployment, bundled = readBundledCiscoDeployment()): CiscoEndpoints | undefined {
+  const query = ciscoEndpointUrl(config.ciscoQueryUrl?.trim() || process.env.TPCOWORK_CISCO_QUERY_URL?.trim() || bundled.ciscoQueryUrl)
+  const dial = ciscoEndpointUrl(config.ciscoDialUrl?.trim() || process.env.TPCOWORK_CISCO_DIAL_URL?.trim() || bundled.ciscoDialUrl)
   if (query && dial) return { query, dial }
   return undefined
 }
@@ -43,11 +32,16 @@ function json(text: string): unknown {
 }
 
 function sseResult(event: string): unknown {
-  const data = event.split(/\r?\n/u)
+  const lines = event.split(/\r?\n/u)
     .filter(line => line.startsWith('data:'))
-    .map(line => line.slice(5).replace(/^ /u, '')).join('\n')
-  const value = json(data)
-  if (value && typeof value === 'object' && 'id' in value && value.id === 3) return value
+    .map(line => line.slice(5).replace(/^ /u, ''))
+  if (!lines.length) return undefined
+  const combined = json(lines.join('\n'))
+  if (combined && typeof combined === 'object' && 'id' in combined && combined.id === 3) return combined
+  for (const line of lines) {
+    const value = json(line.trim())
+    if (value && typeof value === 'object' && 'id' in value && value.id === 3) return value
+  }
   return undefined
 }
 
@@ -64,7 +58,7 @@ async function readReply(response: Response): Promise<unknown> {
       const { done, value } = await reader.read()
       if (done) {
         buffer += decoder.decode()
-        return sse ? sseResult(buffer) : json(buffer)
+        return sse ? sseResult(buffer) : (json(buffer) ?? sseResult(buffer))
       }
       bytes += value.byteLength
       if (bytes > maxResponseBytes) return undefined

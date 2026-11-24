@@ -86,6 +86,21 @@ describe('toolbox user paths', () => {
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull())
     expect(api.refresh).toHaveBeenCalledOnce()
   })
+  it('shows the gateway MCP as probe-only and hides legacy bundled entries', async () => {
+    const api = actions(), { mcp } = catalog()
+    const fixture = mcp.items[0]!
+    mcp.items = [
+      { ...fixture, id: 'playwright', label: 'Playwright', origin: 'bundled' },
+      { ...fixture, label: 'Gateway Juyuan', origin: 'bundled', managed: true, credentials: [] },
+    ]
+    render(React.createElement(Mcp, { load: { value: mcp, failed: false, loading: false }, available: true, query: '', t, actions: api }))
+    expect(screen.queryByRole('heading', { name: 'Playwright' })).toBeNull()
+    const card = within(screen.getByRole('article'))
+    expect(card.getByRole('heading', { name: 'Gateway Juyuan' })).toBeTruthy()
+    expect(card.getAllByRole('button').map(button => button.textContent)).toEqual(['Probe connection'])
+    fireEvent.click(card.getByRole('button', { name: 'Probe connection' }))
+    await waitFor(() => expect(api.mcpProbe).toHaveBeenCalledWith({ id: 'juyuan' }, expect.any(AbortSignal)))
+  })
   it('returns from MCP create and edit pages to the filtered list with its scroll and entry focus restored', async () => {
     const api = actions(), current = catalog()
     const props = { load: { value: current.mcp, failed: false, loading: false }, available: true, query: current.mcp.items[0]!.label, t, actions: api }
@@ -246,12 +261,45 @@ describe('toolbox user paths', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(api.mcpRemove).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 18 })))
   })
+  it('shows probe progress and success/failure results in a floating top toast outside the MCP list', async () => {
+    const api = actions(), current = catalog()
+    const item = { ...current.mcp.items[0]!, connection: 'disconnected' as const, toolCount: 3, readiness: { state: 'ready' as const, checkedAt: 1, reasons: [] } }
+    current.mcp.items = [item]
+    let finish!: (value: typeof item) => void
+    api.mcpProbe = vi.fn(() => new Promise<typeof item>(resolve => { finish = resolve }))
+    const { container, rerender } = render(React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Mcp, { load: { value: current.mcp, failed: false, loading: false }, available: true, query: '', t, actions: api })))
+    expect(container.textContent).not.toContain('Disconnected')
+    expect(container.textContent).toContain('Enabled · Tools: 3')
+    fireEvent.click(screen.getByRole('button', { name: 'Probe connection' }))
+    const pendingToast = await screen.findByRole('status')
+    expect(pendingToast.getAttribute('data-state')).toBe('pending')
+    expect(pendingToast.textContent).toContain(item.label)
+    // Toast is portaled above the list, never inserted inline into the toolbox container.
+    expect(container.contains(pendingToast)).toBe(false)
+    // Refreshing an already-loaded MCP list must not insert an inline loading notice.
+    rerender(React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Mcp, { load: { value: current.mcp, failed: false, loading: true }, available: true, query: '', t, actions: api })))
+    expect(container.textContent).not.toContain('Loading…')
+    rerender(React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Mcp, { load: { value: current.mcp, failed: false, loading: false }, available: true, query: '', t, actions: api })))
+    finish(item)
+    await waitFor(() => expect(screen.getByRole('status').getAttribute('data-state')).toBe('success'))
+    expect(api.refreshMcp).toHaveBeenCalledOnce()
+    expect(api.refresh).not.toHaveBeenCalled()
+    expect(screen.getByRole('status').textContent).toContain(`${item.label} connected, 3 tools found`)
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss probe notice' }))
+    expect(screen.queryByRole('status')).toBeNull()
+  })
   it('shows failed probe results as failures instead of a completion notice', async () => {
     const api = actions(), current = catalog()
-    api.mcpProbe = vi.fn(async () => ({ ...current.mcp.items[0]!, readiness: { state: 'error', reasons: [] } }))
-    render(React.createElement(Mcp, { load: { value: current.mcp, failed: false, loading: false }, available: true, query: '', t, actions: api }))
+    api.mcpProbe = vi.fn(async () => ({ ...current.mcp.items[0]!, readiness: { state: 'error', reasons: [{ code: 'probe_failed', message: 'Upstream timeout' }] } }))
+    const { container } = render(React.createElement(Mcp, { load: { value: current.mcp, failed: false, loading: false }, available: true, query: '', t, actions: api }))
     fireEvent.click(screen.getByRole('button', { name: 'Probe connection' }))
-    await screen.findByRole('alert')
+    const alert = await screen.findByRole('alert')
+    expect(container.contains(alert)).toBe(false)
+    expect(alert.getAttribute('data-state')).toBe('failure')
+    expect(alert.textContent).toContain('Upstream timeout')
     expect(screen.queryByText('Probe finished. Review the connection status.')).toBeNull()
   })
   it('disables a team detail action when the team is removed from the live catalog', () => {

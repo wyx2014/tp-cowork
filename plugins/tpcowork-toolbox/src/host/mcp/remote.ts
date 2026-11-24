@@ -7,7 +7,7 @@ import { definitionSchema, idSchema, editorEntrySchema, importRequestSchema, dra
 
 const readiness = z.object({ state: z.enum(['unknown', 'checking', 'ready', 'blocked', 'error']), checkedAt: z.number().optional(), reasons: z.array(z.object({ code: z.string(), message: z.string() }).strict()) }).strict()
 export const itemSchema = z.object({
-  id: idSchema, label: z.string(), origin: z.enum(['bundled', 'custom']), configRevision: z.number().int().positive(), installed: z.boolean(), enabled: z.boolean(), readiness,
+  id: idSchema, label: z.string(), origin: z.enum(['bundled', 'custom']), managed: z.literal(true).optional(), configRevision: z.number().int().positive(), installed: z.boolean(), enabled: z.boolean(), readiness,
   connection: z.enum(['unknown', 'disconnected', 'connecting', 'connected', 'reconnecting', 'error']), generation: z.number().int().nonnegative(), toolCount: z.number().int().nonnegative(), observedAt: z.number().optional(),
   credentials: z.array(z.object({ ref: z.string(), configured: z.boolean(), writable: z.boolean() }).strict()),
 }).strict()

@@ -11,7 +11,7 @@ export const skillCatalog = {
 } satisfies Catalog<SkillItem>
 export const mcpCatalog = {
   revision: 1, complete: true, items: [{
-    id: 'juyuan', label: '聚源', origin: 'bundled', configRevision: 2, installed: true, enabled: true,
+    id: 'juyuan', label: '聚源', origin: 'custom', configRevision: 2, installed: true, enabled: true,
     readiness: ready, connection: 'connected', generation: 1, toolCount: 3,
     credentials: [{ ref: 'JUYUAN_MCP_TOKEN', configured: true, writable: false }],
   }],

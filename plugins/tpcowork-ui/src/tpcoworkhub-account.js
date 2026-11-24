@@ -1,5 +1,5 @@
 /** Bind the native website authentication bridge to the renderer's account hook. */
-export function createTpcoworkHubAccount(bridge) {
+export function createTpcoworkHubAccount(bridge, selectChannel) {
   let snapshot = { status: 'loading', phase: 'idle' };
   let active = true;
   let generation = 0;
@@ -24,10 +24,25 @@ export function createTpcoworkHubAccount(bridge) {
   return {
     source: { getSnapshot: () => snapshot, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } },
     refreshAccount: () => run('state'),
-    async startSignIn() {
+    async startSignIn(channel = 'internal') {
       started = true;
-      try { return await run('start'); }
-      finally { started = false; }
+      try {
+        if (selectChannel) {
+          const selected = await selectChannel(channel);
+          if ((selected === undefined && channel !== 'internal') || (selected && selected.ok === false)) {
+            const value = failed();
+            generation++;
+            publish(value);
+            return value;
+          }
+        }
+        return await run('start');
+      } catch (_error) {
+        const value = failed();
+        generation++;
+        publish(value);
+        return value;
+      } finally { started = false; }
     },
     cancelSignIn: () => run('cancel'),
     signOut: () => run('signOut'),

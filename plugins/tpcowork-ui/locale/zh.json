@@ -115,12 +115,20 @@
     "shortcutStatus.write-failed": "保存失败，原快捷键已保留，请重试",
     "shortcutStatus.not-ready": "快捷键尚未准备好，请稍后重试",
     "shortcutStatus.conflict": "该组合已被占用",
-    "modelSettingsIntro": "管理自定义模型供应商，配置后可在聊天时选择使用。",
-    "modelSettingsRefresh": "刷新供应商",
+    "modelSettingsIntro": "查看网关模型，管理自定义模型供应商。",
+    "modelSettingsRefresh": "刷新模型和供应商",
     "modelSettingsAdd": "添加供应商",
     "modelSettingsProviders": "模型供应商",
     "modelSettingsSelect": "选择供应商 {name}",
     "modelSettingsEmpty": "暂无供应商，点击右上角添加。",
+    "modelSettingsGateway": "太资模型网关",
+    "modelSettingsGatewayRunning": "运行中",
+    "modelSettingsGatewayAuthorized": "网关已授权",
+    "modelSettingsGatewayLoading": "正在加载网关模型…",
+    "modelSettingsGatewayError": "无法加载网关模型，请刷新重试。",
+    "modelSettingsGatewayConnectionError": "无法读取网关连接信息，请刷新重试。",
+    "modelSettingsGatewayKeyError": "无法读取网关 API Key，请刷新后重试。",
+    "modelSettingsGatewayEmpty": "当前账号暂无可用的网关模型。",
     "appearanceTitle": "外观",
     "appearanceInterface": "界面设置",
     "appearanceInterfaceDescription": "设置应用主题和界面文字样式。",
@@ -223,6 +231,9 @@
     "guideProcess_standard_body": "结果优先，仅展示重要步骤和关键操作",
     "guideProcess_detailed": "完整过程",
     "guideProcess_detailed_body": "查看完整工作过程，方便调试和排查问题",
-    "loginAction": "开始登录"
+    "loginAction": "开始登录",
+    "loginChannelLabel": "登录身份",
+    "loginChannelInternal": "内勤",
+    "loginChannelOutsource": "外包"
   }
 }

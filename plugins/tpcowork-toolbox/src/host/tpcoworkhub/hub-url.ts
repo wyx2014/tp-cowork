@@ -1,5 +1,5 @@
 const TEST_HUB_ORIGIN = 'http://isptest.tpasset.com:54905'
-const PRODUCTION_HUB_ORIGIN = 'https://isp.tpasset.com'
+const PRODUCTION_HUB_ORIGINS = new Set(['https://isp.tpasset.com', 'https://api.isp.tpasset.com'])
 const API_PREFIX = '/tpcoworkapi'
 
 /** Whether `url` may serve as the TP Cowork Hub address (login page and API).
@@ -21,7 +21,7 @@ export function allowedHubUrl(url: URL): boolean {
 /** The test and production gateways strip one leading API prefix before routing to SkillHub. */
 export function hubApiUrl(input: string): string {
   const url = new URL(input)
-  if (url.origin !== TEST_HUB_ORIGIN && url.origin !== PRODUCTION_HUB_ORIGIN) return input
+  if (url.origin !== TEST_HUB_ORIGIN && !PRODUCTION_HUB_ORIGINS.has(url.origin)) return input
   if (!url.pathname.startsWith(`${API_PREFIX}/`)
     || url.pathname.startsWith(`${API_PREFIX}${API_PREFIX}/`)) return input
   url.pathname = API_PREFIX + url.pathname

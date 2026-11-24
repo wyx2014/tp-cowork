@@ -20,15 +20,17 @@ for (const file of await readdir(resolve(root, 'lib'))) {
   }
 }
 const hook = await artifactPeers()
-const [{ Context }, { default: Registry }, { default: Gateway }, host] = await Promise.all([
-  import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-gateway'), import(pathToFileURL(resolve(root, 'lib/host.js'))),
+const [{ Context }, { default: Registry }, { default: RemoteAccess }, { default: Gateway }, { Peer }, host] = await Promise.all([
+  import('@deepseek-ai/cordis'), import('@deepseek-ai/dsh-typert-registry'), import('@deepseek-ai/dsh-api-remote-access'),
+  import('@deepseek-ai/dsh-api-gateway'), import('@deepseek-ai/dsh-client-connection'), import(pathToFileURL(resolve(root, 'lib/host.js'))),
 ])
 const ctx = new Context()
 try {
-  await ctx.plugin(Registry); await ctx.plugin(Gateway)
+  await ctx.plugin(Registry); await ctx.plugin(RemoteAccess); await ctx.plugin(Gateway)
   const plugin = await ctx.plugin(host)
-  const result = await ctx.typertGateway.invoke({ namespace: 'toolbox', method: 'describe', args: {} })
-  assert.deepEqual(result.defaultMcpIds, ['juyuan', 'caihui_mcp', 'playwright'])
+  const peer = new Peer(ctx, { principal: { kind: 'owner' } })
+  const result = await ctx.typertGateway.invoke({ peer, namespace: 'toolbox', method: 'describe', args: {} })
+  assert.deepEqual(result.defaultMcpIds, [])
   let registration
   runInNewContext(await readFile(resolve(root, 'lib/client.js'), 'utf8'), {
     window: { __ModuleLoader__: { load(value) { registration = value } } },

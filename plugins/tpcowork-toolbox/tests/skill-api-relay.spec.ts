@@ -86,11 +86,29 @@ describe('skill API relay', () => {
     expect(api.seen.filter(request => request.url.includes('steal'))).toEqual([])
   })
 
-  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('routes built-in Hub requests through %s without changing custom API paths', (origin) => {
+  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com', 'https://api.isp.tpasset.com'])('routes built-in Hub requests through %s without changing custom API paths', (origin) => {
     const apis = new Map([['hub', origin], ['custom', origin]])
     const query = '/tpcoworkapi/convex/query?source=tool'
     expect(relayTarget('/hub' + query, apis)).toEqual({ api: 'hub', url: origin + '/tpcoworkapi' + query })
     expect(relayTarget('/custom' + query, apis)).toEqual({ api: 'custom', url: origin + query })
+  })
+
+  it('re-resolves the hub target after token lookup updates the active session endpoint', async () => {
+    const internal = await fakeApi()
+    const outsource = await fakeApi()
+    let activeHub = `${internal.base}/hub`
+    const started = await startRelay({
+      apis: () => new Map([['hub', activeHub]]),
+      token: async () => { activeHub = `${outsource.base}/hub`; return 'token-zhangsan' },
+      unauthorized: () => {},
+      timeoutMs: 5000,
+      maxBytes: 1024 * 1024,
+    })
+    closers.push(started.close)
+    const response = await fetch(`${started.url}/hub/tpcoworkapi/convex/query`, { method: 'POST', headers: { 'x-tpcowork-key': started.key }, body: '{}' })
+    expect(response.status).toBe(200)
+    expect(internal.seen).toHaveLength(0)
+    expect(outsource.seen).toHaveLength(1)
   })
 
   it('marks the login expired when the Hub rejects it, and passes other APIs\' own errors through', async () => {

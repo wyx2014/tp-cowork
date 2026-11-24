@@ -11,6 +11,16 @@ import { launchWebScaffold } from '../../../deepseek-harness/apps/web/tests/scaf
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const artifacts = join(root, 'artifacts/model-settings')
 
+function prepareSignedInPage(page) {
+  return page.addInitScript(() => {
+    localStorage.setItem('tpcowork.first-run-guide.v1', 'done')
+    window.dshDesktop = { tpcoworkHub: {
+      state: async () => ({ status: 'signed_in', phase: 'idle', user: { id: 'model-settings-fixture', username: 'fixture' } }),
+      subscribe: () => () => {},
+    } }
+  })
+}
+
 it('offers only custom API creation and preserves the saved endpoint and models after reload', async () => {
   let replyMode = 'ok';
   const requests = [];
@@ -69,8 +79,7 @@ it('offers only custom API creation and preserves the saved endpoint and models 
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
-  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
-  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
+  await prepareSignedInPage(page)
   page.setDefaultTimeout(20000)
   const errors = []
   const receivedFrames = []
@@ -288,7 +297,9 @@ it('offers only custom API creation and preserves the saved endpoint and models 
   expect(await page.locator('.tpcowork-managed-details').getByRole('button', { name: /删除|移除/ }).count()).toBe(0)
   expect(await page.locator('.tpcowork-managed-details').innerText()).toContain('managed-model')
   expect(await dialog.getByText(/其余字段在 cordis.patch.yml/).count()).toBe(0)
-  expect(await page.locator('.tpcowork-model-providers button').first().getAttribute('aria-label')).toBe('选择供应商 资产DeepSeek')
+  const providerNav = dialog.getByRole('navigation', { name: '模型供应商' })
+  expect(await providerNav.getByRole('button').first().textContent()).toBe('太资模型网关')
+  expect(await providerNav.getByRole('button', { name: '选择供应商 资产DeepSeek' }).getAttribute('aria-current')).toBe('true')
   expect(await page.locator('.tpcowork-managed-details [data-logo="deepseek"] svg').count()).toBe(1)
   await page.screenshot({ path: join(artifacts, 'managed-provider.png'), fullPage: true })
   const providerGeometry = () => page.locator('.tpcowork-managed-details').evaluate(detail => {
@@ -369,12 +380,17 @@ it('shows the managed provider from its independent tpcowork-core-model namespac
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
-  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
-  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
+  await prepareSignedInPage(page)
   page.setDefaultTimeout(60000)
   await page.goto(scaffold.authenticatedUrl)
   await page.getByRole('button', { name: '设置', exact: true }).click()
   await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '模型', exact: true }).click()
+  const gateway = page.getByRole('region', { name: '太资模型网关' })
+  await gateway.getByText('当前账号暂无可用的网关模型。').waitFor()
+  expect(await gateway.getByLabel('API 地址').inputValue()).toBe('')
+  expect(await gateway.getByLabel('API 协议').isDisabled()).toBe(true)
+  expect(await gateway.getByLabel('API 密钥', { exact: true }).getAttribute('type')).toBe('password')
+  expect(await gateway.getByRole('button', { name: '显示 API 密钥' }).isDisabled()).toBe(true)
   await page.getByRole('button', { name: '选择供应商 资产DeepSeek', exact: true }).click()
   const details = page.locator('.tpcowork-managed-details')
   await details.getByRole('textbox', { name: 'API 地址', exact: true }).waitFor()

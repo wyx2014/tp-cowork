@@ -87,7 +87,7 @@ await tar.create({ cwd: root, prefix: 'package/', file: archive, gzip: true, por
   filter: path => path !== 'runtime/browsers' && !path.split('/').some(part => ['__pycache__', '.DS_Store', '.links', '.package-lock.json'].includes(part)),
 }, ['package.json', 'README.md', 'cordis.patch.yml', 'lib', 'resources', 'runtime', 'node_modules'])
 const report = { schemaVersion: 1, package: pkg.name, version: pkg.version, platform: process.platform, arch: process.arch,
-  archive: relative(output, archive), sha256: hash(await readFile(archive)), defaultMcpIds: ['juyuan', 'caihui_mcp', 'playwright'],
+  archive: relative(output, archive), sha256: hash(await readFile(archive)), defaultMcpIds: [],
   optionalModules: { ...(JSON.parse(await readFile(resolve(root, 'lib/optional-modules.json'), 'utf8'))), expertsPackaged: process.argv.includes('--with-experts') }, skills: migrated.skills.length,
   files: files.sort((a, b) => a.path.localeCompare(b.path)) }
 await writeFile(resolve(output, 'manifest.json'), JSON.stringify(report, null, 2) + '\n')

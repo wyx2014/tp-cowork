@@ -6,31 +6,34 @@ import type { CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '../../../../tpcowork-core/src/gateway-contract.ts'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, webcrypto } from 'node:crypto'
 import type {} from '../../host.ts'
-import type { InstallSource, TpcoworkHubApi, TpcoworkHubFile, TpcoworkHubSkill } from '../../contracts/index.ts'
+import type { InstallSource, TpcoworkHubApi, TpcoworkHubFile, TpcoworkHubLoginChannel, TpcoworkHubSkill } from '../../contracts/index.ts'
 import type { SkillInstaller } from '../installer/index.ts'
 import { parseSkill, sha256, validateFiles, type SkillFile } from '../installer/files.ts'
 import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
 import { allowedHubUrl, hubApiUrl } from './hub-url.ts'
 import { decode, detail, fileContentSchema, loginResultSchema, page, remoteCount, websiteUserSchema } from './protocol.ts'
-import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
+import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginChannelSchema, loginSchema, modelKeyRevealSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
 import { apiBase, HUB_API, RelayAuthError, startRelay } from './relay.ts'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import { bundledPythonPath } from '../../runtime-paths.ts'
 import { dialCisco, type CiscoContact, type CiscoEndpoints } from '../skills/cisco-call.ts'
+import { loadGatewayMcp, type GatewayMcpConnection } from '../mcp/gateway.ts'
+import type {} from '../mcp/index.ts'
 
 export const name = 'toolbox-tpcoworkhub'
 export const inject = ['credentials', 'skills', 'profileContext', 'typert', 'toolboxInstaller']
 export interface Config {
   /** A Hub address for this profile only; empty uses the build's Hub ({@link HUB_ENDPOINT}). */
-  endpointOverride: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number
+  endpointOverride: string; outsourceEndpointOverride: string; passwordEncoding: 'legacy' | 'sha256'; requestTimeoutMs: number; pageSize: number; maxCatalogItems: number; maxResponseBytes: number; browserAuthTimeoutMs: number
   /** Internal APIs skills may call with the user's login through the relay: name → base URL. `hub` is always the Hub. */
   apis: Record<string, string>
 }
 declare const __TPCOWORK_HUB_ENDPOINT__: string | undefined
+declare const __TPCOWORK_HUB_OUTSOURCE_ENDPOINT__: string | undefined
 /** The local Hub that unbuilt source and tests use; `hub-environments.json` `local` lists the same address. */
 export const LOCAL_HUB_ENDPOINT = 'http://localhost:8080'
 /**
@@ -38,9 +41,12 @@ export const LOCAL_HUB_ENDPOINT = 'http://localhost:8080'
  * Profiles keep no Hub address of their own, so installing a production build over a test one switches Hubs.
  */
 export const HUB_ENDPOINT: string = typeof __TPCOWORK_HUB_ENDPOINT__ === 'string' ? __TPCOWORK_HUB_ENDPOINT__ : LOCAL_HUB_ENDPOINT
+export const HUB_OUTSOURCE_ENDPOINT: string = typeof __TPCOWORK_HUB_OUTSOURCE_ENDPOINT__ === 'string' ? __TPCOWORK_HUB_OUTSOURCE_ENDPOINT__ : HUB_ENDPOINT
 export const Config = z.object({
   // Profiles from builds before 2026-11-11 carry `endpoint` written by the release patch; it is ignored, not migrated.
-  endpointOverride: z.string().default('').description('Hub address for this profile only; leave empty to use the Hub this build was made for.'), passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
+  endpointOverride: z.string().default('').description('Hub address for this profile only; leave empty to use the Hub this build was made for.'),
+  outsourceEndpointOverride: z.string().default('').description('Outsource Hub address for this profile only; leave empty to use the build default.'),
+  passwordEncoding: z.union(['legacy', 'sha256']).default('legacy'),
   requestTimeoutMs: z.number().min(1).default(30000), pageSize: z.number().min(1).max(100).default(30),
   maxCatalogItems: z.number().min(1).default(10000), maxResponseBytes: z.number().min(1).default(96 * 1024 * 1024),
   browserAuthTimeoutMs: z.number().min(1000).max(900000).default(300000),
@@ -79,10 +85,14 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   /** Tokens the Hub accepted recently (hash → check time), and checks in flight, so account reads stay cheap. */
   private readonly verified = new Map<string, number>()
   private readonly verifying = new Map<string, Promise<void>>()
+  private loginChannel: TpcoworkHubLoginChannel = 'internal'
+  private activeSessionEndpoint: string | undefined
+  private gatewayMcp: GatewayMcpConnection | undefined
   constructor(ctx: Context, readonly config: Config, readonly installer: SkillInstaller) {
     super(ctx, 'toolboxTpcoworkHub')
     ctx.on('credentials/record-updated', key => {
       if (key !== sessionKey) return
+      this.setGatewayMcp(undefined)
       this.authLifetime.abort(); this.authLifetime = new AbortController(); this.pages.clear(); this.changed()
     })
     ctx.effect(() => installer.registerSource('tpcoworkhub', async (source, signal) => {
@@ -100,7 +110,8 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const timer = setInterval(check, 60_000)
       return () => { clearInterval(timer) }
     })
-    // The Hub session stays owned by this module; only the Host model service receives the personal gateway key.
+    ctx.inject(['toolboxMcpRuntime'], scope => { scope.toolboxMcpRuntime.setGatewayMcp?.(this.gatewayMcp) })
+    // The Hub session stays owned by this module; the personal gateway key is used only in Host services.
     ctx.inject(['tpcoworkGateway'], scope => {
       let revision = 0
       let request: AbortController | undefined
@@ -110,19 +121,37 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         request = new AbortController()
         scope.tpcoworkGateway.clear('loading')
         void this.run(AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]), async active => {
-          const endpoint = this.endpoint()
+          const allowed = this.allowedEndpoints()
           const record = await this.stored()
           active.throwIfAborted()
           if (current !== revision) return
-          if (record?.endpoint !== endpoint || !record.token || record.expired || !record.user) { scope.tpcoworkGateway.clear(); return }
-          const config = await this.request('/tpcoworkapi/client-config', { method: 'GET' }, active, await this.token(), false)
+          if (!record || !allowed.has(record.endpoint) || !record.token || record.expired || !record.user) {
+            scope.tpcoworkGateway.clear()
+            this.setGatewayMcp(undefined)
+            return
+          }
+          const config = await this.request('/tpcoworkapi/client-config', { method: 'GET' }, active, await this.token(), false, record.endpoint)
           active.throwIfAborted()
           if (current !== revision) return
           if (!config || typeof config !== 'object' || (config as { userId?: unknown }).userId !== record.user.id) throw new TpcoworkHubError('protocol')
           await scope.tpcoworkGateway.configure(config, record.expiresAt)
+          const connection = scope.tpcoworkGateway.modelConnection()
+          const key = connection && scope.tpcoworkGateway.readModelKey(connection.grantId)
+          try {
+            const mcp = connection && key && record.expiresAt !== undefined
+              ? await loadGatewayMcp(connection.baseURL, key, record.expiresAt, active) : undefined
+            active.throwIfAborted()
+            if (current === revision) this.setGatewayMcp(mcp)
+          } catch {
+            if (current === revision && !active.aborted) {
+              this.setGatewayMcp(undefined)
+              scope.logger.warn('Personal gateway MCP catalog is unavailable.')
+            }
+          }
         }).catch(() => {
           if (current === revision) {
             scope.tpcoworkGateway.clear('unavailable')
+            this.setGatewayMcp(undefined)
             scope.logger.warn('Personal model configuration is unavailable; sign in or check the Hub configuration.')
           }
         })
@@ -131,7 +160,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       scope.effect(() => {
         refresh()
         const timer = setInterval(refresh, 5 * 60_000)
-        return () => { revision++; request?.abort(); clearInterval(timer); scope.tpcoworkGateway.clear() }
+        return () => { revision++; request?.abort(); clearInterval(timer); this.setGatewayMcp(undefined); scope.tpcoworkGateway.clear() }
       })
     })
     // Skills call internal APIs as the signed-in user through a loopback relay; see relay.ts and docs/toolbox/skill-api-auth.md.
@@ -169,6 +198,10 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       }, 'toolbox-tpcoworkhub: skill API relay')
     })
   }
+  private setGatewayMcp(connection: GatewayMcpConnection | undefined): void {
+    this.gatewayMcp = connection
+    this.ctx.get('toolboxMcpRuntime')?.setGatewayMcp?.(connection)
+  }
   /** The relay allowlist: configured internal APIs, and the Hub itself as `hub` when it is configured. */
   private relayApis(): Map<string, string> {
     const apis = new Map<string, string>()
@@ -179,13 +212,24 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     return apis
   }
   private changed(): void { this.ctx.emit('toolbox/changed', { domain: 'tpcoworkhub', revision: ++this.revision }) }
-  private endpoint(): string {
+  private parseEndpoint(raw: string): string {
     try {
-      const url = new URL(this.config.endpointOverride || HUB_ENDPOINT)
+      const url = new URL(raw)
       if (url.search || url.hash || !allowedHubUrl(url)) throw new Error()
       return url.href.replace(/\/+$/, '')
     } catch { throw new TpcoworkHubError('not-configured') }
   }
+  private endpointFor(channel: TpcoworkHubLoginChannel): string {
+    if (channel === 'outsource') {
+      return this.parseEndpoint(this.config.outsourceEndpointOverride || this.config.endpointOverride || HUB_OUTSOURCE_ENDPOINT)
+    }
+    return this.parseEndpoint(this.config.endpointOverride || HUB_ENDPOINT)
+  }
+  private allowedEndpoints(): Set<string> {
+    return new Set([this.endpointFor('internal'), this.endpointFor('outsource')])
+  }
+  private loginEndpoint(): string { return this.endpointFor(this.loginChannel) }
+  private endpoint(): string { return this.activeSessionEndpoint ?? this.endpointFor(this.loginChannel) }
   private run<T>(signal: AbortSignal | undefined, work: (active: AbortSignal) => Promise<T>, authenticated = true): Promise<T> {
     const active = AbortSignal.any([this.lifetime.signal, ...(authenticated ? [this.authLifetime.signal] : []), ...(signal ? [signal] : [])])
     const pending = (async () => {
@@ -202,22 +246,29 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   }
   private async stored(): Promise<Session | undefined> {
     try {
+      const allowed = this.allowedEndpoints()
       const record = session(await this.ctx.credentials.readRecord(sessionKey))
       this.lifetime.signal.throwIfAborted()
-      if (record && record.endpoint !== this.endpoint()) return record
-      if (record?.token && this.rejected.has(sha256(record.endpoint + '\0' + record.token))) return { endpoint: record.endpoint, expired: true }
-      if (!record?.token || record.expired || record.expiresAt !== undefined && Date.now() < record.expiresAt) return record
+      if (!record || !allowed.has(record.endpoint)) {
+        this.activeSessionEndpoint = undefined
+        return record
+      }
+      this.activeSessionEndpoint = record.endpoint
+      if (record.token && this.rejected.has(sha256(record.endpoint + '\0' + record.token))) return { endpoint: record.endpoint, expired: true }
+      if (!record.token || record.expired || record.expiresAt !== undefined && Date.now() < record.expiresAt) return record
       // Legacy grants have no deadline: require one fresh sign-in instead of extending their lifetime on restart.
-      await this.expire(record.token, record)
+      await this.expire(record.token, record, record.endpoint)
       return { endpoint: record.endpoint, expired: true }
     }
     catch { throw new TpcoworkHubError('credentials-unavailable') }
   }
   private async token(): Promise<string> {
-    const endpoint = this.endpoint()
+    const allowed = this.allowedEndpoints()
     const record = await this.stored()
-    if (record?.endpoint !== endpoint || !record.token) throw new TpcoworkHubError(record?.endpoint === endpoint && record.expired ? 'session-expired' : 'login-required')
-    if (this.rejected.has(sha256(endpoint + '\0' + record.token))) throw new TpcoworkHubError('session-expired')
+    if (!record || !allowed.has(record.endpoint) || !record.token) {
+      throw new TpcoworkHubError(record && allowed.has(record.endpoint) && record.expired ? 'session-expired' : 'login-required')
+    }
+    if (this.rejected.has(sha256(record.endpoint + '\0' + record.token))) throw new TpcoworkHubError('session-expired')
     return record.token
   }
   /** Host-only action. The stored account grant never leaves the request path. */
@@ -236,10 +287,10 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     let pending = this.verifying.get(key)
     if (pending === undefined) {
       pending = this.run(AbortSignal.timeout(VERIFY_TIMEOUT_MS), async active => {
-        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
+        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false, endpoint)
         // The Hub's convex/query is public, so an expired token reads as anonymous: users:me answers null with HTTP 200.
         // Some deployments instead answer HTTP 200 with a 401 envelope.
-        if (raw === null || (raw && typeof raw === 'object' && (raw as { code?: unknown }).code === 401)) { await this.expire(token); return }
+        if (raw === null || (raw && typeof raw === 'object' && (raw as { code?: unknown }).code === 401)) { await this.expire(token, undefined, endpoint); return }
         this.verified.set(key, Date.now())
       }).catch(() => undefined).finally(() => { this.verifying.delete(key) })
       this.verifying.set(key, pending)
@@ -247,29 +298,62 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     return pending
   }
   async account(): ReturnType<TpcoworkHubApi['account']> {
-    let endpoint: string
-    try { endpoint = this.endpoint() } catch { return { configured: false, writable: false, state: 'unconfigured' } }
+    let allowed: Set<string>
+    try { allowed = this.allowedEndpoints() } catch { return { configured: false, writable: false, state: 'unconfigured' } }
     try {
       const restored = await this.stored()
-      if (restored?.endpoint === endpoint && restored.token && !restored.expired
-        && !this.rejected.has(sha256(endpoint + '\0' + restored.token))) await this.verify(endpoint, restored.token)
+      if (restored && allowed.has(restored.endpoint) && restored.token && !restored.expired
+        && !this.rejected.has(sha256(restored.endpoint + '\0' + restored.token))) await this.verify(restored.endpoint, restored.token)
       const record = await this.stored()
       const { writable } = await this.ctx.credentials.describeRecord(sessionKey)
-      const expired = record?.endpoint === endpoint && (record.expired || (record.token && this.rejected.has(sha256(endpoint + '\0' + record.token))))
-      const configured = record?.endpoint === endpoint && !!record.token && !expired
+      const matched = record !== undefined && allowed.has(record.endpoint)
+      const expired = matched && (record.expired || (record.token && this.rejected.has(sha256(record.endpoint + '\0' + record.token))))
+      const configured = matched && !!record.token && !expired
       return { configured, writable, state: configured ? 'signed_in' : expired ? 'expired' : 'signed_out', ...(configured && record?.user ? { user: record.user } : {}) }
     } catch { throw new TpcoworkHubError('credentials-unavailable') }
   }
+  async selectLoginChannel(request: Parameters<TpcoworkHubApi['selectLoginChannel']>[0]): ReturnType<TpcoworkHubApi['selectLoginChannel']> {
+    const invocation = this.ctx.invocation
+    if (invocation && invocation.peer.principal.kind !== 'owner') throw new TpcoworkHubError('invalid-request')
+    const { channel } = parse(loginChannelSchema, request)
+    this.endpointFor(channel)
+    this.loginChannel = channel
+    return { channel }
+  }
+  async modelConnection(): ReturnType<TpcoworkHubApi['modelConnection']> {
+    return this.ctx.get('tpcoworkGateway')?.modelConnection() ?? null
+  }
+  async revealModelKey(request: Parameters<TpcoworkHubApi['revealModelKey']>[0]): ReturnType<TpcoworkHubApi['revealModelKey']> {
+    const invocation = this.ctx.invocation
+    if (invocation?.peer.principal.kind !== 'owner') throw new TpcoworkHubError('model-key-access-denied')
+    const { grantId, publicKey } = parse(modelKeyRevealSchema, request)
+    let peer: webcrypto.CryptoKey
+    try {
+      peer = await webcrypto.subtle.importKey('spki', Buffer.from(publicKey, 'base64'), { name: 'ECDH', namedCurve: 'P-256' }, false, [])
+    } catch { throw new TpcoworkHubError('invalid-request') }
+    const pair = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey'])
+    const key = await webcrypto.subtle.deriveKey({ name: 'ECDH', public: peer }, pair.privateKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt'])
+    const sender = await webcrypto.subtle.exportKey('spki', pair.publicKey)
+    const gateway = this.ctx.get('tpcoworkGateway')
+    const value = gateway?.readModelKey(grantId)
+    if (value === undefined) throw new TpcoworkHubError('session-expired')
+    invocation.signal.throwIfAborted()
+    const iv = webcrypto.getRandomValues(new Uint8Array(12))
+    const ciphertext = await webcrypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: Buffer.from(grantId) }, key, Buffer.from(value))
+    invocation.signal.throwIfAborted()
+    if (this.ctx.get('tpcoworkGateway')?.readModelKey(grantId) !== value) throw new TpcoworkHubError('session-expired')
+    return { publicKey: Buffer.from(sender).toString('base64'), iv: Buffer.from(iv).toString('base64'), ciphertext: Buffer.from(ciphertext).toString('base64') }
+  }
   async browserAuth(): ReturnType<TpcoworkHubApi['browserAuth']> {
-    return { loginUrl: this.endpoint() + '/tp-cowork/desktop/authorize', timeoutMs: this.config.browserAuthTimeoutMs }
+    return { loginUrl: this.loginEndpoint() + '/tp-cowork/desktop/authorize', timeoutMs: this.config.browserAuthTimeoutMs }
   }
   acceptBrowserSession(request: Parameters<TpcoworkHubApi['acceptBrowserSession']>[0], signal?: AbortSignal): ReturnType<TpcoworkHubApi['acceptBrowserSession']> {
     return this.run(signal, active => {
       const work = this.authTail.then(async () => {
         const { token } = parse(browserSessionSchema, request)
-        const endpoint = this.endpoint()
+        const endpoint = this.loginEndpoint()
         if (!(await this.ctx.credentials.describeRecord(sessionKey)).writable) throw new TpcoworkHubError('credentials-unavailable')
-        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false)
+        const raw = await this.request('/tpcoworkapi/convex/query', { method: 'POST', body: JSON.stringify({ path: 'users:me', args: {} }) }, active, token, false, endpoint)
         const user = decode(websiteUserSchema, raw)
         active.throwIfAborted()
         try {
@@ -280,6 +364,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
           })
         }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
+        this.activeSessionEndpoint = endpoint
         this.verified.set(sha256(endpoint + '\0' + token), Date.now())
         return { configured: true }
       })
@@ -291,7 +376,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     return this.run(signal, active => {
       const work = this.authTail.then(async () => {
         const input = parse(loginSchema, request)
-        const endpoint = this.endpoint()
+        const endpoint = this.loginEndpoint()
         let password: string
         try {
           if (!(await this.ctx.credentials.describeRecord(sessionKey)).writable) throw new Error()
@@ -299,7 +384,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
           if (!resolved) throw new Error()
           password = resolved.value
         } catch { throw new TpcoworkHubError('credentials-unavailable') }
-        const raw = await this.request('/tpcoworkapi/users/login', { method: 'POST', body: JSON.stringify({ username: input.username.trim(), passwordHash: this.config.passwordEncoding === 'sha256' ? sha256(password) : password }) }, active)
+        const raw = await this.request('/tpcoworkapi/users/login', { method: 'POST', body: JSON.stringify({ username: input.username.trim(), passwordHash: this.config.passwordEncoding === 'sha256' ? sha256(password) : password }) }, active, undefined, true, endpoint)
         const result = decode(loginResultSchema, raw)
         active.throwIfAborted()
         try {
@@ -309,6 +394,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
           })
         }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
+        this.activeSessionEndpoint = endpoint
         this.verified.set(sha256(endpoint + '\0' + result.token), Date.now())
         return { configured: true }
       })
@@ -324,6 +410,8 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         active.throwIfAborted()
         try { await this.ctx.credentials.deleteRecord(sessionKey) }
         catch { throw new TpcoworkHubError('credentials-unavailable') }
+        this.activeSessionEndpoint = undefined
+        this.loginChannel = 'internal'
         this.pages.clear(); this.changed()
       })
       this.authTail = work.catch(() => undefined)
@@ -448,18 +536,18 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     this.publications.set(input.requestId, { key, promise })
     return promise
   }
-  private async request(path: string, init: RequestInit, signal: AbortSignal, token?: string, enveloped = true): Promise<unknown> {
+  private async request(path: string, init: RequestInit, signal: AbortSignal, token?: string, enveloped = true, base = this.endpoint()): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.config.requestTimeoutMs)
     const active = AbortSignal.any([signal, timeout])
     const publishing = path === '/tpcoworkapi/skills/publish'
     try {
-      const response = await fetch(hubApiUrl(this.endpoint() + path), { ...init, redirect: 'error', signal: active,
+      const response = await fetch(hubApiUrl(base + path), { ...init, redirect: 'error', signal: active,
         headers: { ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
       if (response.status === 401) {
         await response.body?.cancel()
         if (!token) throw new TpcoworkHubError('login-failed')
-        await this.expire(token)
+        await this.expire(token, undefined, base)
         throw new TpcoworkHubError('session-expired')
       }
       if (!response.ok) { await response.body?.cancel(); throw new TpcoworkHubError(publishing ? (response.status >= 500 ? 'publish-uncertain' : 'publish-rejected') : 'network') }
@@ -483,7 +571,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const envelope = payload as { code: unknown; data?: unknown }
       if (envelope.code === 401) {
         if (!token) throw new TpcoworkHubError('login-failed')
-        await this.expire(token); throw new TpcoworkHubError('session-expired')
+        await this.expire(token, undefined, base); throw new TpcoworkHubError('session-expired')
       }
       if (envelope.code !== 200) throw new TpcoworkHubError(publishing ? 'publish-rejected' : token ? 'remote-rejected' : 'login-failed')
       return envelope.data
@@ -494,8 +582,8 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       throw new TpcoworkHubError('network')
     }
   }
-  private async expire(token: string, expected?: Session): Promise<void> {
-    const endpoint = this.endpoint()
+  private async expire(token: string, expected?: Session, targetEndpoint?: string): Promise<void> {
+    const endpoint = targetEndpoint ?? expected?.endpoint ?? this.endpoint()
     const revision = this.revision
     if (!expected) {
       this.rejected.add(sha256(endpoint + '\0' + token))
@@ -508,6 +596,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         this.rejected.add(sha256(endpoint + '\0' + token))
         this.verified.delete(sha256(endpoint + '\0' + token))
         this.ctx.get('tpcoworkGateway')?.clear('expired')
+        this.setGatewayMcp(undefined)
         return { kind: 'grant', payload: { endpoint, expired: true } }
       })
     } catch {
@@ -516,6 +605,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         this.rejected.add(sha256(endpoint + '\0' + token))
         this.verified.delete(sha256(endpoint + '\0' + token))
         this.ctx.get('tpcoworkGateway')?.clear('expired')
+        this.setGatewayMcp(undefined)
       }
     }
     this.changed()

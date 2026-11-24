@@ -18,6 +18,7 @@ import * as toolbox from '../src/host.ts'
 import { skillId } from '../src/host/installer/index.ts'
 import { requireInstaller } from '../src/host/skills/index.ts'
 import { markerName } from '../src/host/installer/files.ts'
+import { defaultMcpDefinitions } from '../src/host/mcp/defaults.ts'
 
 async function fixture(initial: object = {}) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'toolbox-bootstrap-')))
@@ -61,24 +62,17 @@ async function fixture(initial: object = {}) {
     return ctx
   }
   onTestFinished(async () => { for (const ctx of contexts) await ctx.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
-  const deployment = async (value: object) => {
-    const current = readProfilePatches('test', profile).findLast(patch => 'id' in patch && patch.id === 'tpcowork-toolbox')
-    const patch = JSON.parse(JSON.stringify(current))
-    patch.config.deployment = value
-    await writeFile(profile.patchPath, JSON.stringify([patch]))
-  }
-  return { home, dir, skill, start, deployment }
+  return { home, dir, skill, start }
 }
 
-it('initializes a fresh profile once and preserves disable/remove/override choices through restart and release upgrade', async () => {
-  const { dir, start, skill, deployment } = await fixture()
+it('starts with an empty MCP list and preserves skill choices through restart and release upgrade', async () => {
+  const { dir, start, skill } = await fixture()
   const ctx = await start()
   expect((await ctx.toolbox.describe()).modules).toEqual({ skills: true, installer: true, mcp: true, teams: false, tpcoworkhub: true })
   expect(await ctx.toolboxTpcoworkHub.account()).toMatchObject({ configured: false, state: 'signed_out' })
   expect(await ctx.toolboxTpcoworkHub.browserAuth()).toMatchObject({ loginUrl: 'http://localhost:8080/tp-cowork/desktop/authorize' })
   const mcp = await ctx.toolboxMcp.inventory()
-  expect(mcp.items.map(item => item.id)).toEqual(['juyuan', 'caihui_mcp', 'playwright'])
-  expect(mcp.items.find(item => item.id === 'juyuan')?.readiness.reasons).toContainEqual(expect.objectContaining({ code: 'needs_configuration' }))
+  expect(mcp.items).toEqual([])
   expect(ctx.tools.schemas().some(item => item.name.startsWith('mcp__'))).toBe(false)
   const firstPatch = await readFile(join(dir, 'cordis.patch.yml'), 'utf8')
   await ctx.fiber.dispose()
@@ -87,28 +81,20 @@ it('initializes a fresh profile once and preserves disable/remove/override choic
   await again.toolboxSkills.setEnabled({ id: skillId(join(dir, 'skills/sample')), enabled: false, expectedRevision: (await again.toolboxSkills.inventory({})).revision })
   await again.toolboxSkills.remove({ id: skillId(join(dir, 'skills/removed')), expectedRevision: (await again.toolboxSkills.inventory({})).revision })
   await writeFile(join(dir, 'skills/override/SKILL.md'), '---\nname: override\ndescription: Mine\n---\nUser override\n')
-  await again.toolboxMcp.setEnabled({ id: 'caihui_mcp', enabled: false, expectedRevision: (await again.toolboxMcp.inventory()).revision })
-  await again.toolboxMcp.remove({ id: 'juyuan', expectedRevision: (await again.toolboxMcp.inventory()).revision })
-  const original = await again.toolboxMcp.definition({ id: 'playwright' })
-  await again.toolboxMcp.update({ expectedRevision: (await again.toolboxMcp.inventory()).revision, definition: { ...original, transport: 'stdio', command: 'my-local-browser', args: [] } })
   await again.fiber.dispose()
   await skill('sample', 'v2'); await skill('override', 'v2'); await skill('new-default', 'v2')
-  await deployment({ caihuiEndpoint: 'https://example.invalid/new-default', playwrightCommand: 'new-default-browser', playwrightArgs: [] })
   const upgrade = await start()
   expect(await readFile(join(dir, 'skills/sample/SKILL.md'), 'utf8')).toContain('v2')
   expect((await upgrade.toolboxSkills.inventory({})).items.find(item => item.name === 'sample')?.enabled).toBe(false)
   await expect(readFile(join(dir, 'skills/removed/SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await readFile(join(dir, 'skills/override/SKILL.md'), 'utf8')).toContain('User override')
   expect(await readFile(join(dir, 'skills/new-default/SKILL.md'), 'utf8')).toContain('v2')
-  const items = (await upgrade.toolboxMcp.inventory()).items
-  expect(items.some(item => item.id === 'juyuan')).toBe(false)
-  expect(items.find(item => item.id === 'caihui_mcp')?.enabled).toBe(false)
-  expect(await upgrade.toolboxMcp.definition({ id: 'caihui_mcp' })).toMatchObject({ endpoint: 'https://example.invalid/new-default' })
-  expect(await upgrade.toolboxMcp.definition({ id: 'playwright' })).toMatchObject({ command: 'my-local-browser' })
+  expect((await upgrade.toolboxMcp.inventory()).items).toEqual([])
 }, 30000)
 
 it('adopts old profiles conservatively, retires only product-owned legacy MCPs and never clears custom names', async () => {
   const { start, dir } = await fixture({ mcp: { servers: [
+    ...defaultMcpDefinitions().filter(definition => definition.id !== 'juyuan').map(definition => ({ revision: 1, definition })),
     { revision: 2, definition: { id: 'anysearch', label: 'User custom', origin: 'custom', enabled: false, transport: 'stdio', command: 'user-command', args: [], credentials: [] } },
     { revision: 3, definition: { id: 'hexin-ifind-ds-stock-mcp', label: 'Old product default', origin: 'bundled', enabled: true, transport: 'stdio', command: 'old-command', args: [], credentials: [] } },
     { revision: 4, definition: { id: 'juyuan', label: 'My endpoint', origin: 'custom', enabled: true, transport: 'streamable-http', endpoint: 'https://example.invalid/mcp', credentials: [] } },
@@ -117,8 +103,9 @@ it('adopts old profiles conservatively, retires only product-owned legacy MCPs a
   await writeFile(join(dir, 'skills/sample/SKILL.md'), '---\nname: sample\ndescription: Custom\n---\nKeep me\n')
   const ctx = await start()
   expect(await readFile(join(dir, 'skills/sample/SKILL.md'), 'utf8')).toContain('Keep me')
-  expect((await ctx.toolboxMcp.inventory()).items.map(item => item.id)).toEqual(['anysearch', 'juyuan', 'caihui_mcp', 'playwright'])
+  expect((await ctx.toolboxMcp.inventory()).items.map(item => item.id)).toEqual(['anysearch', 'juyuan'])
   expect(await ctx.toolboxMcp.definition({ id: 'juyuan' })).toMatchObject({ origin: 'custom', endpoint: 'https://example.invalid/mcp' })
+  expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).not.toMatch(/caihui_mcp|playwright|hexin-ifind/)
 })
 
 it('leaves out-of-band file removals absent on later releases', async () => {
@@ -174,7 +161,7 @@ it('keeps MCP and the store available when one bundled skill is invalid, then re
   await writeFile(join(home, 'release/override/SKILL.md'), '---\nname: [\n---\nBroken release\n')
   const ctx = await start()
   expect((await ctx.toolbox.describe()).modules).toMatchObject({ skills: true, mcp: true, tpcoworkhub: true })
-  expect((await ctx.toolboxMcp.inventory()).items.map(item => item.id)).toContain('caihui_mcp')
+  expect((await ctx.toolboxMcp.inventory()).items).toEqual([])
   expect((await ctx.skills.get('sample'))?.content).toContain('v1')
   expect((await ctx.toolbox.describe()).initialization).toMatchObject({ state: 'failed', issues: [{ kind: 'skill', resourceId: 'override', code: 'skills/invalid-frontmatter' }] })
   expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).not.toMatch(/override: [a-f0-9]{64}/)
@@ -195,7 +182,7 @@ it('keeps management available with a missing release directory and initializes 
   await rm(join(home, 'release'), { recursive: true })
   const ctx = await start()
   expect((await ctx.toolbox.describe()).initialization).toEqual({ state: 'failed', issues: [{ kind: 'resources', resourceId: 'bundled-skills', code: 'filesystem/ENOENT' }] })
-  expect((await ctx.toolboxMcp.inventory()).items).toHaveLength(3)
+  expect((await ctx.toolboxMcp.inventory()).items).toEqual([])
   expect((await ctx.toolboxTpcoworkHub.account()).state).toBe('signed_out')
   await skill('sample', 'restored')
   const results = await Promise.all([ctx.toolbox.retryInitialization(), ctx.toolbox.retryInitialization()])

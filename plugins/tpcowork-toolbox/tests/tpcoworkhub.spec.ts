@@ -1,4 +1,5 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { webcrypto } from 'node:crypto'
 import { mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isUserInvocable } from '@deepseek-ai/dsh-skill'
@@ -7,9 +8,13 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { hubFixture, deferred, password, sampleFiles, secret } from './tpcoworkhub-fixture.ts'
 import { fingerprint, sha256 } from '../src/host/installer/files.ts'
 import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
+import type { TpcoworkHubApi } from '../src/contracts/tpcoworkhub.ts'
 import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 import LlmRuntime from '../../../../deepseek-harness/packages/llm/llm/src/index.ts'
 import * as HubModel from '../../tpcowork-core/src/hub-model.ts'
+import * as Mcp from '../src/host/mcp/index.ts'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { assemble } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/assemble.ts'
 import { textEvents } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/mock-server.ts'
 
@@ -17,7 +22,8 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it.each([
     ['local', 'http://localhost:8080'],
     ['test', 'http://isptest.tpasset.com:54905'],
-    ['production', 'https://isp.tpasset.com'],
+    ['production-internal', 'https://isp.tpasset.com'],
+    ['production-outsource', 'https://api.isp.tpasset.com'],
   ])('uses the prefixed website authorization page for %s', async (_environment, endpoint) => {
     const { service, requests } = await hubFixture({ endpointOverride: endpoint })
     expect(await service.browserAuth()).toEqual({
@@ -26,7 +32,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(requests).toHaveLength(0)
   })
 
-  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('finishes browser sign-in and loads the model config and skills through %s', async (origin) => {
+  it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com', 'https://api.isp.tpasset.com'])('finishes browser sign-in and loads the model config and skills through %s', async (origin) => {
     const { ctx, state, endpoint, service } = await hubFixture({ endpointOverride: origin })
     const fetch = globalThis.fetch
     const paths: string[] = []
@@ -58,6 +64,9 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it('loads the personal gateway after login, streams directly with its key and removes it on logout', async () => {
     const { ctx, login, state, endpoint, service, requests } = await hubFixture()
     const key = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const upstreamToken = 'fixture-juyuan-upstream-token'
+    const mcpPath = '/modelgw/api/mcp/my-servers/juyuan_api/direct-config'
+    let authorized = true
     state.override = (request, response) => {
       if (request.url === '/tpcoworkapi/client-config') {
         response.setHeader('Content-Type', 'application/json')
@@ -69,22 +78,82 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
         response.end(textEvents.map(event => `data: ${event}\n\n`).join(''))
         return true
       }
+      if (request.url === mcpPath) {
+        if (!authorized) { response.statusCode = 403; response.end(); return true }
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ success: true, data: {
+          name: 'juyuan_api', display_name: '聚源数据 API', endpoint: 'https://api.gildata.com/mcp-servers/aidata-assistant-srv-api',
+          token: upstreamToken, protocol_type: 'streamableHttp',
+        } }))
+        return true
+      }
+      if (request.url === '/modelgw/api/mcp/my-servers/juyuan/direct-config') {
+        response.statusCode = 404
+        response.end()
+        return true
+      }
       return false
     }
     await ctx.plugin(LlmRuntime).await()
     await ctx.plugin(HubModel).await()
+    await ctx.plugin(SystemPrompt).await()
+    await ctx.plugin(ToolRuntime).await()
+    await ctx.plugin(Mcp).await()
+    const readConnection = () => ctx.typertGateway.invoke({ peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'modelConnection', args: {} })
     expect(ctx.llm.listProviders()).toEqual([])
+    expect(await readConnection()).toBeNull()
+    expect((await ctx.toolboxMcp.inventory()).items).toEqual([])
     await login()
     await vi.waitFor(async () => expect((await ctx.llm.listModels(HubModel.providerId)).map(model => model.id)).toEqual(['qwen-chat']))
     expect((await assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).message.content)
       .toEqual([{ type: 'text', text: 'hello' }])
     expect(requests.find(row => row.path === '/tpcoworkapi/client-config')?.authorization).toBe(`Bearer ${secret}`)
     expect(requests.find(row => row.path === '/modelgw/v1/chat/completions')?.authorization).toBe(`Bearer ${key}`)
+    await vi.waitFor(async () => expect((await ctx.toolboxMcp.inventory()).items).toMatchObject([
+      { id: 'juyuan', label: '聚源数据 API', managed: true, credentials: [] },
+    ]))
+    expect(requests.find(row => row.path === mcpPath)?.authorization).toBe(`Bearer ${key}`)
+    const definition = await ctx.toolboxMcp.definition({ id: 'juyuan' })
+    expect(definition).toMatchObject({ endpoint: 'https://api.gildata.com/mcp-servers/aidata-assistant-srv-api', credentials: [] })
+    expect(JSON.stringify(definition)).not.toContain(upstreamToken)
     // The shared account state and durable Hub session contain no model key.
+    const connection = await readConnection() as NonNullable<Awaited<ReturnType<TpcoworkHubApi['modelConnection']>>>
+    expect(connection).toEqual({ baseURL: endpoint + '/modelgw/v1', api: 'openai-completions', grantId: expect.any(String) })
+    const pair = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveKey'])
+    const publicKey = Buffer.from(await webcrypto.subtle.exportKey('spki', pair.publicKey)).toString('base64')
+    const revealRequest = { grantId: connection.grantId, publicKey }
+    const reveal = () => ctx.typertGateway.invoke({ peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'revealModelKey', args: { request: revealRequest } })
+    await expect(service.revealModelKey(revealRequest)).rejects.toMatchObject({ code: 'tpcoworkhub/model-key-access-denied' })
+    const envelope = await reveal() as Awaited<ReturnType<TpcoworkHubApi['revealModelKey']>>
+    expect(JSON.stringify(envelope)).not.toContain(key)
+    const peer = await webcrypto.subtle.importKey('spki', Buffer.from(envelope.publicKey, 'base64'), { name: 'ECDH', namedCurve: 'P-256' }, false, [])
+    const decryptionKey = await webcrypto.subtle.deriveKey({ name: 'ECDH', public: peer }, pair.privateKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt'])
+    const plaintext = await webcrypto.subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: Buffer.from(connection.grantId) },
+      decryptionKey, Buffer.from(envelope.ciphertext, 'base64'))
+    expect(Buffer.from(plaintext).toString()).toBe(key)
     expect(JSON.stringify(await service.account())).not.toContain(key)
     expect(JSON.stringify(await ctx.credentials.readRecord(sessionKey))).not.toContain(key)
     await service.logout()
+    expect((await ctx.toolboxMcp.inventory()).items).toEqual([])
     expect(ctx.llm.listProviders()).toEqual([])
+    expect(await readConnection()).toBeNull()
+    await expect(reveal()).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+    authorized = false
+    await login()
+    await vi.waitFor(async () => expect(await readConnection()).not.toBeNull())
+    await vi.waitFor(() => expect(requests.filter(row => row.path === mcpPath)).toHaveLength(2))
+    expect((await ctx.toolboxMcp.inventory()).items).toEqual([])
+    await expect(reveal()).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+    await service.logout()
+    authorized = true
+    await login()
+    await vi.waitFor(async () => expect((await ctx.toolboxMcp.inventory()).items).toMatchObject([
+      { id: 'juyuan', label: '聚源数据 API', managed: true },
+    ]))
+    const restored = await readConnection() as typeof connection
+    expect(restored).toMatchObject({ baseURL: endpoint + '/modelgw/v1', api: 'openai-completions' })
+    expect(restored.grantId).not.toBe(connection.grantId)
+    expect(ctx.tpcoworkGateway.readModelKey(restored.grantId)).toBe(key)
   })
 
   it('discards delayed config after logout and rejects another users config', async () => {
@@ -114,6 +183,41 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await vi.waitFor(() => expect(ctx.tpcoworkGateway.status).toBe('unavailable'))
     expect(configured).not.toHaveBeenCalled()
     expect(ctx.llm.listProviders()).toEqual([])
+  })
+
+  it('discards an authorized MCP response that arrives after logout', async () => {
+    const { ctx, login, state, endpoint, service } = await hubFixture()
+    const entered = deferred()
+    const release = deferred()
+    const mounted = vi.fn()
+    ctx.provide('toolboxMcpRuntime', { setGatewayMcp: mounted, openTask: vi.fn() })
+    state.override = (request, response) => {
+      if (request.url === '/tpcoworkapi/client-config') {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1',
+          apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', models: [{ id: 'qwen-chat' }] }))
+        return true
+      }
+      if (request.url !== '/modelgw/api/mcp/my-servers/juyuan_api/direct-config') return false
+      entered.resolve()
+      void release.promise.then(() => {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ success: true, data: {
+          name: 'juyuan_api', display_name: 'Juyuan', endpoint: 'https://api.gildata.com/mcp-servers/aidata-assistant-srv-api',
+          token: 'fixture-upstream-token', protocol_type: 'streamableHttp',
+        } }))
+      })
+      return true
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    await login()
+    await entered.promise
+    await service.logout()
+    release.resolve()
+    expect((await service.account()).state).toBe('signed_out')
+    expect(ctx.llm.listProviders()).toEqual([])
+    expect(mounted.mock.calls.every(([connection]) => connection === undefined)).toBe(true)
   })
   it('accepts accessToken/userInfo with a numeric internal user ID and stores only the access token and public profile', async () => {
     const { service, state, login, ctx, requests } = await hubFixture()
@@ -416,6 +520,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await login()
     await vi.waitFor(async () => expect(await ctx.llm.listModels(HubModel.providerId)).toHaveLength(1))
     vi.setSystemTime(new Date(2026, 10, 18))
+    expect(await service.modelConnection()).toBeNull()
     await expect(assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
     expect(requests.some(request => request.path === '/v1/chat/completions')).toBe(false)
     await vi.advanceTimersByTimeAsync(60_000)
@@ -608,5 +713,29 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await expect(service.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
     expect(await service.account()).toMatchObject({ configured: false, state: 'expired' })
     await expect(service.list({})).rejects.toMatchObject({ code: 'tpcoworkhub/session-expired' })
+  })
+  it('supports switching between internal (default) and outsource Hub channels and restores outsource sessions after restart', async () => {
+    const outsource = await hubFixture()
+    const { ctx, service, endpoint: internalEndpoint, requests: internalRequests, start, attach } = await hubFixture({
+      outsourceEndpointOverride: outsource.endpoint,
+    })
+    expect((await service.browserAuth()).loginUrl).toBe(`${internalEndpoint}/tp-cowork/desktop/authorize`)
+    expect(await ctx.typertGateway.invoke({ peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'selectLoginChannel', args: { request: { channel: 'outsource' } } }))
+      .toEqual({ channel: 'outsource' })
+    expect((await service.browserAuth()).loginUrl).toBe(`${outsource.endpoint}/tp-cowork/desktop/authorize`)
+    const internalBefore = internalRequests.length
+    expect(await service.acceptBrowserSession({ token: secret })).toEqual({ configured: true })
+    expect(await service.account()).toMatchObject({ configured: true, state: 'signed_in' })
+    expect((await service.list({})).items.length).toBeGreaterThan(0)
+    expect(internalRequests.length).toBe(internalBefore)
+    expect(outsource.requests.some(row => row.path === '/tpcoworkapi/convex/query')).toBe(true)
+
+    const { service: restarted } = await attach(await start())
+    expect(await restarted.account()).toMatchObject({ configured: true, state: 'signed_in' })
+    expect((await restarted.list({})).items.length).toBeGreaterThan(0)
+    expect(internalRequests.length).toBe(internalBefore)
+
+    await restarted.logout()
+    expect((await restarted.browserAuth()).loginUrl).toBe(`${internalEndpoint}/tp-cowork/desktop/authorize`)
   })
 })

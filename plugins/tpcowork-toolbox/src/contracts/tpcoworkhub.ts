@@ -1,12 +1,20 @@
 import type { InstallRequest, InstallResult } from './installer.ts'
+import type { GatewayModelConnection } from '../../../tpcowork-core/src/gateway-contract.ts'
 export interface TpcoworkHubSkill {
   id: string; name: string; description: string; versionId: string; version: string
   displayName?: string; tags?: string[]; visibility?: string; approvalStatus?: string
 }
 export interface TpcoworkHubFile { path: string; size: number; sha256: string; contentType: string }
 export interface TpcoworkHubUser { id: string; username: string; name?: string }
+export type TpcoworkHubLoginChannel = 'internal' | 'outsource'
 export interface TpcoworkHubApi {
   account(): Promise<{ configured: boolean; writable: boolean; state?: 'unconfigured' | 'signed_out' | 'signed_in' | 'expired'; user?: TpcoworkHubUser }>
+  /** Select whether desktop browser login uses the internal (内勤) or outsource (外包) Hub address. */
+  selectLoginChannel(request: { channel: TpcoworkHubLoginChannel }): Promise<{ channel: TpcoworkHubLoginChannel }>
+  /** Read-only connection metadata for the current gateway grant. */
+  modelConnection(): Promise<GatewayModelConnection | null>
+  /** Explicit reveal to an owner using an ephemeral P-256 public key. */
+  revealModelKey(request: { grantId: string; publicKey: string }): Promise<{ publicKey: string; iv: string; ciphertext: string }>
   /** System-browser authorization page and callback timeout; contains no credentials. */
   browserAuth(): Promise<{ loginUrl: string; timeoutMs: number }>
   /** Validate the website token with TpcoworkHub before saving the shared Host session. */

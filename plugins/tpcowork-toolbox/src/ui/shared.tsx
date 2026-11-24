@@ -28,7 +28,7 @@ export function ReadinessBadge({ value, t }: { value: Readiness; t: T }) {
 }
 export function Reasons({ value }: { value: Readiness }) { return value.reasons.length ? <ul className="tp-toolbox-reasons">{value.reasons.map((reason, i) => <li key={i}>{reason.message}</li>)}</ul> : null }
 export function LoadNotice<TValue extends { complete: boolean }>({ load, available, empty, t }: { load: Load<TValue>; available: boolean; empty: boolean; t: T }) {
-  return <>{load.loading && <p role="status">{t('loading')}</p>}{load.failed && <p role="alert">{t('failed')}</p>}
+  return <>{load.loading && !load.value && <p role="status">{t('loading')}</p>}{load.failed && <p role="alert">{t('failed')}</p>}
     {!available && <p role="status">{t('unavailable')}</p>}{available && load.value?.complete && !load.loading && !load.failed && empty && <p className="tp-toolbox-empty">{t('empty')}</p>}</>
 }
 export function ConfirmRemove({ name, onClose, onConfirm, busy, disabled, feedback, t }: { name: string; onClose(): void; onConfirm(): void; busy: boolean; disabled?: boolean; feedback?: React.ReactNode; t: T }) {

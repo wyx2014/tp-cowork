@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
   'not-configured': '尚未配置 TP Cowork Hub 服务地址。',
   'login-required': '请登录 TP Cowork Hub 后重试。',
   'session-expired': 'TP Cowork Hub 会话已失效，请重新登录。',
+  'model-key-access-denied': '只有当前桌面所有者可以查看网关 API Key。',
   'login-failed': '登录失败，请检查账号和密码凭证引用。',
   'credentials-unavailable': 'TP Cowork 凭证不可读取或写入，请检查凭证服务。',
   'network': '无法连接 TP Cowork Hub，请检查网络后重试。',

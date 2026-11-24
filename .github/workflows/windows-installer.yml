@@ -154,6 +154,8 @@ jobs:
           TPCOWORK_IMAGE_EXTRACT_API_URL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_API_URL }}
           TPCOWORK_IMAGE_EXTRACT_MODEL: ${{ vars.TPCOWORK_IMAGE_EXTRACT_MODEL }}
           TPCOWORK_IMAGE_EXTRACT_API_KEY: ${{ secrets.TPCOWORK_IMAGE_EXTRACT_API_KEY }}
+          TPCOWORK_CISCO_QUERY_URL: ${{ secrets.TPCOWORK_CISCO_QUERY_URL }}
+          TPCOWORK_CISCO_DIAL_URL: ${{ secrets.TPCOWORK_CISCO_DIAL_URL }}
         run: npm run build:win
       - name: Save harness build
         if: >-

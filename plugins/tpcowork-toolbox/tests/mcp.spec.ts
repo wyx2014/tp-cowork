@@ -52,6 +52,34 @@ async function setup(definitions: McpDefinition[] = [stdio], secrets: Record<str
   return { ctx, service, module, agent, call, write, removed: () => removed }
 }
 describe('MCP profile management and native runtime', () => {
+  it('uses the upstream token on the direct Host connection and retracts its tools on logout', async () => {
+    const http = await startHttpMcpFixture()
+    try {
+      const { ctx, service, agent, call, write } = await setup([])
+      const gateway = { endpoint: http.url, label: '聚源', upstreamToken: 'test-upstream-token', expiresAt: Date.now() + 60_000 }
+      service.setGatewayMcp(gateway)
+      const before = await service.inventory()
+      expect(before.items).toMatchObject([{ id: 'juyuan', managed: true, credentials: [] }])
+      expect(JSON.stringify(before)).not.toContain(gateway.upstreamToken)
+      await expect(service.remove({ id: 'juyuan', expectedRevision: before.revision })).rejects.toThrow('gateway-managed')
+      expect((await service.probe({ id: 'juyuan' }, new AbortController().signal)).toolCount).toBe(1)
+      const a = agent('a')
+      const lease = await service.openTask({ ...task('a'), mcp: [{ id: 'juyuan', configRevision: before.items[0]!.configRevision }] }, a.scope.ctx, new AbortController().signal)
+      expect((await call('mcp__juyuan__ping', a.key)).value).toMatchObject({ content: [{ text: 'pong' }] })
+      expect(http.authorization.every(value => value === undefined)).toBe(true)
+      expect(http.urls.length).toBeGreaterThan(0)
+      expect(http.urls.every(value => new URL(value, http.url).searchParams.get('token') === gateway.upstreamToken)).toBe(true)
+      service.setGatewayMcp({ ...gateway })
+      expect(lease.signal.aborted).toBe(false)
+      service.setGatewayMcp()
+      expect((await service.inventory()).items).toEqual([])
+      await vi.waitFor(() => expect(lease.signal.aborted).toBe(true))
+      await lease.close()
+      expect((await call('mcp__juyuan__ping', a.key)).isError).toBe(true)
+      expect(ctx.tools.schemas().some(tool => tool.name.startsWith('mcp__juyuan__'))).toBe(false)
+      expect(write).not.toHaveBeenCalled()
+    } finally { await http.close() }
+  })
   it('stores editor values in credentials, retains public references and rolls back new secrets when persistence fails', async () => {
     const secrets: Record<string, string> = {}
     const { service, write } = await setup([], secrets)

@@ -21,11 +21,11 @@ npm run test:artifact
 
 `call` 在“工具箱 → 技能 → 办公电话 → 设置电话”选择 Cisco 或 Yealink。新配置默认 Cisco，已有 Yealink 配置沿用当前类型。切换到 Cisco 后，已保存的 Yealink 配置可在切回时恢复。Cisco 支持直接拨打 `1121xxxx` 分机，或按姓名、邮箱查到唯一分机后拨打。只有 Yealink 支持挂断。
 
-Cisco 在 Host 内使用当前 TP CoWork 账号会话请求查号和拨号 MCP。用户只需登录 TP CoWork，设置页仅保存电话类型。部署时为 Host 设置 `TPCOWORK_CISCO_QUERY_URL` 和 `TPCOWORK_CISCO_DIAL_URL`，或设置工具箱 `skills.ciscoQueryUrl`、`skills.ciscoDialUrl`（配置优先）。两项均须指向受信任的 HTTPS MCP 入口。如果代理需要 URL 查询参数，随部署地址提供。缺少地址时技能报告配置问题。账号切换或登出会取消正在等待的请求，拨号请求超时后提示通过话机确认，避免重复拨号。
+Cisco 在 Host 内使用当前 TP CoWork 账号会话请求查号和拨号 MCP。用户只需登录 TP CoWork，设置页仅保存电话类型。构建时读取本插件目录中被 Git 忽略的 `cisco-call.local.json`（`ciscoQueryUrl`、`ciscoDialUrl`），或通过环境变量 `TPCOWORK_CISCO_QUERY_URL`、`TPCOWORK_CISCO_DIAL_URL`（GitHub Actions 使用同名 Repository Secrets）写入随插件打包的 `lib/cisco-call.local.json`（仅 Host 读取，不进入前端或 Git）；运行时仍可通过工具箱 `skills.ciscoQueryUrl`、`skills.ciscoDialUrl` 或同名环境变量覆盖（配置优先）。两项均须指向受信任的 HTTPS 或内网私网 HTTP MCP 入口。如果代理需要 URL 查询参数，随部署地址提供。缺少地址或地址无效时技能报告配置问题。账号切换或登出会取消正在等待的请求，拨号请求超时后提示通过话机确认，避免重复拨号。
 
 选择 Yealink 后，填写自己的四位办公分机号，软件从旧版个人技能目录下的 `call/内部分机信息表.md` 精确匹配话机 IP；重复或缺失分机不会自动选设备。可读取同目录 `config.json` 中同一主叫的 `caller`、`phone_ip`、`pbx_ip`、`scheme`、`outgoing_prefix` 和登录凭据；仅确认保存后才导入凭据。没有旧配置时，首次填写话机登录账号和密码；匹配不到 IP 时，在“话机与分机表设置”填写话机 HTTP(S) 地址。电话服务器与外线前缀沿用参考实现默认值 `12.100.10.9`、`9`，可在同一页面修改。
 
-Yealink 在普通聊天中直接处理“给张三打电话”“拨打 3737”“挂断电话”等明确指令，也支持 `/call 姓名或号码` 和 `/call 挂断`。本机查号后向已配置的话机发送指令，结果直接显示在会话里。话机请求最多等待 8 秒。
+Cisco 和 Yealink 在普通聊天中均直接处理“给张三打电话”“拨打 11213397”“挂断电话”以及选中办公电话技能后的“$call 张三 / 邮箱 / 分机号”等明确指令，不调用模型，并直接在会话中记录用户输入与助手回复；也支持 `/call 姓名、邮箱、号码或挂断`。Yealink 话机请求最多等待 8 秒。
 
 电话配置保存在当前 DSH profile 的 `call-phone.json`，凭据使用 DSH credentials 的 `DSH_YEALINK_USERNAME`、`DSH_YEALINK_PASSWORD` 引用；前端只收到是否已配置，不回读密码。默认复用系统应用数据目录 `tpcowork/workspace/skills/call`，也可在页面指定旧版目录或通过 `TPCOWORK_CALL_DIRECTORY` 部署。原有 `DSH_YEALINK_*` 环境配置仍兼容；用户保存的本机配置优先。匹配、检查和保存不发起话机请求，配置齐全不代表通话已连通；实际拨号需要办公网络及有效的 HTTP(S)/TLS 连接。
 
@@ -55,7 +55,9 @@ Windows 产品安装包统一通过根目录 `npm run build:win` 准备工具箱
 
 打包前的启动冒烟测试使用真实的 DSH 本地凭证服务和临时 profile，验证默认 Hub 的未登录状态、默认资源初始化及重启和升级；凭证文件位于测试临时目录，检查不连接内网 Hub。
 
-`src/composition.ts` 将技能、统一安装器和 MCP 管理接在同一 Loader entry 下。首次启动安装随包技能目录和三个默认 MCP 引用；之后只增补新默认项或更新未修改的产品资源，保留禁用、移除、同名自定义项和覆盖。配置/版本决定保存在 DSH settings；内置技能副本安装在当前 profile 的 `skills/`，个人技能直接复用旧 GUI 的系统应用数据目录，没有另建执行或安装注册表。聚源和财汇缺凭证时显示 needs_configuration；Playwright 只使用已准备的本地固定 launcher，不在启动时执行 npx 或下载浏览器，也不注册全局 MCP。
+`src/composition.ts` 将技能、统一安装器和 MCP 管理接在同一 Loader entry 下。升级时移除旧版随包注册的聚源、财汇、Playwright 等 MCP。用户自行创建的连接保存在 DSH settings。内置技能副本安装在当前 profile 的 `skills/`，个人技能复用旧 GUI 的系统应用数据目录。
+
+登录后，Host 用 SkillHub 下发的个人 New API Key 请求同一网关的 `/api/mcp/my-servers/:name/direct-config`，获取获授权的 `juyuan_api` 或 `juyuan` 直连配置。桌面 Host 直接用 Streamable HTTP 连接聚源，按任务使用连接。聚源令牌保留在 Host 内存中，工具箱公开目录只提供名称、状态等信息。退出、账号切换和登录过期会移除该连接并关闭工具会话。同名的自定义 `juyuan` 保留，受管聚源在该情况下使用 `juyuan_newapi`。
 
 技能和专家团队的「详情」在工具箱内打开面包屑页面，与技能编辑器共用页面布局。点击面包屑或「返回列表」回到原清单，保留搜索与技能来源筛选，并恢复列表位置和入口焦点。技能展示正文、资源文件和实际路径；团队展示封面、介绍、任务示例、可展开的报告结构案例、成员职责及协作阶段。任务示例、案例及「使用团队」均只准备独立聊天草稿，保留此前的草稿，由用户确认后发送。
 

@@ -106,11 +106,16 @@ export async function startRelay(options: RelayOptions): Promise<{ url: string; 
     try {
       const given = Buffer.from(String(request.headers[RELAY_KEY_HEADER] ?? ''))
       if (given.length !== expected.length || !timingSafeEqual(given, expected)) { fail(response, 'bad-key'); return }
-      const target = relayTarget(request.url ?? '/', options.apis())
+      let target = relayTarget(request.url ?? '/', options.apis())
       if (typeof target === 'string') { fail(response, target); return }
       let token: string
       try { token = await options.token() }
       catch (error) { fail(response, error instanceof RelayAuthError ? error.code : 'login-required'); return }
+      if (target.api === HUB_API) {
+        const refreshed = relayTarget(request.url ?? '/', options.apis())
+        if (typeof refreshed === 'string') { fail(response, refreshed); return }
+        target = refreshed
+      }
       const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await readBody(request, options.maxBytes)
       if (body === 'too-large') { fail(response, 'too-large'); return }
       const headers = new Headers()

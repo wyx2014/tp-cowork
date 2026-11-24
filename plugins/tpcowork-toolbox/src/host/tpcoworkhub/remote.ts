@@ -9,6 +9,10 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/)
 export const userSchema = z.object({ id: z.string().min(1).max(200), username: z.string().min(1).max(200), name: z.string().max(200).optional() }).strict()
   .transform(user => ({ id: user.id, username: user.username, ...(user.name === undefined ? {} : { name: user.name }) }))
 export const accountSchema = z.object({ configured: z.boolean(), writable: z.boolean(), state: z.enum(['unconfigured', 'signed_out', 'signed_in', 'expired']).optional(), user: userSchema.optional() }).strict()
+export const loginChannelSchema = z.object({ channel: z.enum(['internal', 'outsource']) }).strict()
+const modelGrantId = z.string().uuid()
+const revealPublicKey = z.string().min(1).max(256).regex(/^[A-Za-z0-9+/]+={0,2}$/)
+export const modelKeyRevealSchema = z.object({ grantId: modelGrantId, publicKey: revealPublicKey }).strict()
 export const browserSessionSchema = z.object({ token: z.string().min(1).max(32768) }).strict()
 export const loginSchema = z.object({ username: id, passwordRef: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).max(200) }).strict()
 export const listSchema = z.object({ query: z.string().max(200).optional(), cursor: z.string().max(200).optional() }).strict()
@@ -30,8 +34,11 @@ function descriptor(method: string, input: z.ZodType | undefined, output: z.ZodT
 }
 export const descriptors = [
   descriptor('browserAuth', undefined, z.object({ loginUrl: z.string(), timeoutMs: z.number().positive() }).strict()),
+  descriptor('selectLoginChannel', loginChannelSchema, loginChannelSchema),
   descriptor('acceptBrowserSession', browserSessionSchema, z.object({ configured: z.boolean() }).strict(), true),
   descriptor('account', undefined, accountSchema), descriptor('login', loginSchema, z.object({ configured: z.boolean() }).strict(), true), descriptor('logout', undefined, z.void()),
+  descriptor('modelConnection', undefined, z.object({ baseURL: z.string(), api: z.string(), grantId: modelGrantId }).strict().nullable()),
+  descriptor('revealModelKey', modelKeyRevealSchema, z.object({ publicKey: revealPublicKey, iv: z.string(), ciphertext: z.string() }).strict()),
   descriptor('list', listSchema, z.object({ items: z.array(hubSkillSchema), cursor: z.string().optional() }).strict(), true),
   descriptor('detail', detailSchema, z.object({ skill: hubSkillSchema, fingerprint: hash, files: z.array(fileSchema), content: z.string().optional() }).strict(), true),
   descriptor('install', hubInstallSchema, installResult, true), descriptor('publish', publishSchema, publishResultSchema, true),

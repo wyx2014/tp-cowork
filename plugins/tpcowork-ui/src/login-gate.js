@@ -7,8 +7,10 @@ export function createLoginGate(React, primitives, brandIcon) {
   const spinner = h('span', { className: 'tpcowork-login-spinner', 'aria-hidden': true });
   return function LoginGate({ account, startSignIn, cancelSignIn, refreshAccount, t }) {
     const state = React.useSyncExternalStore(account.subscribe, account.getSnapshot);
+    const [channel, setChannel] = React.useState('internal');
     const page = React.useRef(null);
     const authenticated = state.status === 'signed_in' && state.phase === 'idle';
+    React.useEffect(() => { if (authenticated) setChannel('internal'); }, [authenticated]);
     React.useLayoutEffect(() => {
       if (authenticated) return;
       const overlay = page.current?.closest('[data-dsh-modal-part="overlay"]');
@@ -76,9 +78,33 @@ export function createLoginGate(React, primitives, brandIcon) {
             h('p', { id: 'tpcowork-login-description' }, t('loginDescription')))),
         h('div', { className: 'tpcowork-login-actions' },
           message ? h('p', { className: 'tpcowork-login-notice', role: 'alert' }, t(message)) : null,
+          h('div', { className: 'tpcowork-login-channels', role: 'radiogroup', 'aria-label': t('loginChannelLabel') },
+            ...['internal', 'outsource'].map((option, index, options) => {
+              const locked = checking || waiting || state.status === 'unconfigured';
+              const selected = channel === option;
+              return h('button', {
+                key: option,
+                type: 'button',
+                role: 'radio',
+                'aria-checked': selected,
+                tabIndex: selected ? 0 : -1,
+                disabled: locked,
+                className: 'tpcowork-login-channel',
+                'data-selected': String(selected),
+                onClick: () => setChannel(option),
+                onKeyDown: event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                  event.preventDefault();
+                  const next = options[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? options.length - 1 : 1)) % options.length];
+                  setChannel(next);
+                  const radios = event.currentTarget.parentElement?.querySelectorAll('[role="radio"]');
+                  radios?.[options.indexOf(next)]?.focus();
+                },
+              }, t(option === 'internal' ? 'loginChannelInternal' : 'loginChannelOutsource'));
+            })),
           h(Button, { variant: 'primary', className: 'tpcowork-login-primary',
             disabled: checking || waiting || state.status === 'unconfigured', 'data-modal-autofocus': true,
-            onClick: () => { void startSignIn(); } }, checking || waiting ? spinner : null, t(actionLabel)),
+            onClick: () => { void startSignIn(channel); } }, checking || waiting ? spinner : null, t(actionLabel)),
           waiting ? h(Button, { variant: 'outline', onClick: () => { void cancelSignIn(); } }, t('cancelSignIn')) : null,
           unavailable ? h(Button, { variant: 'outline', onClick: () => { void refreshAccount(); } }, t('loginRetry')) : null))));
   };

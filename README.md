@@ -63,7 +63,7 @@ Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命�
 
 `npm run dev:rebuild` 统一完成底座和插件构建。单独管理已初始化桌面的插件可使用 `node scripts/desktop-plugin.mjs install all`。检查源码和依赖链接使用 `node scripts/check-worktree.mjs`。
 
-模型配置默认由 SkillHub 登录账号下发。登录或重启恢复账号后，Host 请求 `/tpcoworkapi/client-config`，加载该账号的 New API 网关和模型列表；模型请求直接发往 New API。退出、账号切换或配置失效后移除托管模型，不回退到共享 DeepSeek 密钥。模型密钥仅保留在 Host 内存，不写入普通设置或传给界面；登录凭证仍由 DSH 凭证服务管理。
+模型配置默认由 SkillHub 登录账号下发。登录或重启恢复账号后，Host 请求 `/tpcoworkapi/client-config`，加载该账号的 New API 网关和模型列表。模型请求直接发往 New API。退出、账号切换或配置失效后移除托管模型，模型请求需重新获得网关授权。模型密钥保存在 Host 内存，用户可在「设置 → 模型 → 太资模型网关」点击 API Key 旁的图标临时查看。登录凭证仍由 DSH 凭证服务管理。
 
 应用启动时先验证 SkillHub 登录。未登录、登录过期或无法恢复账号时显示全屏登录入口，隐藏工作台和历史会话，并禁止背景交互；没有跳过入口。登录成功后进入工作台，退出后回到登录页。Host 同时要求有效的个人网关授权，手动添加的模型来源也不能绕过登录调用。
 

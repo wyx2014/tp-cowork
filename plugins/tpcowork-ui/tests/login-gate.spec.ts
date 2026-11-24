@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as primitives from '../../../../deepseek-harness/packages/client/ui-primitives/src/index.ts'
 import { OnboardingSurface } from '../../../../deepseek-harness/packages/client/ui-settings-account/src/client/OnboardingSurface.tsx'
 import { createLoginGate } from '../src/login-gate.js'
+import { createTpcoworkHubAccount } from '../src/tpcoworkhub-account.js'
 
 const LoginGate = createLoginGate(React, primitives, 'data:image/png;base64,')
 const labels = JSON.parse(readFileSync(resolve(import.meta.dirname, '../locale/zh.json'), 'utf8')).ui
@@ -49,6 +50,8 @@ it('blocks every workbench surface until login and restores the barrier on logou
   expect(screen.getByRole('heading', { name: '欢迎来到 TP CoWork' })).toBeTruthy()
   expect(screen.getByText('连接账号，开始使用 TP CoWork')).toBeTruthy()
   expect(screen.getAllByRole('button')).toHaveLength(1)
+  expect(screen.getByRole('radio', { name: '内勤' }).getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByRole('radio', { name: '外包' }).getAttribute('aria-checked')).toBe('false')
   expect(screen.queryByRole('status')).toBeNull()
   expect(screen.queryByRole('alert')).toBeNull()
   expect(document.querySelector('.tpcowork-login-page')?.textContent).not.toMatch(/SkillHub|模型|配置|请先登录/)
@@ -56,7 +59,11 @@ it('blocks every workbench surface until login and restores the barrier on logou
   fireEvent.click(document.querySelector('[data-dsh-modal-part="mask"]')!)
   expect(screen.getByRole('dialog', { name: '欢迎来到 TP CoWork' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '开始登录' }))
-  expect(fixture.startSignIn).toHaveBeenCalledOnce()
+  expect(fixture.startSignIn).toHaveBeenCalledExactlyOnceWith('internal')
+  fireEvent.click(screen.getByRole('radio', { name: '外包' }))
+  expect(screen.getByRole('radio', { name: '外包' }).getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: '开始登录' }))
+  expect(fixture.startSignIn).toHaveBeenLastCalledWith('outsource')
   // A settings portal opened by an application command must also remain hidden and inert.
   const portal = document.createElement('div')
   portal.textContent = 'Private settings'
@@ -181,4 +188,20 @@ it.each([
   } finally {
     root.remove()
   }
+})
+
+it('selects the chosen login channel on Host before starting browser sign-in', async () => {
+  const order: string[] = []
+  const bridge = {
+    state: vi.fn(async () => ({ status: 'signed_out', phase: 'idle' })),
+    start: vi.fn(async () => { order.push('start'); return { status: 'signed_in', phase: 'idle' } }),
+    cancel: vi.fn(async () => ({ status: 'signed_out', phase: 'idle' })),
+    signOut: vi.fn(async () => ({ status: 'signed_out', phase: 'idle' })),
+    subscribe: () => () => {},
+  }
+  const selectChannel = vi.fn(async (channel: string) => { order.push(`channel:${channel}`); return { ok: true, value: { channel } } })
+  const account = createTpcoworkHubAccount(bridge, selectChannel)
+  await account.startSignIn('outsource')
+  expect(order).toEqual(['channel:outsource', 'start'])
+  await account.dispose()
 })

@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '../../host.ts'
 import type { Catalog, McpApi, McpDefinition, McpItem, McpEditorEntry, TaskContext } from '../../contracts/index.ts'
 import { connect } from './connection.ts'
+import type { GatewayMcpConnection } from './gateway.ts'
 import { parseDefinition, editorEntrySchema, importRequestSchema } from './schema.ts'
 import { hostContribution } from './remote.ts'
 export { defaultMcpDefinitions } from './defaults.ts'
@@ -18,6 +19,7 @@ export { defaultMcpDefinitions } from './defaults.ts'
 export const name = 'toolbox-mcp'
 export const inject = ['typert', 'settings', 'tools', 'credentials']
 export interface McpRecord { definition: McpDefinition; revision: number }
+type AvailableMcpRecord = McpRecord & { managed?: true }
 export interface Config {
   settingsEntry: string
   settingsPath: string[]
@@ -52,6 +54,7 @@ export interface TaskMcpLease {
 /** Host-only admission boundary, deliberately absent from Remote. T6 must await it before driving the Agent. */
 export interface McpTaskRuntime {
   openTask(context: TaskContext, agentCtx: Context, signal: AbortSignal): Promise<TaskMcpLease>
+  setGatewayMcp?(connection?: GatewayMcpConnection): void
 }
 declare module '@deepseek-ai/cordis' { interface Context { toolboxMcpRuntime: McpTaskRuntime } }
 
@@ -66,26 +69,64 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
   private readonly probes = new Map<string, Activity>()
   private readonly pinned = new WeakMap<object, Map<string, string>>()
   private readonly sessions = new WeakSet<object>()
-  constructor(ctx: Context, readonly config: Config) { super(ctx, 'toolboxMcp') }
+  private gateway: { connection: GatewayMcpConnection; row: AvailableMcpRecord } | undefined
+  private gatewayRevision = 0
+  private gatewayExpiry: ReturnType<typeof setTimeout> | undefined
+  constructor(ctx: Context, readonly config: Config, private readonly retireBundled = false) { super(ctx, 'toolboxMcp') }
   changed(id?: string): void {
     void this.ctx.parallel('toolbox/changed', { domain: 'mcp', revision: ++this.revision, ...(id ? { id } : {}) })
       .catch(() => { this.ctx.logger.warn('toolbox-mcp: 状态订阅者处理失败。') })
   }
-  private records(): McpRecord[] {
+  private localRecords(): McpRecord[] {
     const ids = new Set<string>()
-    return this.config.servers.get().map(row => {
+    return this.config.servers.get().filter(row => !this.retireBundled || row.definition.origin === 'custom').map(row => {
       const definition = parseDefinition(row.definition)
       if (ids.has(definition.id) || !Number.isSafeInteger(row.revision) || row.revision < 1) throw new Error('toolbox/mcp-invalid-profile: 请修复重复标识或配置版本。')
       ids.add(definition.id)
       return { definition, revision: row.revision }
     })
   }
-  private find(id: string): McpRecord {
+  private records(): AvailableMcpRecord[] {
+    const rows = this.localRecords()
+    if (this.gateway) rows.push(this.gateway.row)
+    return rows
+  }
+  setGatewayMcp(connection?: GatewayMcpConnection): void {
+    if (this.closed) return
+    const current = this.gateway
+    if (current && connection && current.connection.upstreamToken === connection.upstreamToken && current.connection.endpoint === connection.endpoint
+      && current.connection.label === connection.label && current.connection.expiresAt === connection.expiresAt) return
+    if (!current && !connection) return
+    clearTimeout(this.gatewayExpiry)
+    this.gatewayExpiry = undefined
+    this.gateway = undefined
+    if (current) {
+      const id = current.row.definition.id
+      void this.stopId(id).catch(() => this.ctx.logger.warn('Managed MCP shutdown failed.'))
+      this.observations.delete(id)
+      this.discovered.delete(id)
+      for (const [token, snapshot] of this.live) if (snapshot.serverName === id) this.live.delete(token)
+    }
+    if (connection && connection.expiresAt > Date.now()) {
+      const localIds = new Set(this.localRecords().map(row => row.definition.id))
+      const id = !localIds.has('juyuan') ? 'juyuan' : 'juyuan_newapi'
+      if (!localIds.has(id)) {
+        const definition = parseDefinition({ id, label: connection.label, origin: 'bundled', enabled: true, credentials: [],
+          transport: 'streamable-http', endpoint: connection.endpoint })
+        this.gatewayRevision = Math.max(this.gatewayRevision + 1, this.nextConfigRevision())
+        this.gateway = { connection, row: { definition, revision: this.gatewayRevision, managed: true } }
+        this.gatewayExpiry = setTimeout(() => this.setGatewayMcp(), connection.expiresAt - Date.now())
+        this.gatewayExpiry.unref()
+      }
+    }
+    this.changed()
+  }
+  private find(id: string): AvailableMcpRecord {
     const row = this.records().find(row => row.definition.id === id)
     if (!row) throw new Error('toolbox/mcp-not-found: 服务器已被移除，请刷新列表。')
     return row
   }
-  private async item(row: McpRecord): Promise<McpItem> {
+  private async item(row: AvailableMcpRecord): Promise<McpItem> {
     const def = row.definition
     const reasons: McpItem['readiness']['reasons'] = []
     const credentials: McpItem['credentials'] = []
@@ -101,7 +142,8 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     const snapshot = this.observations.get(def.id)
     const failed = snapshot?.state === 'error'
     if (!reasons.length && failed) reasons.push({ code: 'probe_failed', message: '连接失败，请检查网络、服务与凭证后重新探测。' })
-    return { id: def.id, label: def.label, origin: def.origin, configRevision: row.revision, installed: true, enabled: def.enabled,
+    return { id: def.id, label: def.label, origin: def.origin, ...row.managed ? { managed: true } : {},
+      configRevision: row.revision, installed: true, enabled: def.enabled,
       readiness: { state: reasons.length ? failed && reasons[0]?.code === 'probe_failed' ? 'error' : 'blocked' : snapshot?.state === 'connecting' || snapshot?.state === 'reconnecting' ? 'checking' : 'ready', reasons, ...(snapshot ? { checkedAt: snapshot.observedAt } : {}) },
       connection: snapshot?.state ?? 'disconnected', generation: snapshot?.generation ?? 0, toolCount: snapshot?.toolCount ?? 0,
       ...(snapshot ? { observedAt: snapshot.observedAt } : {}), credentials }
@@ -130,6 +172,16 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
   }
   private assertRevision(expected: number): void {
     if (expected !== this.revision) throw new Error('toolbox/stale-selection: 列表已变化，请刷新后重试。')
+  }
+  private assertEditable(id: string): void {
+    if (id === this.gateway?.row.definition.id) throw new Error('toolbox/mcp-gateway-managed')
+  }
+  private connectRecord(ctx: Context, row: AvailableMcpRecord, signal: AbortSignal, status: (snapshot: McpConnectionStatus) => void) {
+    const managed = this.gateway?.row === row ? this.gateway : undefined
+    if (row.managed && (!managed || Date.now() >= managed.connection.expiresAt)) throw new Error('toolbox/mcp-gateway-expired')
+    return connect(ctx, row.definition, signal, this.config.connectTimeoutMs,
+      snapshot => { if (!managed || this.gateway === managed) status(snapshot) },
+      {}, managed?.connection.upstreamToken)
   }
   private nextConfigRevision(): number {
     const revision = Math.max(this.config.configRevision.get(), ...this.records().map(row => row.revision)) + 1
@@ -170,8 +222,8 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     const entry = this.editorEntry({ definition, ...(request.secretValues ? { secretValues: request.secretValues } : {}) })
     return this.serialize(async () => {
       this.assertRevision(request.expectedRevision)
-      const rows = this.records()
-      if (rows.some(row => row.definition.id === definition.id)) throw new Error('toolbox/mcp-already-exists')
+      const rows = this.localRecords()
+      if (this.records().some(row => row.definition.id === definition.id)) throw new Error('toolbox/mcp-already-exists')
       if (definition.origin !== 'custom') throw new Error('toolbox/mcp-bundled-owner: 默认项由资源安装器配置。')
       const row = { definition, revision: this.nextConfigRevision() }
       await this.withSecrets([entry], () => this.write([...rows, row])); this.changed(definition.id)
@@ -183,10 +235,11 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     const entry = this.editorEntry({ definition, ...(request.secretValues ? { secretValues: request.secretValues } : {}) })
     return this.serialize(async () => {
       this.assertRevision(request.expectedRevision)
+      this.assertEditable(definition.id)
       const current = this.find(definition.id)
       if (current.definition.origin !== definition.origin) throw new Error('toolbox/mcp-origin-immutable')
       const row = { definition, revision: this.nextConfigRevision() }
-      await this.withSecrets([entry], () => this.write(this.records().map(old => old.definition.id === definition.id ? row : old)))
+      await this.withSecrets([entry], () => this.write(this.localRecords().map(old => old.definition.id === definition.id ? row : old)))
       await this.stopId(definition.id); this.observations.delete(definition.id); this.discovered.delete(definition.id); this.changed(definition.id)
       return this.item(row)
     })
@@ -196,11 +249,12 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     const entries = input.entries.map(({ replace, ...entry }) => ({ ...this.editorEntry(entry), replace }))
     return this.serialize(async () => {
       this.assertRevision(input.expectedRevision)
-      let rows = this.records()
+      let rows = this.localRecords()
       const revision = this.nextConfigRevision()
       const seen = new Set<string>()
       for (const entry of entries) {
         const { definition } = entry
+        this.assertEditable(definition.id)
         if (seen.has(definition.id)) throw new Error('toolbox/mcp-already-exists')
         seen.add(definition.id)
         const old = rows.find(row => row.definition.id === definition.id)
@@ -235,9 +289,10 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
   remove(request: { expectedRevision: number; id: string }): Promise<void> {
     return this.serialize(async () => {
       this.assertRevision(request.expectedRevision)
+      this.assertEditable(request.id)
       const current = this.find(request.id)
       const removed = current.definition.origin === 'bundled' ? [...new Set([...this.config.removedBundled.get(), request.id])] : undefined
-      await this.write(this.records().filter(row => row.definition.id !== request.id), removed)
+      await this.write(this.localRecords().filter(row => row.definition.id !== request.id), removed)
       await this.stopId(request.id); this.observations.delete(request.id); this.discovered.delete(request.id); this.changed(request.id)
     })
   }
@@ -284,11 +339,13 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     const isolated = createScope(this.ctx, {})
     let successful: McpItem | undefined
     try {
-      const connection = await connect(isolated.ctx, row.definition, activity.controller.signal, this.config.connectTimeoutMs, snapshot => this.observe(token, request.id, snapshot))
+      const connection = await this.connectRecord(isolated.ctx, row, activity.controller.signal, snapshot => this.observe(token, request.id, snapshot))
       successful = await this.item(row)
       await connection.close()
     } catch {
-      this.observe(token, request.id, { serverName: request.id, state: activity.controller.signal.aborted ? 'disconnected' : 'error', generation: 0, toolCount: 0, observedAt: Date.now() })
+      if (this.records().some(current => current.definition.id === request.id && current.revision === row.revision)) {
+        this.observe(token, request.id, { serverName: request.id, state: activity.controller.signal.aborted ? 'disconnected' : 'error', generation: 0, toolCount: 0, observedAt: Date.now() })
+      }
     } finally {
       await isolated.dispose()
       if (this.probes.get(request.id) === activity) this.probes.delete(request.id)
@@ -337,7 +394,8 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
         const ready = await this.item(row)
         if (ready.readiness.state === 'blocked') throw new Error('toolbox/mcp-needs-configuration')
         const token = {}
-        await connect(scope.ctx, row.definition, activity.controller.signal, this.config.connectTimeoutMs, snapshot => {
+        activity.controller.signal.throwIfAborted()
+        await this.connectRecord(scope.ctx, row, activity.controller.signal, snapshot => {
           this.observe(token, row.definition.id, snapshot)
           if (snapshot.state === 'error') void close().catch(() => {})
         })
@@ -355,13 +413,19 @@ export class ToolboxMcp extends TypertRemoteService implements McpApi, McpTaskRu
     await Promise.all([...this.active].map(activity => activity.close()))
     this.observations.clear(); this.discovered.clear(); this.changed()
   }
-  async dispose(): Promise<void> { this.closed = true; await this.reconfigure(); await this.tail }
+  async dispose(): Promise<void> {
+    this.closed = true
+    clearTimeout(this.gatewayExpiry)
+    this.gateway = undefined
+    await this.reconfigure()
+    await this.tail
+  }
 }
 
 /** T7 mounts this module inside the existing toolbox bundle; it opens no default connections. */
-export function applyMcpModule(ctx: Context, config: Config): void {
+export function applyMcpModule(ctx: Context, config: Config, retireBundled = false): void {
   ctx.typert.register(hostContribution)
-  const service = new ToolboxMcp(ctx, config)
+  const service = new ToolboxMcp(ctx, config, retireBundled)
   ctx.provide('toolboxMcpRuntime', service)
   let servers = JSON.stringify(config.servers.get())
   ctx.on('settings/document-updated', ns => {

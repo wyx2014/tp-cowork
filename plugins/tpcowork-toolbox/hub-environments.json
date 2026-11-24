@@ -1,5 +1,8 @@
 {
   "local": "http://localhost:8080",
   "test": "http://isptest.tpasset.com:54905",
-  "production": "https://isp.tpasset.com"
+  "production": {
+    "internal": "https://isp.tpasset.com",
+    "outsource": "https://api.isp.tpasset.com"
+  }
 }

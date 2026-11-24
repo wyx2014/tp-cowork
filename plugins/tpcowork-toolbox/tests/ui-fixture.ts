@@ -11,7 +11,7 @@ export const catalog = (): SelectionCatalog => structuredClone({ revision: 8, sk
 export const t = (key: UiKey, params?: Record<string, unknown>): string => en[key].replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
 export function actions(): UiActions {
   return {
-    retryInitialization: vi.fn(async () => {}), refresh: vi.fn(async () => {}), refreshSkills: vi.fn(async () => {}), setTab: vi.fn(),
+    retryInitialization: vi.fn(async () => {}), refresh: vi.fn(async () => {}), refreshSkills: vi.fn(async () => {}), refreshMcp: vi.fn(async () => {}), setTab: vi.fn(),
     skillDetail: vi.fn(async () => ({ item: skillCatalog.items[0]!, content: '# Office skill\nFull resources.' })),
     skillEnable: vi.fn(async () => skillCatalog), skillRemove: vi.fn(async () => {}), skillCheck: vi.fn(async () => skillCatalog.items[0]!),
     callSetup: vi.fn(async request => ({ ...phoneSetup, ...request })), saveCallSetup: vi.fn(async request => ({ ...phoneSetup, ...request, confirmed: true })),
@@ -19,7 +19,7 @@ export function actions(): UiActions {
     prepareSkillArchive: vi.fn(async () => ({ importId: 'archive-1', name: 'skillhub-sample' })),
     pickSkillDirectory: vi.fn(async () => '/local/skill-folder'), openSkillDirectory: vi.fn(async () => {}),
     prepareManualSkill: vi.fn(async () => ({ importId: 'manual-1', name: 'my-skill' })),
-    mcpDefinition: vi.fn(async () => ({ id: 'juyuan', label: 'Juyuan', origin: 'bundled' as const, enabled: true, credentials: [{ ref: 'JUYUAN_MCP_TOKEN', target: 'url-query' as const, key: 'token' }], transport: 'streamable-http' as const, endpoint: 'https://example.test/mcp' })),
+    mcpDefinition: vi.fn(async () => ({ id: 'juyuan', label: 'Juyuan', origin: 'custom' as const, enabled: true, credentials: [{ ref: 'JUYUAN_MCP_TOKEN', target: 'url-query' as const, key: 'token' }], transport: 'streamable-http' as const, endpoint: 'https://example.test/mcp' })),
     mcpCreate: vi.fn(async () => mcpCatalog.items[0]!), mcpUpdate: vi.fn(async () => mcpCatalog.items[0]!), mcpRemove: vi.fn(async () => {}), mcpEnable: vi.fn(async () => mcpCatalog.items[0]!), mcpProbe: vi.fn(async () => mcpCatalog.items[0]!),
     mcpInventory: vi.fn(async () => mcpCatalog), mcpImport: vi.fn(async () => mcpCatalog), mcpProbeDraft: vi.fn(async () => ({ ok: true, toolCount: 2 })),
     hubAccount: vi.fn(async () => ({ configured: true, writable: true })), hubLogin: vi.fn(async () => ({ configured: true })), hubLogout: vi.fn(async () => {}),

@@ -9,7 +9,7 @@ it('accepts HTTPS, local HTTP and the exact configured HTTP test origin', () => 
     expect(ok(url), url).toBe(false)
 })
 
-it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com'])('adds one gateway prefix to API requests for %s', (origin) => {
+it.each(['http://isptest.tpasset.com:54905', 'https://isp.tpasset.com', 'https://api.isp.tpasset.com'])('adds one gateway prefix to API requests for %s', (origin) => {
   const request = '/tpcoworkapi/skill-versions/files?path=foo%2Fbar'
   const prefixed = `${origin}/tpcoworkapi${request}`
   for (const [input, expected] of [

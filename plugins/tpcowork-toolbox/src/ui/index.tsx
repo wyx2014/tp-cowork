@@ -80,7 +80,7 @@ export function registerToolboxUi(ctx: Context): void {
   ctx.effect(() => ctx.inputTriggers.registerPresenter('/', 'skill',
     (session, candidates) => presentSkillCandidates(model.state.getSnapshot().choices[session.sessionId], candidates, t)))
   const actions: UiActions = {
-    refresh: () => model.refresh(), retryInitialization: () => model.retryInitialization(), refreshSkills: () => model.refresh('skills'), setTab: tab => model.setTab(tab),
+    refresh: () => model.refresh(), retryInitialization: () => model.retryInitialization(), refreshSkills: () => model.refresh('skills'), refreshMcp: () => model.refresh('mcp'), setTab: tab => model.setTab(tab),
     skillDetail: request => unwrap(remote.toolboxSkills.detail(request)), skillEnable: request => model.setSkillEnabled(request),
     skillRemove: request => unwrap(remote.toolboxSkills.remove(request)), skillCheck: request => model.checkSkill(request),
     callSetup: request => unwrap(remote.toolboxSkills.callSetup(request)),

@@ -1,8 +1,14 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import { sendCall, type NativeOptions } from '../src/host/skills/native.ts'
+import { ciscoEndpoints } from '../src/host/skills/cisco-call.ts'
+import { loadCiscoDeployment, readBundledCiscoDeployment, resolveCiscoDeployment } from '../src/host/skills/cisco-deployment.ts'
 import { deferred, hubFixture, secret } from './tpcoworkhub-fixture.ts'
 
 const options: NativeOptions = {
@@ -90,10 +96,14 @@ it('uses the existing account session for direct dialing and directory lookup', 
   expect(requests.filter(row => row.path === '/tpcoworkapi/users/login')).toHaveLength(1)
 })
 
-it('only dials a valid, unambiguous extension and refuses cleartext endpoints', async () => {
+it('only dials a valid, unambiguous extension and refuses public cleartext endpoints', async () => {
   const { call, login, operations, state, cisco } = await fixture()
   await login()
   const before = cisco.mock.calls.length
+  expect(ciscoEndpoints({})).toBeUndefined()
+  expect(ciscoEndpoints({ ciscoQueryUrl: 'http://10.17.22.116:32300/api/proxy/mcp?api_key=q', ciscoDialUrl: 'http://192.168.1.10:8080/mcp' })).toBeDefined()
+  expect(ciscoEndpoints({ ciscoQueryUrl: 'http://172.16.0.5:3000/q', ciscoDialUrl: 'http://127.0.0.1:3000/d' })).toBeDefined()
+  expect(ciscoEndpoints({ ciscoQueryUrl: 'http://172.32.0.1/q', ciscoDialUrl: 'https://office.test/d' })).toBeUndefined()
   await expect(call({ number: '13800000000' })).rejects.toThrow('八位办公分机号')
   await expect(call({ action: 'hangup' })).rejects.toThrow('暂不支持挂断')
   await expect(call({ number: '11211234' }, { ...options, ciscoDialUrl: 'http://office.test/dial' })).rejects.toThrow('尚未配置')
@@ -103,6 +113,45 @@ it('only dials a valid, unambiguous extension and refuses cleartext endpoints', 
   state.users = [{ VC_IP_PHONE: '1234' }]
   await expect(call({ name: '没有有效分机' })).rejects.toThrow('没有找到有效')
   expect(operations.map(operation => operation.name)).toEqual(['用户查询', '用户查询'])
+})
+
+it('loads build-time Cisco endpoints from local file or env and honors override precedence', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'toolbox-cisco-'))
+  onTestFinished(() => rm(directory, { recursive: true, force: true }))
+  const url = pathToFileURL(directory + '/')
+  expect(await loadCiscoDeployment(url, {})).toEqual({})
+  expect(readBundledCiscoDeployment(url)).toEqual({})
+
+  const intranet = {
+    ciscoQueryUrl: 'http://10.17.22.116:32300/api/proxy/mcp?api_key=query-test',
+    ciscoDialUrl: 'http://10.17.22.116:32300/api/proxy/mcp?api_key=dial-test',
+  }
+  await writeFile(join(directory, 'cisco-call.local.json'), JSON.stringify(intranet))
+  expect(await loadCiscoDeployment(url, {})).toEqual(intranet)
+  const bundled = readBundledCiscoDeployment(url)
+  expect(bundled).toEqual(intranet)
+  expect(ciscoEndpoints({}, bundled)).toEqual({
+    query: new URL(intranet.ciscoQueryUrl),
+    dial: new URL(intranet.ciscoDialUrl),
+  })
+  expect(ciscoEndpoints({ ciscoQueryUrl: 'https://override.test/q', ciscoDialUrl: 'https://override.test/d' }, bundled)).toEqual({
+    query: new URL('https://override.test/q'),
+    dial: new URL('https://override.test/d'),
+  })
+  expect(await loadCiscoDeployment(url, {
+    TPCOWORK_CISCO_QUERY_URL: 'https://ci.test/query?api_key=ci-q',
+    TPCOWORK_CISCO_DIAL_URL: 'https://ci.test/dial?api_key=ci-d',
+  })).toEqual({
+    ciscoQueryUrl: 'https://ci.test/query?api_key=ci-q',
+    ciscoDialUrl: 'https://ci.test/dial?api_key=ci-d',
+  })
+
+  expect(() => resolveCiscoDeployment({ ciscoQueryUrl: 'http://10.17.22.116:32300/mcp?api_key=secret-only-one' }, {}))
+    .toThrow('Cisco 办公电话部署配置无效，请同时配置有效的查号和拨号服务地址。')
+  expect(() => resolveCiscoDeployment({
+    ciscoQueryUrl: 'http://public.example/query?api_key=secret',
+    ciscoDialUrl: 'http://public.example/dial?api_key=secret',
+  }, {})).toThrow('Cisco 办公电话部署配置无效，请同时配置有效的查号和拨号服务地址。')
 })
 
 it('redacts service errors and never retries a dial whose outcome is uncertain', async () => {

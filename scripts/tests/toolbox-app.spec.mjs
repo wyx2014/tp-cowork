@@ -447,8 +447,8 @@ it('manages four real toolbox pages through the native browser', async () => {
   await expect.poll(() => panel.locator('article').count(), { timeout: 30000 }).toBe(skillCount)
 
   await tabs.getByRole('button', { name: 'MCP', exact: true }).click()
-  await expect.poll(() => panel.locator('article').count()).toBe(3)
-  expect((await scaffold.ctx.toolboxMcp.inventory()).items.map(row => row.id)).toEqual(['juyuan', 'caihui_mcp', 'playwright'])
+  await expect.poll(() => panel.locator('article').count()).toBe(0)
+  expect((await scaffold.ctx.toolboxMcp.inventory()).items).toEqual([])
   await panel.getByRole('button', { name: '新增 MCP', exact: true }).click()
   const editor = page.getByRole('form', { name: '添加 MCP 服务', exact: true })
   expect(await page.getByRole('dialog').count()).toBe(0)

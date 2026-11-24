@@ -32,5 +32,19 @@ export const mcpStyles = `
 .tp-mcp-import-entry p { margin:0; }
 .tp-mcp-import-name { display:flex; flex-wrap:wrap; gap:8px; overflow-wrap:anywhere; }
 .tp-mcp-import-name span { color:var(--dsw-alias-label-tertiary); }
+.tp-mcp-probe-toast-viewport { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; max-width:min(560px,calc(100vw - 32px)); width:max-content; pointer-events:none; }
+[data-platform=darwin] .tp-mcp-probe-toast-viewport { top:calc(16px + var(--dsh-frame-top-clearance,0px)); }
+.tp-mcp-probe-toast { display:flex; align-items:center; gap:10px; height:48px; min-height:48px; max-height:48px; max-width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid var(--dsw-alias-border-l3); border-radius:12px; background:var(--dsw-alias-bg-layer-1); color:var(--dsw-alias-label-primary); box-shadow:0 6px 20px rgb(0 0 0 / 14%); backdrop-filter:blur(8px); font-family:inherit; font-size:13px; font-weight:500; line-height:20px; pointer-events:auto; animation:tp-mcp-toast-in 160ms ease-out; }
+.tp-mcp-probe-toast[data-state=success] { color:light-dark(#178146,#52c985); background:color-mix(in srgb,#178146 10%,var(--dsw-alias-bg-layer-1)); border-color:color-mix(in srgb,#178146 30%,transparent); }
+.tp-mcp-probe-toast[data-state=failure] { color:light-dark(#d53030,#f87171); background:color-mix(in srgb,#d53030 10%,var(--dsw-alias-bg-layer-1)); border-color:color-mix(in srgb,#d53030 30%,transparent); }
+.tp-mcp-probe-toast > svg { flex:none; width:16px; height:16px; }
+.tp-mcp-probe-toast > span { min-width:0; flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.tp-mcp-probe-toast button { flex:none; display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:28px; height:28px; max-height:28px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.tp-mcp-probe-toast button:hover { background:color-mix(in srgb,currentColor 8%,transparent); }
+.tp-mcp-probe-toast button:focus-visible { outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:1px; }
+.tp-mcp-probe-toast button[aria-label] { width:28px; padding:0; }
+.tp-mcp-probe-toast button:not([aria-label]) { padding:0 8px; white-space:nowrap; }
+@keyframes tp-mcp-toast-in { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) { .tp-mcp-probe-toast { animation:none; } }
 @container toolbox (max-width:520px) { .tp-mcp-timeouts { gap:10px; }.tp-mcp-editor .tp-toolbox-editor-actions { justify-content:flex-end; margin-left:auto; } }
 `
