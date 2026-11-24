@@ -22,8 +22,8 @@ export const MEMORY_SECTION = [
   + 'save it with `memory_save` (a short kebab-case `name`, a one-line `description` used to decide relevance, a '
   + '`type`, and the fact as `body`; for `feedback` and `project`, follow the fact with **Why:** and **How to apply:** '
   + 'lines). Saving an existing name replaces that memory. Remove a memory with `memory_delete`; read one in full with '
-  + '`memory_read`. The `MEMORY.md` index lists one line per memory, is updated by these tools, and is loaded at the '
-  + 'start of each conversation.',
+  + '`memory_read`. These tools maintain the `MEMORY.md` index. At the start of each conversation, you receive '
+  + 'a bounded summary of recently updated memories.',
   '',
   'In a body, link related memories with `[[name]]`; a link to a memory that does not exist yet is fine.',
   '',
@@ -38,10 +38,10 @@ export const MEMORY_SECTION = [
 
 /**
  * The index message that opens a conversation.
- * @param index - bounded `MEMORY.md` text.
+ * @param index - bounded summary of recent memory files.
  */
 export function indexMessage(index: string): string {
-  return `Contents of MEMORY.md (this workspace's memory index, persists across conversations):\n\n${index}`
+  return `Recent workspace memories (newest updates first, up to the context limit):\n\n${index}`
 }
 
 /** System prompt of the background extraction call. */

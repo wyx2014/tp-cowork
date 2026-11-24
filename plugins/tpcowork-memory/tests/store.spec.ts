@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { boundIndex, listCatalog, MemoryStore, memoryRoot, parseFrontmatter, updateIndex } from '../src/store.ts'
+import { listCatalog, MemoryStore, memoryRoot, parseFrontmatter, renderMemory, updateIndex } from '../src/store.ts'
 import { formatUpdatedAt } from '../src/updated-at.ts'
 import { en } from '../src/locales.ts'
 
@@ -34,9 +34,10 @@ describe('memory store', () => {
     expect(parseFrontmatter(text!)).toEqual({ description: 'Prefers Chinese replies', type: 'feedback', originSessionId: 's1' })
     expect(text).toContain('**Why:** team language.')
     await memory.save({ name: 'report-dashboard', description: 'Weekly numbers live in the BI dashboard', type: 'reference', body: 'https://bi.example/weekly' }, 's2')
+    await utimes(join(memory.root, 'reply-language.md'), 1, 1)
     expect(await memory.index()).toBe([
-      '- [reply-language](reply-language.md) — Prefers Chinese replies',
       '- [report-dashboard](report-dashboard.md) — Weekly numbers live in the BI dashboard',
+      '- [reply-language](reply-language.md) — Prefers Chinese replies',
     ].join('\n'))
     expect((await memory.list()).map(entry => entry.name).sort()).toEqual(['reply-language', 'report-dashboard'])
   })
@@ -64,7 +65,47 @@ describe('memory store', () => {
   it('serializes concurrent saves so the index keeps every pointer', async () => {
     const memory = await store()
     await Promise.all(Array.from({ length: 8 }, (_, i) => memory.save({ name: `fact-${i}`, description: `F${i}`, type: 'user', body: 'x' }, undefined)))
+    expect((await readFile(join(memory.root, 'MEMORY.md'), 'utf8')).trim().split('\n')).toHaveLength(8)
     expect((await memory.index())!.split('\n')).toHaveLength(8)
+  })
+
+  it('prioritizes new and updated facts in an overfull legacy workspace', async () => {
+    const memory = await store()
+    await mkdir(memory.root, { recursive: true })
+    const names = Array.from({ length: 200 }, (_, i) => `old-${i}`)
+    await Promise.all(names.map(async (name, i) => {
+      const path = join(memory.root, `${name}.md`)
+      await writeFile(path, renderMemory({ name, description: 'Old fact', type: 'project', body: 'Historical fact.' }, undefined))
+      await utimes(path, i + 1, i + 1)
+    }))
+    // Existing workspaces have an oldest-first index.
+    await writeFile(join(memory.root, 'MEMORY.md'), names.map(name => `- [${name}](${name}.md) — Old fact\n`).join(''))
+    await memory.save({ name: 'new-fact', description: 'New fact', type: 'project', body: 'New.' }, undefined)
+    await memory.save({ name: 'old-0', description: 'Updated fact', type: 'project', body: 'Updated.' }, undefined)
+    await utimes(join(memory.root, 'new-fact.md'), 500, 500)
+    await utimes(join(memory.root, 'old-0.md'), 600, 600)
+    const lines = (await memory.index())!.split('\n')
+    expect(lines).toHaveLength(200)
+    expect(lines.slice(0, 2)).toEqual(['- [old-0](old-0.md) — Updated fact', '- [new-fact](new-fact.md) — New fact'])
+    expect(lines.some(line => line.startsWith('- [old-1]'))).toBe(false)
+    expect(await memory.read('old-1')).toContain('Historical fact.')
+  })
+
+  it('stops before a partial summary and skips entries that exceed the whole character budget', async () => {
+    const memory = await store()
+    const entries = [
+      { name: 'older', description: 'x'.repeat(15_000), time: 1 },
+      { name: 'recent', description: 'y'.repeat(15_000), time: 2 },
+      { name: 'short', description: 'kept', time: 3 },
+      { name: 'oversized', description: 'z'.repeat(30_000), time: 4 },
+    ]
+    for (const { name, description, time } of entries) {
+      await memory.save({ name, description, type: 'project', body: 'Fact.' }, undefined)
+      await utimes(join(memory.root, `${name}.md`), time, time)
+    }
+    const index = (await memory.index())!
+    expect(index.length).toBeLessThanOrEqual(25_000)
+    expect(index.split('\n')).toEqual(['- [short](short.md) — kept', `- [recent](recent.md) — ${entries[1]!.description}`])
   })
 
   it('lists only fact files and tolerates foreign Markdown', async () => {
@@ -79,18 +120,11 @@ describe('memory store', () => {
 })
 
 describe('index text', () => {
-  it('replaces, appends and removes pointer lines', () => {
-    const index = updateIndex(updateIndex('', 'a', 'A'), 'b', 'B')
-    expect(updateIndex(index, 'a', 'A2')).toBe('- [b](b.md) — B\n- [a](a.md) — A2\n')
-    expect(updateIndex(index, 'a', undefined)).toBe('- [b](b.md) — B\n')
-  })
-
-  it('bounds the index to 200 lines or 25,000 characters with a notice', () => {
-    expect(boundIndex('  short  ')).toBe('short')
-    const long = boundIndex(Array.from({ length: 250 }, (_, i) => `- line ${i}`).join('\n'))
-    expect(long.split('\n').filter(line => line.startsWith('- line'))).toHaveLength(200)
-    expect(long).toContain('[MEMORY.md truncated')
-    expect(boundIndex('x'.repeat(30_000)).length).toBeLessThan(25_200)
+  it('matches only the primary link when updating or deleting an index row', () => {
+    const reference = '- [b](b.md) — See [a](a.md)\n'
+    const index = '# Workspace memory\n- [a](a.md) — A\n' + reference
+    expect(updateIndex(index, 'a', 'A2')).toBe('# Workspace memory\n' + reference + '- [a](a.md) — A2\n')
+    expect(updateIndex(index, 'a', undefined)).toBe('# Workspace memory\n' + reference)
   })
 })
 

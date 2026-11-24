@@ -3,7 +3,7 @@
  * project-memory layout. The store, not the model, keeps the index in step with the fact files.
  */
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 
 export const MEMORY_TYPES = ['user', 'feedback', 'project', 'reference'] as const
@@ -30,6 +30,7 @@ const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/
 const MANIFEST_LIMIT = 200
 const INDEX_MAX_LINES = 200
 const INDEX_MAX_CHARS = 25_000
+const INDEX_LINK = /^\s*[-*+]\s+\[[^\]]*\]\(([^)]+)\)/u
 
 /**
  * Resolve the memory directory of one workspace, keyed like ZCode: basename slug plus the first 16
@@ -88,14 +89,8 @@ export function parseFrontmatter(text: string): { description: string; type: str
   return { description: field('description') ?? '', type: field('type') ?? '', ...origin === undefined ? {} : { originSessionId: origin } }
 }
 
-/** Bound the index the way ZCode bounds `MEMORY.md`: 200 lines or 25,000 characters. */
-export function boundIndex(text: string): string {
-  const trimmed = text.trim()
-  const lines = trimmed.split('\n')
-  let bounded = lines.slice(0, INDEX_MAX_LINES).join('\n')
-  if (bounded.length > INDEX_MAX_CHARS) bounded = bounded.slice(0, INDEX_MAX_CHARS)
-  if (bounded.length === trimmed.length) return trimmed
-  return `${bounded}\n\n[MEMORY.md truncated: only the first part is shown. Keep the index short; read individual memories with memory_read.]`
+function indexLine(name: string, description: string): string {
+  return `- [${name}](${name}.md) — ${oneLine(description)}`
 }
 
 async function readOptional(path: string): Promise<string | undefined> {
@@ -113,9 +108,9 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 
 /** Replace, append, or remove the index line pointing at `name.md`. */
 export function updateIndex(index: string, name: string, description: string | undefined): string {
-  const target = `](${name}.md)`
-  const lines = index.split('\n').filter(line => line.trim() !== '' && !line.includes(target))
-  if (description !== undefined) lines.push(`- [${name}](${name}.md) — ${oneLine(description)}`)
+  const target = `${name}.md`
+  const lines = index.split('\n').filter(line => line.trim() !== '' && INDEX_LINK.exec(line)?.[1] !== target)
+  if (description !== undefined) lines.push(indexLine(name, description))
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`
 }
 
@@ -135,11 +130,22 @@ export class MemoryStore {
     return join(this.root, `${assertMemoryName(name)}.md`)
   }
 
-  /** The bounded index text, or undefined when it is missing or empty. */
+  /** Render the newest complete fact summaries within the conversation's index budget. */
   async index(): Promise<string | undefined> {
-    const text = await readOptional(join(this.root, INDEX_FILE))
-    if (text === undefined || text.trim() === '') return undefined
-    return boundIndex(text)
+    const lines: string[] = []
+    let length = 0
+    for await (const { name, description } of this.recentEntries()) {
+      if (description.trim() === '') continue
+      const line = indexLine(name, description)
+      // An entry that cannot fit even on its own should not hide all other facts.
+      if (line.length > INDEX_MAX_CHARS) continue
+      const nextLength = length + line.length + (lines.length === 0 ? 0 : 1)
+      if (nextLength > INDEX_MAX_CHARS) break
+      lines.push(line)
+      if (lines.length === INDEX_MAX_LINES) break
+      length = nextLength
+    }
+    return lines.length === 0 ? undefined : lines.join('\n')
   }
 
   /** Create or replace one fact, keeping its first session id, and point the index at it. */
@@ -180,21 +186,34 @@ export class MemoryStore {
 
   /** Fact summaries, newest first, at most 200 like ZCode's recall manifest. */
   async list(): Promise<MemoryEntry[]> {
-    let names: string[]
-    try { names = await readdir(this.root) } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    const entries: MemoryEntry[] = []
+    for await (const entry of this.recentEntries()) {
+      entries.push(entry)
+      if (entries.length === MANIFEST_LIMIT) break
+    }
+    return entries
+  }
+
+  /** Sort file metadata first so callers only read the fact files they need. */
+  private async *recentEntries(): AsyncGenerator<MemoryEntry> {
+    let files
+    try { files = await readdir(this.root, { withFileTypes: true }) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
       throw error
     }
-    const entries: MemoryEntry[] = []
-    for (const file of names) {
-      if (!file.endsWith('.md') || file === INDEX_FILE || !NAME.test(file.slice(0, -3))) continue
-      const path = join(this.root, file)
-      const [text, info] = await Promise.all([readOptional(path), stat(path).catch(() => undefined)])
-      if (text === undefined || info === undefined || !info.isFile()) continue
-      const { description, type } = parseFrontmatter(text)
-      entries.push({ name: file.slice(0, -3), description, type, mtimeMs: info.mtimeMs })
+    const candidates: { name: string; mtimeMs: number }[] = []
+    for (const file of files) {
+      if (!file.isFile() || !file.name.endsWith('.md') || !NAME.test(file.name.slice(0, -3))) continue
+      const info = await lstat(join(this.root, file.name)).catch(() => undefined)
+      if (info?.isFile()) candidates.push({ name: file.name.slice(0, -3), mtimeMs: info.mtimeMs })
     }
-    return entries.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, MANIFEST_LIMIT)
+    candidates.sort((left, right) => right.mtimeMs - left.mtimeMs || left.name.localeCompare(right.name, 'en'))
+    for (const candidate of candidates) {
+      const text = await this.read(candidate.name)
+      if (text === undefined) continue
+      const { description, type } = parseFrontmatter(text)
+      yield { ...candidate, description, type }
+    }
   }
 }
 

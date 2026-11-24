@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/host.ts'
-import { memoryRoot } from '../src/store.ts'
+import { MemoryStore, memoryRoot } from '../src/store.ts'
 
 type Handler = (...args: any[]) => any
 
@@ -98,21 +98,66 @@ describe('memory plugin', () => {
       .rejects.toThrow('main conversation')
   })
 
-  it('injects the index once per conversation after the claimed prompt', async () => {
+  it('injects after the claimed prompt and stops once the index is recorded in history', async () => {
     const mounted = mount()
     const s = session()
     await mounted.tools.get('memory_save').execute({ name: 'a-fact', description: 'A fact', type: 'user', body: 'A.' }, exec(s))
     const prompt = { id: 'u1' }
     const preStep = mounted.handlers.get('agent/pre-step')![0]!
-    const first = await preStep({ agent: { session: s }, messages: [prompt], step: 1, signal: new AbortController().signal },
+    const run = (step: number) => preStep({ agent: { session: s }, messages: [prompt], step, signal: new AbortController().signal },
       async () => ({ kind: 'enter', messages: [prompt] }))
+    const first = await run(1)
     expect(first.messages).toHaveLength(2)
     expect(first.messages[0]).toBe(prompt)
     expect(first.messages[1].source).toEqual({ kind: 'tpcowork-memory', form: 'instructions' })
     expect(first.messages[1].content[0].text).toContain('- [a-fact](a-fact.md) — A fact')
-    const second = await preStep({ agent: { session: s }, messages: [prompt], step: 2, signal: new AbortController().signal },
+    // Returning the proposed step does not commit it to the session.
+    const retried = await run(1)
+    expect(retried.messages).toHaveLength(2)
+    s.events.push({ type: 'user/message', data: retried.messages[1] })
+    s.surface.nodes.push(0)
+    expect((await run(2)).messages).toEqual([prompt])
+  })
+
+  it('retries injection after the first index read is cancelled', async () => {
+    const mounted = mount()
+    const s = session()
+    await mounted.tools.get('memory_save').execute({ name: 'a-fact', description: 'A fact', type: 'user', body: 'A.' }, exec(s))
+    const prompt = { id: 'u1' }
+    const preStep = mounted.handlers.get('agent/pre-step')![0]!
+    const run = (signal: AbortSignal) => preStep({ agent: { session: s }, messages: [prompt], step: 1, signal },
       async () => ({ kind: 'enter', messages: [prompt] }))
-    expect(second.messages).toHaveLength(1)
+    const abort = new AbortController()
+    const index = MemoryStore.prototype.index
+    const read = vi.spyOn(MemoryStore.prototype, 'index').mockImplementationOnce(async function (this: MemoryStore) {
+      const value = await index.call(this)
+      abort.abort()
+      return value
+    })
+    try {
+      await expect(run(abort.signal)).rejects.toMatchObject({ name: 'AbortError' })
+      expect((await run(new AbortController().signal)).messages[1].source.kind).toBe('tpcowork-memory')
+    } finally {
+      read.mockRestore()
+    }
+  })
+
+  it('can inject after an empty index or a temporary read error', async () => {
+    const mounted = mount()
+    const s = session()
+    const prompt = { id: 'u1' }
+    const preStep = mounted.handlers.get('agent/pre-step')![0]!
+    const run = () => preStep({ agent: { session: s }, messages: [prompt], step: 1, signal: new AbortController().signal },
+      async () => ({ kind: 'enter', messages: [prompt] }))
+    expect((await run()).messages).toEqual([prompt])
+    await mounted.tools.get('memory_save').execute({ name: 'a-fact', description: 'A fact', type: 'user', body: 'A.' }, exec(s))
+    const read = vi.spyOn(MemoryStore.prototype, 'index').mockRejectedValueOnce(new Error('temporarily unreadable'))
+    try {
+      expect((await run()).messages).toEqual([prompt])
+      expect((await run()).messages[1].source.kind).toBe('tpcowork-memory')
+    } finally {
+      read.mockRestore()
+    }
   })
 
   it('extracts after a completed turn with user prose and saves the returned facts', async () => {

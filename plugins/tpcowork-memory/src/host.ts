@@ -1,6 +1,6 @@
 /**
  * TP Cowork workspace memory, modeled on ZCode's project memory: a `# Memory` system-prompt section,
- * the `MEMORY.md` index at the start of each conversation, model tools that own the fact files, and an
+ * a bounded index of recent facts at the start of each conversation, model tools that own the fact files, and an
  * optional background extraction after each completed turn. Off by default, like ZCode, because
  * extraction adds a model call per turn; the Settings switch turns it on from the next request.
  * @module @tpcowork/dsh-memory
@@ -169,7 +169,7 @@ export function apply(ctx: Context, config: Config): void {
     presentCall: args => ({ card: 'generic', title: `Read memory: ${args.name}`, kind: 'read', rawInput: args }),
   })
 
-  // The index enters once per conversation, at its first proceeding step; a resumed log already holds it.
+  // Only a recorded index message counts as injected, including in a resumed conversation.
   const indexed = new WeakSet<Session>()
   const alreadyIndexed = (session: Session): boolean => {
     if (indexed.has(session)) return true
@@ -187,9 +187,9 @@ export function apply(ctx: Context, config: Config): void {
     const decision = await next()
     if (!on()) return decision
     const cwd = workspaceOf(agent.session)
-    if (cwd === undefined || decision.kind === 'reject' || (step === 1 && decision.messages.length === 0)) return decision
+    if (cwd === undefined || decision.kind === 'reject' || (step === 1 && (decision.handledLocally || decision.messages.length === 0))) return decision
     if (alreadyIndexed(agent.session)) return decision
-    indexed.add(agent.session)
+    signal.throwIfAborted()
     let index: string | undefined
     try { index = await storeFor(cwd).index() } catch (error) {
       ctx.logger.warn('memory index unreadable: %o', error)
@@ -249,6 +249,10 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   ctx.on('session/event', (session, event) => {
+    if (event.type === 'user/message' && event.data.source.kind === 'tpcowork-memory') {
+      indexed.add(session)
+      return
+    }
     if (!on() || !config.extraction || workspaceOf(session) === undefined) return
     switch (event.type) {
       case 'user/message':
