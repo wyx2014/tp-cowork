@@ -3,7 +3,7 @@ import { AutomationError, AutomationEvidencePendingError } from './errors.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { nextRunAt } from './recurrence.ts'
 import type { AutomationService } from './host.ts'
-import type { AutomationClock, AutomationExecutor, AutomationRuntime, AutomationTaskId,
+import type { AutomationClock, AutomationExecutor, AutomationRunId, AutomationRuntime, AutomationTaskId,
   ScheduledTask, ScheduledTaskRun, AutomationRunOutcome } from './types.ts'
 
 /**
@@ -20,6 +20,9 @@ export const systemClock: AutomationClock = {
   clearTimeout(handle) { clearTimeout(handle as ReturnType<typeof setTimeout>) },
 }
 const staleMs = 24 * 60 * 60 * 1000
+const maxAgentRuns = 3
+const recoveryTimeoutMs = 10_000
+const recoveryRetryMs = 60_000
 
 export class AutomationScheduler implements AutomationRuntime {
   readonly nextRunAt = nextRunAt
@@ -34,10 +37,12 @@ export class AutomationScheduler implements AutomationRuntime {
   private connecting: Promise<void> | undefined
   private disconnecting = false
   private disposal: Promise<void> | undefined
-  private readonly lifetime = new AbortController()
   private connection: AbortController | undefined
+  private agentSlots = 0
   private readonly executions = new Map<AutomationTaskId, { controller: AbortController; runId: string; release(): void; done: Promise<void> }>()
   private readonly admissions = new Set<Promise<unknown>>()
+  private recoveryReads = new Set<AutomationRunId>()
+  private readonly recoverAfter = new Map<AutomationRunId, number>()
 
   constructor(private readonly ctx: Context, private readonly service: AutomationService, private readonly clock: AutomationClock = systemClock,
     private readonly maxSleepMs = 300_000) {}
@@ -55,11 +60,12 @@ export class AutomationScheduler implements AutomationRuntime {
     this.executor = executor
     this.connection = new AbortController()
     const connect = (async () => {
-      await this.recover()
-      if (this.stopped) return
       await this.service.recomputeSchedules()
       if (this.stopped) return
       this.ready = true
+      this.recoverAfter.clear()
+      this.recoveryReads = new Set()
+      this.recover()
       this.arm()
     })()
     this.connecting = connect
@@ -98,7 +104,8 @@ export class AutomationScheduler implements AutomationRuntime {
     // list is async: track this short read as an admission, so disposal cannot outlive store access.
     const pending = this.service.list().then(payload => {
       if (!this.isReady() || this.dispatch) return
-      const targets = payload.tasks.filter(task => task.status === 'active' && !task.runs.some(run => run.status === 'running'))
+      const targets = payload.tasks.filter(task => task.status === 'active' && !task.runs.some(run => run.status === 'running')
+        && (task.executionMode === 'reminder' || this.agentSlots < maxAgentRuns))
         .flatMap(task => task.nextRunAt === undefined ? [] : [task.nextRunAt])
       const delay = Math.min(this.maxSleepMs, Math.max(0, (targets.length ? Math.min(...targets) : this.clock.now() + this.maxSleepMs) - this.clock.now()))
       this.clearTimer()
@@ -107,13 +114,13 @@ export class AutomationScheduler implements AutomationRuntime {
     this.admissions.add(pending)
     void pending.finally(() => this.admissions.delete(pending))
   }
-  /** Foreground awaitable for deterministic Host tests; concurrent wakes share one dispatch. */
+  /** Concurrent wakes share only the due scan and durable admissions. */
   wake(): Promise<void> {
     if (this.dispatch) return this.dispatch
     if (!this.isReady()) return Promise.resolve()
     this.clearTimer()
     const pending = (async () => {
-      await this.recover()
+      this.recover()
       const now = this.clock.now()
       const due = (await this.service.list()).tasks.filter(task => task.status === 'active' && task.schedule.frequency !== 'manual'
         && task.nextRunAt !== undefined && task.nextRunAt <= now && !task.runs.some(run => run.status === 'running'))
@@ -122,11 +129,10 @@ export class AutomationScheduler implements AutomationRuntime {
         if (!this.isReady()) break
         try { await this.admit(task.id, task.nextRunAt) }
         catch (error) {
-          // Edits/pause/delete/manual admission may win while a previous due task is executing.
-          if (error instanceof AutomationError && ['automation/task_running', 'automation/task_not_found', 'automation/invalid_rule'].includes(error.code)) continue
+          // Edits, other admissions, or a full Agent pool leave the next item eligible, including reminders.
+          if (error instanceof AutomationError && ['automation/task_running', 'automation/task_not_found', 'automation/invalid_rule', 'automation/agent_capacity'].includes(error.code)) continue
           throw error
         }
-        await this.executions.get(task.id)?.done
       }
     })().catch(() => {
       // Never retry a failed execution. Storage/recovery faults leave durable evidence for a later wake.
@@ -147,13 +153,29 @@ export class AutomationScheduler implements AutomationRuntime {
     this.executions.delete(id)
     execution.controller.abort()
     execution.release()
+    this.arm()
   }
   private async admit(id: AutomationTaskId, scheduledAt?: number): Promise<void> {
     const executor = this.executor
     if (!executor || !this.isReady()) throw new AutomationError('runtime_unavailable', '自动化执行器尚未就绪。')
+    let agentSlot = false
+    const releaseSlot = () => {
+      if (!agentSlot) return
+      agentSlot = false
+      this.agentSlots--
+    }
     const admission = (async () => {
-      const run = await this.service.beginRun({ taskId: id, trigger: scheduledAt === undefined ? 'manual' : 'scheduled', scheduledAt })
+      const run = await this.service.beginRun({ taskId: id, trigger: scheduledAt === undefined ? 'manual' : 'scheduled', scheduledAt }, mode => {
+        if (!this.isReady() || this.executor !== executor) throw new AutomationError('runtime_unavailable', '自动化执行器尚未就绪。')
+        if (mode === 'reminder') return
+        if (this.agentSlots >= maxAgentRuns) throw new AutomationError('agent_capacity', 'Agent 运行已满，请稍后重试。')
+        this.agentSlots++
+        agentSlot = true
+      })
       const task = { ...this.service.getTask(id), executionMode: run.executionMode }
+      // A stopped run may have been durably settled immediately before this admission.
+      const previous = this.executions.get(id)
+      if (previous) this.releaseRun(id, previous.runId)
       const controller = new AbortController()
       if (!this.isReady() || this.executor !== executor) controller.abort()
       // Schedule work after durable start; admission never awaits the Agent's terminal state.
@@ -176,31 +198,63 @@ export class AutomationScheduler implements AutomationRuntime {
       }).catch(() => {
         // A failed terminal write remains running for Session/Turn recovery, never replay.
         this.ctx.logger.warn('自动化运行结算失败；保留 running 记录等待恢复。')
-      }).finally(() => { if (this.executions.get(id)?.controller === controller) this.executions.delete(id); this.arm() })
+      }).finally(() => {
+        releaseSlot()
+        if (this.executions.get(id)?.controller === controller) this.executions.delete(id)
+        this.arm()
+      })
       let release = () => {}
-      const released = new Promise<void>(resolve => { release = resolve })
+      const released = new Promise<void>(resolve => { release = () => { releaseSlot(); resolve() } })
       this.executions.set(id, { controller, runId: run.id, release, done: Promise.race([done, released]) })
     })()
     this.admissions.add(admission)
-    try { await admission } finally { this.admissions.delete(admission) }
+    try { await admission }
+    catch (error) { releaseSlot(); throw error }
+    finally { this.admissions.delete(admission) }
   }
-  private async recover(): Promise<void> {
-    if (this.recovery) return this.recovery
+  private recover(): void {
+    if (this.recovery) return
     const executor = this.executor
-    if (!executor || this.stopped) return
+    const connection = this.connection
+    if (!executor || !connection || !this.isReady()) return
     const pending = (async () => {
-      for (const task of (await this.service.list()).tasks) {
+      const { tasks } = await this.service.list()
+      const running = new Set(tasks.flatMap(task => task.runs.filter(run => run.status === 'running').map(run => run.id)))
+      for (const id of this.recoverAfter.keys()) if (!running.has(id)) this.recoverAfter.delete(id)
+      for (const task of tasks) {
         for (const run of task.runs) {
-          if (run.status !== 'running' || this.executions.has(task.id) || this.stopped || this.executor !== executor) continue
-          const outcome = await executor.recover({ task, run, signal: this.connection?.signal ?? this.lifetime.signal })
-          if (this.stopped || this.executor !== executor) return
-          if (outcome) await this.service.finishRun({ ...outcome, taskId: task.id, runId: run.id })
-          else if (this.clock.now() - run.startedAt > staleMs) await this.interrupt(task, run)
+          if (connection.signal.aborted) return
+          if (run.status !== 'running' || this.executions.has(task.id) || this.recoveryReads.has(run.id)
+            || (this.recoverAfter.get(run.id) ?? 0) > this.clock.now()) continue
+          this.recoverAfter.set(run.id, this.clock.now() + recoveryRetryMs)
+          try {
+            const outcome = await this.readRecovery(executor, task, run, connection.signal)
+            if (connection.signal.aborted) return
+            if (outcome) await this.service.finishRun({ ...outcome, taskId: task.id, runId: run.id })
+            else if (this.clock.now() - run.startedAt > staleMs) await this.interrupt(task, run)
+          } catch {
+            if (!connection.signal.aborted) this.ctx.logger.warn('自动化运行恢复暂未完成，将稍后重试。')
+          }
         }
       }
-    })()
+    })().catch(() => {
+      if (!connection.signal.aborted) this.ctx.logger.warn('自动化恢复暂未完成，将稍后重试。')
+    }).finally(() => { if (this.recovery === pending) this.recovery = undefined })
     this.recovery = pending
-    try { await pending } finally { if (this.recovery === pending) this.recovery = undefined }
+  }
+  private readRecovery(executor: AutomationExecutor, task: ScheduledTask, run: ScheduledTaskRun, connection: AbortSignal): Promise<AutomationRunOutcome | undefined> {
+    const signal = AbortSignal.any([connection, AbortSignal.timeout(recoveryTimeoutMs)])
+    const reads = this.recoveryReads
+    reads.add(run.id)
+    // A timed-out adapter may ignore its signal. Ignore its late result and do not duplicate that read.
+    const read = Promise.resolve().then(() => executor.recover({ task, run, signal }))
+      .finally(() => { reads.delete(run.id) })
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      if (signal.aborted) abort()
+      void read.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+    })
   }
   private async interrupt(task: ScheduledTask, run: ScheduledTaskRun): Promise<void> {
     await this.service.finishRun({ taskId: task.id, runId: run.id, status: 'error', resultType: 'none',
@@ -212,7 +266,6 @@ export class AutomationScheduler implements AutomationRuntime {
     this.clearTimer()
     this.unsubscribe?.()
     this.unsubscribe = undefined
-    this.lifetime.abort()
     this.connection?.abort()
     await this.connecting?.catch(() => {})
     if (this.executor) await this.disconnect(this.executor)

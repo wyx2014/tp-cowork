@@ -50,9 +50,10 @@ export function AutomationPage({ services, t, locale }: AutomationPageProps) {
     <button type="button" className="tp-auto-assistant" onClick={() => services.askAssistant(t('askPrompt'))}><AutomationIcon name="wand" />{t('ask')}</button>
   </div>
   const deletion = allTasks.find(task => task.id === deleting)
-  const deleteDialog = deletion && <DeleteConfirmation title="delete" hint="deleteHint" pending={state.pending || deletion.runs.some(run => run.status === 'running')} failure={state.error ? state.failure ?? 'unknown' : undefined} t={t} cancel={() => setDeleting(undefined)} confirm={() => {
+  const deleteDialog = deletion && <DeleteConfirmation key={deletion.id} title="delete" hint="deleteHint" allowSessionCleanup={deletion.runs.some(run => run.ownsSession)}
+    pending={state.pending || deletion.runs.some(run => run.status === 'running')} failure={state.error ? state.failure ?? 'unknown' : undefined} t={t} cancel={() => setDeleting(undefined)} confirm={cleanupSessions => {
     if (deletion.runs.some(run => run.status === 'running')) return
-    void catalog.mutate(() => services.automation.delete({ id: deletion.id })).then(ok => {
+    void catalog.mutate(() => services.automation.delete({ id: deletion.id, ...cleanupSessions ? { cleanupSessions } : {} })).then(ok => {
       if (ok) { setDeleting(undefined); if (editor?.id === deletion.id) setEditor(undefined) }
     })
   }} />

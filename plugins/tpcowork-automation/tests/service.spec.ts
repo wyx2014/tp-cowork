@@ -258,6 +258,72 @@ describe('durable automation service', () => {
     expect(stored.runs.some(run => run.id === first.id)).toBe(false)
   })
 
+  it('persists pending cleanup with the trimmed history and resumes it after a restart', async () => {
+    const root = await directory()
+    const first = await harness(root)
+    const task = await create(first.service)
+    const run = await first.service.beginRun({ taskId: task.id, trigger: 'manual' })
+    const sessionId = SessionId('retired')
+    await first.service.bindRun({ taskId: task.id, runId: run.id, sessionId, turnId: 1, ownsSession: true })
+    await first.service.finishRun({ taskId: task.id, runId: run.id, status: 'completed', resultType: 'conversation', conversationAvailable: true })
+    for (let index = 0; index < 19; index++) await complete(first.service, task.id)
+    const readTask = async () => JSON.parse(await readFile(join(root, 'tpcowork_automation.json'), 'utf8')).tables.tasks[task.id]
+    expect((await readTask()).runs.at(-1).id).toBe(run.id)
+    await complete(first.service, task.id)
+    const record = await readTask()
+    expect(record.task.runs).toHaveLength(20)
+    expect(record.task.runs.map((entry: { id: string }) => entry.id)).not.toContain(run.id)
+    expect(record.pendingCleanup).toMatchObject([{ id: run.id, sessionId, ownsSession: true }])
+    const temporarilyUnavailable = vi.fn().mockRejectedValue(new Error('Session busy'))
+    const detach = first.service.attachSessionCleanup({ deleteRunSession: temporarilyUnavailable })
+    await vi.waitFor(() => expect(temporarilyUnavailable).toHaveBeenCalledOnce())
+    await detach()
+    expect((await readTask()).pendingCleanup).toEqual(record.pendingCleanup)
+    await first.fiber.dispose()
+
+    const second = await harness(root)
+    const remove = vi.fn().mockResolvedValue(undefined)
+    second.service.attachSessionCleanup({ deleteRunSession: remove })
+    await vi.waitFor(async () => expect((await readTask()).runs).toHaveLength(20))
+    expect(remove).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: task.id }), expect.objectContaining({ id: run.id, sessionId }), { preserveUserWork: true })
+    expect((await second.service.list()).tasks[0]?.runs).toHaveLength(20)
+  })
+
+  it('retries opted-in task cleanup only after other task references are removed', async () => {
+    const root = await directory()
+    const first = await harness(root)
+    for (const cleanupSessions of [false, true]) {
+      const owner = await create(first.service)
+      const run = await first.service.beginRun({ taskId: owner.id, trigger: 'manual' })
+      const sessionId = SessionId(cleanupSessions ? 'owned-result' : 'kept-result')
+      await first.service.bindRun({ taskId: owner.id, runId: run.id, sessionId, turnId: 1, ownsSession: true })
+      await first.service.finishRun({ taskId: owner.id, runId: run.id, status: 'completed', resultType: 'conversation', conversationAvailable: true })
+      if (cleanupSessions) {
+        const shared = await first.service.beginRun({ taskId: owner.id, trigger: 'manual' })
+        await first.service.bindRun({ taskId: owner.id, runId: shared.id, sessionId: SessionId('shared-result'), ownsSession: false })
+        await first.service.finishRun({ taskId: owner.id, runId: shared.id, status: 'completed', resultType: 'conversation', conversationAvailable: true })
+      }
+      await first.service.delete(cleanupSessions ? { id: owner.id, cleanupSessions } : { id: owner.id })
+    }
+    const reference = await create(first.service, { ...draft(), originSessionId: SessionId('owned-result') })
+    expect((await first.service.list()).tasks.map(task => task.id)).toEqual([reference.id])
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const detach = first.service.attachSessionCleanup({ deleteRunSession: remove })
+    await detach()
+    expect(remove).not.toHaveBeenCalled()
+    await first.service.delete({ id: reference.id })
+    await first.fiber.dispose()
+
+    const second = await harness(root)
+    second.service.attachSessionCleanup({ deleteRunSession: remove })
+    await vi.waitFor(async () => {
+      const { tables } = JSON.parse(await readFile(join(root, 'tpcowork_automation.json'), 'utf8'))
+      expect(tables.tasks).toEqual({})
+    })
+    expect(remove).toHaveBeenCalledExactlyOnceWith(expect.anything(), expect.objectContaining({ sessionId: 'owned-result' }), { preserveUserWork: true })
+    expect((await second.service.list()).tasks).toEqual([])
+  })
+
   it('links Session/Turn explicitly, retains unread unavailable results and preserves viewedAt monotonically', async () => {
     const { service } = await harness()
     const task = (await service.create({ ...draft(), originSessionId: SessionId('creation') })).tasks[0]!

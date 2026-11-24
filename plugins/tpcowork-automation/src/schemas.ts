@@ -9,7 +9,7 @@ const identity = z.string().min(1).refine(value => value.trim() === value)
 const timestamp = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 export const taskIdSchema = identity.transform(value => value as AutomationTaskId)
 export const runIdSchema = identity.transform(value => value as AutomationRunId)
-const sessionIdSchema = identity.transform(value => value as SessionId)
+export const sessionIdSchema = identity.transform(value => value as SessionId)
 const projectIdSchema = identity.transform(value => value as WorkspaceId)
 const timezoneSchema = z.string().min(1).superRefine((value, ctx) => {
   try {
@@ -21,7 +21,7 @@ const timezoneSchema = z.string().min(1).superRefine((value, ctx) => {
 })
 export const errorCodeSchema = z.enum(['invalid_input', 'invalid_timezone', 'invalid_rule', 'invalid_persistence',
   'storage_failure', 'task_not_found', 'run_not_found', 'task_running', 'run_running', 'runtime_unavailable',
-  'service_stopping', 'run_interrupted', 'session_cleanup_failed', 'execution_failed'])
+  'service_stopping', 'run_interrupted', 'session_cleanup_failed', 'execution_failed', 'agent_capacity'])
 
 export const scheduleSchema = z.object({
   frequency: z.enum(['once', 'hourly', 'daily', 'weekly', 'monthly', 'weekdays', 'custom', 'manual']),
@@ -58,6 +58,7 @@ export const draftSchema = z.object({
 }).strict()
 export const createSchema = draftSchema.extend({ originSessionId: sessionIdSchema.optional(), timezone: timezoneSchema.optional() })
 export const taskRequestSchema = z.object({ id: taskIdSchema }).strict()
+export const deleteTaskSchema = taskRequestSchema.extend({ cleanupSessions: z.boolean().optional() })
 export const updateSchema = taskRequestSchema.extend({ data: draftSchema.extend({
   projectId: projectIdSchema.nullable().optional(), timezone: timezoneSchema.optional(),
   modelSelection: draftSchema.shape.modelSelection.unwrap().nullable().optional(),

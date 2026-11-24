@@ -71,6 +71,7 @@ export interface AutomationCreateRequest extends ScheduleTaskDraft {
   timezone?: string | undefined
 }
 export interface AutomationTaskRequest { id: AutomationTaskId }
+export interface AutomationDeleteTaskRequest extends AutomationTaskRequest { cleanupSessions?: boolean | undefined }
 export interface AutomationUpdateRequest extends AutomationTaskRequest {
   data: Omit<ScheduleTaskDraft, 'projectId' | 'modelSelection' | 'permissionPreset'> & {
     /** Omission preserves these choices; null explicitly clears them across JSON transports. */
@@ -139,7 +140,7 @@ export interface AutomationMigrationStatus {
 export type AutomationErrorCode = 'invalid_input' | 'invalid_timezone' | 'invalid_rule' | 'invalid_persistence'
   | 'storage_failure' | 'task_not_found' | 'run_not_found' | 'task_running' | 'run_running'
   | 'runtime_unavailable' | 'service_stopping' | 'run_interrupted' | 'session_cleanup_failed'
-  | 'execution_failed'
+  | 'execution_failed' | 'agent_capacity'
 export type AutomationFailureCode = `automation/${AutomationErrorCode}`
 
 /** Same service used by the UI and chat tools. Mutations resolve only after durable commit. */
@@ -147,7 +148,7 @@ export interface AutomationServiceApi {
   list(): Promise<ScheduleTasksPayload>
   create(request: AutomationCreateRequest): Promise<ScheduleTasksPayload>
   update(request: AutomationUpdateRequest): Promise<ScheduleTasksPayload>
-  delete(request: AutomationTaskRequest): Promise<ScheduleTasksPayload>
+  delete(request: AutomationDeleteTaskRequest): Promise<ScheduleTasksPayload>
   pause(request: AutomationTaskRequest): Promise<ScheduleTasksPayload>
   resume(request: AutomationTaskRequest): Promise<ScheduleTasksPayload>
   /** Resolves after admission/start persistence, before the full run ends; paused tasks may run manually. */
@@ -165,7 +166,7 @@ export type AutomationRemoteApi = {
 
 /** Host-only adapters: register exactly one scheduler; attach effects to the owning plugin. */
 export interface AutomationRuntime {
-  /** False until the real executor's recovery has completed. Omitted for legacy adapters. */
+  /** False until the real executor can admit work. Omitted for legacy adapters. */
   isReady?(): boolean
   /** Only the scheduler owns attachRuntime; execution modules use service.attachExecutor instead. */
   attachExecutor?(executor: AutomationExecutor): Promise<() => Promise<void>>
@@ -212,7 +213,7 @@ export interface AutomationExecutor {
 
 /** Cleanup must be idempotent, reject foreign Sessions, and leave the history intact on failure. */
 export interface AutomationSessionCleanup {
-  deleteRunSession(task: ScheduledTask, run: ScheduledTaskRun): Promise<void>
+  deleteRunSession(task: Pick<ScheduledTask, 'id' | 'originSessionId'>, run: ScheduledTaskRun, options?: { preserveUserWork: true }): Promise<void>
   /** Stop new cleanup calls and wait for already owned deletion operations. */
   dispose?(): Promise<void>
 }

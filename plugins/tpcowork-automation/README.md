@@ -124,9 +124,9 @@ Host 和 Client 都提供 `AutomationServiceApi`。所有成功调用返回 `{ t
 
 ## Host 执行适配器
 
-包根默认入口现为组合插件：加载命名导出的 `AutomationService`，再通过 Cordis inject 加载 `AutomationScheduler`。仅调度器调用 `attachRuntime`，子任务03不得再注册第二个 Runtime。独立管理服务仍可用于单元测试。九个 Gateway/Client 方法、任务持久化版本及表名均保持不变。
+包根默认入口加载命名导出的 `AutomationService`，再通过 Cordis inject 加载 `AutomationScheduler`。调度器独占 `attachRuntime`。独立管理服务可用于单元测试。Gateway 的 `delete` 接受可选的 `cleanupSessions`，只传 `id` 仍默认保留结果会话。
 
-`src/executor.ts` 的 DshAutomationExecutor 已由组合插件自动注册，先完成证据恢复再启用调度；自定义精简组合可单独使用命名导出的 AutomationService 和 AutomationScheduler，自行在 Cordis effect 内注册唯一执行器。接口示意：
+`src/executor.ts` 的 DshAutomationExecutor 由组合插件自动注册。自定义精简组合可单独使用命名导出的 AutomationService 和 AutomationScheduler，在 Cordis effect 内注册唯一执行器。
 
 ```ts
 ctx.effect(async () => ctx.automation.attachExecutor({
@@ -148,25 +148,27 @@ ctx.effect(async () => ctx.automation.attachExecutor({
 
 上例是接口示意，必须由真实 DSH 实现替换后才注册，不能直接返回成功。新增 Host 类型为 `AutomationExecutor`、`AutomationExecution`、`AutomationRecovery`、`AutomationRunOutcome` 和 `AutomationClock`。执行器只负责执行及证据查询，调度器独占准入、历史结算和下一时间计算。运行配置使用准入后的独立快照，executionMode 固定为开始记录的模式；结算读取任务最新规则。未知抛出错误使用安全的 execution_failed 文案，不将上游原始异常或凭证写入历史；受控错误可在 outcome 中返回脱敏说明。
 
-执行器注册先查询未结算记录并重新计算后续目标，再启用计时器。interval 按当前时间重新锚定，过去 once 不补跑；不追补停机的全部周期。醒来处理当前到期项，按 nextRunAt 升序串行等待执行完成；每次准入都在持久化队列内重新核对到期目标，暂停、删除或编辑已排队任务不会误启动。手动触发独立准入，不等待另一任务的完整执行；同任务的并发准入只成功一次。失败执行结束后计算正常下一周期，不立即重试。最长休眠五分钟以应对系统唤醒；客户端计时器仅刷新状态。
+执行器注册后重新计算计划并启用计时器，同时在后台恢复未结算记录。interval 按当前时间重新锚定，停机期间错过的周期和过期 once 均跳过。每次唤醒按 `nextRunAt` 升序准入，在写入队列内重新核对当前计划，持久化开始记录后即交由执行器。手动和定时触发合计最多同时运行 3 个 Agent，满额时到期的 Agent 等待空位，手动 Agent 返回容量提示。纯提醒独立准入。同一任务同时只允许一条运行中记录。失败的周期任务继续按正常计划运行。最长休眠五分钟以应对系统唤醒，客户端计时器只刷新状态。
 
 调度器的 `runNow` 先调用 `beginRun` 持久化开始记录，再安排执行并尽快返回；暂停任务也可手动运行。`beginRun({ taskId, trigger, scheduledAt? })` 原子拒绝重入；scheduled 触发现在必须携带当前且已到期的 scheduledAt。分配独立 DSH Session 后，通过 execution.bind 持久化关联；其内部仍调用既有 `bindRun`。首次绑定默认仍为 resultType=none，不能根据 ID 推断会话；只有显式 conversationAvailable=true 才原子发布 conversation、conversationId/sessionKey/sessionId 一致的可用结果，执行中也可打开和跟随。纯提醒禁止发布会话，已绑定的 Turn 不可更换。turnId 是该 Session 的 `turn/start.data.turn` 数字，不是 Session ID 或消息 ID。不得声称拥有创建会话或其他已关联运行的 Session。
 
 真实终态确认后，执行器返回 outcome，调度器调用既有 `finishRun`。`status` 接受 completed/error/skipped，skipped 必须有 skippedReason。`completedAt?` 用于恢复时保留原 turn/end 的时间；resultType/conversationAvailable 始终显式提供。服务在串行结算内按当前规则计算 nextRunAt，覆盖过期快照；暂停任务和 manual 不会被重新启动。旧 `finishRun.nextRunAt?` 只在未装入 Runtime 的测试/兼容场景下作兜底。结束调用幂等，不覆盖已结算记录及已读状态。单纯消息投递、followup 或 Agent 一次 idle 不能当作执行成功。
 
-DshAutomationExecutor 的 recover 使用 SessionPersistence 只读 handle 查询保存的 sessionId/turnId 及专属归属记录。SessionQuery 的冷查询会在内存补出 interrupted 闭合事件，恢复不把这些合成事件当作持久化终态。调度器优先按证据修复 running；查询成功但没有终态且超过 24 小时，标记 error/errorCode=run_interrupted、resultType=none。较新的未知运行保持 running 并禁止重入，每次唤醒继续查询。证据查询失败时不误报成功或中断。禁止自动重放外部操作。开始写入失败时不调用执行器；结束写入失败时保留 running，等待上述恢复。执行器未确认终态 flush、终态回查、会话可用性发布或释放 Agent 时抛出内部 AutomationEvidencePendingError，调度器同样保留 running，不以未知结果提前结算。
+DshAutomationExecutor 的 `recover` 通过 SessionPersistence 查询保存的 sessionId/turnId 及归属记录，只采信真实持久化的终态。每条记录的后台查询独立处理，限时 10 秒，后续唤醒至少间隔 60 秒再检查同一条记录。持久化证据已确认时按原结果结算。查询成功且确实缺少终态的记录继续保持 running，超过 24 小时则标记 `run_interrupted`。查询失败、结算写入失败或终态仍未确认时保留 running，等待恢复。开始记录必须先保存才能执行。恢复只读取证据和结算，外部操作只由原始执行发起。Agent 的 `dispose()` 报错时写入 Host 日志，已确认的结果或原始执行错误照常结算。
 
-撤销执行器先关闭准入和计时器，再 abort、等待所有执行和恢复调用结束，最后调用 executor.dispose；旧执行器尚未完成清理时拒绝替换。卸载调度器还会释放唯一 Runtime 和监听。正常取消保存 run_interrupted；进程崩溃留下的记录通过 recover 修复。可注入 AutomationClock（包插件选项 `{ clock }` 或 Scheduler 构造参数），持久化时间和计时器使用同一时钟。`recomputeSchedules()` 在服务写入队列内计算，避免启动/恢复与 CRUD 覆盖；`getTask()` 是准入后供执行器获取独立快照的 Host 内部接口。
+撤销执行器先关闭准入和计时器，再取消执行和恢复，等调度工作退出后调用 `executor.dispose`。旧执行器清理完成后才能注册新执行器。卸载调度器还会释放唯一 Runtime 和监听。正常取消保存 `run_interrupted`，进程崩溃留下的记录通过 `recover` 修复。可注入 AutomationClock（包插件选项 `{ clock }` 或 Scheduler 构造参数），持久化时间和计时器使用同一时钟。`recomputeSchedules()` 在服务写入队列内计算，`getTask()` 供执行器在准入后获取独立快照。
 
 真实执行每次分配随机唯一 Session，并沿用准入时已有的 runId。先持久化 Session/Turn=1 关联，再通过 ctx.agents.create 创建全新无 seed、无 parentSession 的顶层 Agent；从现有默认 Agent preset 挂载工具和权限，不复制来源会话上下文。Session.header.cwd 保留 task.projectId 对应项目的目录，workspacePath 只通过 workingDirectory.set 改变有效执行目录；显式项目已不存在时直接失败，不回退到其他项目。项目没有绑定时使用任务目录或 DSH 默认工作目录。运行中的会话通过 DSH SessionQuery 和现有 Session-follow 流读取，完成后释放自己的 live Agent，保留 Session 供普通历史查询和继续会话使用。
 
-运行模型来自创建会话当前有效的持久化选择（pending model/selection 优先于最近 request/header，忽略适配器默认的 effort），来源缺失或没有选择时使用 agentDefaultModel.currentSelection()。在新 Agent 的创建期安装固定模型选择并持久化 model/selection；后续默认变化只影响下一次运行。执行器从不调用 saveSelection，也不修改模型来源、凭证或用户默认设置。技能通过当前 Agent scope/cwd 的 skills.get 读取并以 DSH skill-invocation 上下文注入；MCP 名称必须对应当前 Agent 可见的 mcp__<name>__ 工具命名空间，复用现有连接及权限，不从任务元信息创建连接或携带密钥。不可用的技能、MCP 或项目返回受控失败。
+任务显式设置的模型优先。跟随默认时，执行器读取创建会话当前有效的持久化选择（待生效的 `model/selection` 优先于最近的 `request/header`，忽略适配器默认的 effort）。如果历史供应商路由已撤下，当下默认供应商提供相同模型 ID 时沿用该模型，否则使用当前默认模型。没有来源选择的任务直接使用当前默认模型。选定模型后，在新 Agent 创建时写入 `model/selection`，保留原任务及来源会话的设置。技能通过当前 Agent scope/cwd 的 skills.get 读取并以 DSH skill-invocation 上下文注入；MCP 名称必须对应当前 Agent 可见的 mcp__<name>__ 工具命名空间，复用现有连接及权限，不从任务元信息创建连接或携带密钥。不可用的技能、MCP 或项目返回受控失败。
 
 成功必须有本次专属记录、准确 turn/start、该 runId 的已入模 user/message 和对应 completed turn/end，并通过 Session flush 与持久化只读回查。其他 Session/Turn、消息仅入队、idle、被拒绝的零步 turn、blocked、max-tokens、模型错误或中断都不算成功。aborted/interrupted/forked 映射 error/run_interrupted，其余非成功终态为 error/execution_failed；历史只保存固定脱敏说明，不复制上游异常文本。纯提醒直接完成为 none，不分配 Session 或调用模型。
 
 专属归属证据为 Session 的 ignorable 记录 plugin:tpcowork-automation/run，保存 version=1、taskId、runId、sessionId、turnId=1、可选 projectId/originSessionId。包根导出 readAutomationOwnership(events) 和 AutomationOwnership，前者只接受唯一且位于首个 turn/start 之前的合法记录。子任务05清理时还必须拒绝 seeded/parent Session，并核对 header.id、任务/运行/会话 ID、来源会话及其他运行关系；ownsSession 单独不是删除授权。缺失、重复或无效的记录须拒绝清理；记录是插件可忽略数据，丢失时不能放宽归属校验。默认 Host 组合同时注册唯一 DshAutomationSessionCleanup；清理不改变归属标记或防递归行为。
 
-会话删除模块通过 `attachSessionCleanup` 注册 `deleteRunSession(task, run)`，返回异步卸载函数。模块可实现 `dispose()` 停止准入并等待已开始操作，旧模块拆卸完成前不允许替换；Host 卸载同样等待清理。Host 先拒绝 running，重新检查所有任务的来源及其他运行引用；只有清理成功才持久化删除历史。共享旧记录（ownsSession=false）仅删除记录。ownsSession=true 仍须读取真实 SessionPersistence header/events，验证唯一合法且早于首个 Turn 的归属记录、taskId/runId/sessionId/turnId、不可变创建来源与可用项目的真实 header.cwd，拒绝 seeded、parent、继承前缀及外来会话。任务编辑后的项目按运行归属记录捕获的项目校验。
+会话删除模块通过 `attachSessionCleanup` 注册 `deleteRunSession(task, run)`，返回异步卸载函数。模块可实现 `dispose()` 停止准入并等待已开始操作，旧模块拆卸完成前不允许替换，Host 卸载同样等待清理。显式调用 `deleteRun` 时，Host 先拒绝 running，重新检查所有任务的来源及其他运行引用，清理成功后再删除历史。共享旧记录（ownsSession=false）仅删除记录。ownsSession=true 仍须读取真实 SessionPersistence header/events，验证唯一合法且早于首个 Turn 的归属记录、taskId/runId/sessionId/turnId、不可变创建来源与可用项目的真实 header.cwd，拒绝 seeded、parent、继承前缀及外来会话。任务编辑后的项目按运行归属记录捕获的项目校验。
+
+每个任务保留最近 20 条运行记录。裁剪历史或在删除任务时选择同时清理会话，Host 会在同一次存储写入中保存清理请求，随后在后台处理。重启后会接续待办。清理前重新核对归属和引用，保留共享会话、无法验证归属的会话及用户继续聊天的会话。遇到占用、其他任务引用或暂时的存储故障时延后重试。此规则应用于升级后发生的裁剪和勾选清理的任务删除。待办存在期间，任务存储记录需要由支持清理队列的 Host 版本读取。
 
 通用接口为 `SessionPersistence.delete(id, { expectedRevision, signal? })`。插件先 stat 捕获修订号，再只读检查并关闭句柄；后端在进程内认领和已有内核写锁内核对版本，拒绝活跃/恢复中的 Session 及校验后的并发写入。活跃会话通过 `automation/session_cleanup_failed` 明确提示关闭后重试；其他清理失败同码保留记录，I/O 故障不能当作缺失。真实缺失可幂等完成，已删会话但记录提交失败时可在重启后再次删除。
 
@@ -184,7 +186,7 @@ Host 业务错误是 `RemoteError`，`code` 为 `automation/<错误码>`，detai
 
 子任务02新增 `tests/recurrence.spec.ts` 与 `tests/scheduler.spec.ts`。`tests/fixtures/croniter.json` 包含源 CronService、同一表达式/参考时刻/时区的 262 个 next-run 结果及 55 个校验结果；随机 R 使用相同 32 位随机值对照。覆盖秒在末位、年份约束与耗尽、七个宏、月日/周日 OR、L/W/#、短月、闰年、纽约/柏林 DST 缺失及重复小时、Lord Howe 半小时切换、Apia 跳日及时区偏移。对照脚本 `tests/reference-croniter.py` 仅用于开发时生成固定证据，普通测试和生产均不调用 Python。源语义参考 [Croniter 官方说明](https://github.com/pallets-eco/croniter)，实际对照版本固定为参考工程当前锁定的 6.2.4。
 
-更新证据时在已安装参考 nanobot 的开发 Python 环境执行 `python plugins/tpcowork-automation/tests/reference-croniter.py`，再运行上面的 Vitest 命令。调度测试覆盖手动及时返回、同任务排他、到期排序及等待、队列内规则变更、暂停恢复、晚唤醒、周期失败不重试、20 条历史、一次任务历史、重启、终态恢复、24 小时中断、存储故障和插件卸载取消。这些调度测试使用受控执行器；真实执行另由 tests/executor.spec.ts 和构建产物 smoke 验证。
+更新证据时在已安装参考 nanobot 的开发 Python 环境执行 `python plugins/tpcowork-automation/tests/reference-croniter.py`，再运行上面的 Vitest 命令。调度测试覆盖手动及时返回、同任务排他、按到期顺序准入、并发上限、满额时的提醒、队列内规则变更、暂停恢复、晚唤醒、周期失败后的正常调度、20 条历史、一次任务历史、重启、单条恢复失败和超时、24 小时中断、存储故障和插件卸载取消。调度测试使用受控执行器，真实执行由 `tests/executor.spec.ts` 和构建产物验证。
 
 当前验证：Host/Client 构建及独立类型检查通过；Vitest 原 7 文件 437 用例全通过，新增运行清理与清理卸载 21 用例亦通过（合计 458）；构建产物 smoke（聊天 cron 创建、纯提醒确认、Host/Client、真实 AgentLoop 成功/取消、独立会话、持久化终态、恢复后用户创建、新自动 Turn 防递归、桌面默认 Zstandard JSONL 删除、缓存/搜索/恢复移除和模型选择保留）通过。
 
@@ -204,7 +206,7 @@ MCP 绑定使用已有 DSH serverName 命名空间，不迁移旧工程连接器
 
 `src/ui.tsx` 在宿主 `main` / `sidebar.panellist` 的 `schedules` 位置以 priority=-20 注册自动化页面；TP UI 发现该入口后撤销原生标题适配，保留一个自动化入口。卸载撤销页面、侧栏贡献、字典和样式。浏览器构建从 ModuleLoader 取得宿主 React 和共享 ui-primitives，样式使用 DSH 主题变量，中英文文案由宿主 locale 管理。迁移提示和确认复用此页面，经 `automationMigration/migrate({confirm:true})` 调用 Host；目录 `status.migration` 返回等待、恢复或完成状态及过期一次任务 ID。
 
-`src/AutomationPage.tsx` 提供任务/运行记录双页签、任务卡片、空态、请求失败重试、新建、暂停/恢复、立即运行及任务删除确认，不提供卡片内展开记录树。任务删除说明明确保留已有结果 Session。一次任务仅在 completed 且最新运行成功并已读时从任务页归档；历史页读取全部任务历史。打开结果要求 resultType=conversation、conversationAvailable=true 和明确的 conversationId；none 结果仅确认已读。运行页使用紧凑表格，直接跳转结果会话，并提供确认已读和删除记录。
+`src/AutomationPage.tsx` 提供任务/运行记录双页签、任务卡片、空态、请求失败重试、新建、暂停/恢复、立即运行及任务删除确认。删除任务默认保留结果会话，有专属结果时可勾选“同时清理专属结果会话”。一次任务仅在 completed 且最新运行成功并已读时从任务页归档，历史页读取全部任务历史。打开结果要求 resultType=conversation、conversationAvailable=true 和明确的 conversationId，none 结果仅确认已读。运行页使用紧凑表格，直接跳转结果会话，并提供确认已读和删除记录。
 
 `src/AutomationEditor.tsx` 使用 Zcode 风格的面包屑、设置/历史页签及单栏表单；编辑时右上角提供保存、立即运行及任务菜单，历史页只保留任务菜单。立即运行先验证并保存当前草稿，成功后执行且保留编辑页；保存失败不执行。任务菜单支持暂停/恢复和删除，暂停/恢复保留未保存输入。项目选择位于指令框上方，使用首页相同的 Menu、文件夹图标、选中标记、主题材质及键盘操作，支持“不绑定项目”；底栏提供权限、模型和思考强度。编辑器不提供“更多设置”，不再请求隐藏选项的 bindings 目录；已有描述、执行方式、技能、MCP 和目录仍随草稿完整保存。只在打开时复制草稿；两秒全局客户端刷新只读取 Host 目录，不执行或重算调度，不覆盖未保存输入。`AutomationCatalog` 合并同一代未结束的读取、丢弃写入前的旧响应及卸载后的响应。项目来自 `ctx.workspaces.list`，项目 ID 和可覆盖的 workspacePath 独立保存；频率支持 once/hourly/daily/weekly/monthly/weekdays/manual/custom，新建空白任务须先添加计划，保留原始 at 精度、custom cronExpression/everyMs 及其他已有 custom 参数。一次日期按任务保存的时区转换为绝对时间，新任务自动使用本机时区，页面不显示时区控件；拒绝 DST 缺口，重叠时间选较早实例；后续触发时间全部交给 Host。选择项目时将执行目录更新为该项目目录，解除项目绑定时保留独立执行目录；不可用项目显示提示并保留原 ID，只有明确选择“不绑定项目”才解除。
 
@@ -232,7 +234,7 @@ Chromium 产物验证使用真实 Cordis、SlotRegistry、LocaleRuntime、宿主
 
 完整结果仅接受 `resultType=conversation`、`conversationAvailable=true`、明确 `conversationId` 且无 unavailable reason。`src/open-run-session.ts` 在目录尚未发现目标时刷新 DSH Session 目录，通过既有 `sessions.using` 等待历史，以 `openState` 判断读取是否成功；`removed` 也会在执行器释放 Host Agent 时出现，不能据此判定持久化结果丢失。历史读取成功后调用 `uiWorkspace.openSession`，再异步通过 Session.rename 保存标准运行标题；重命名失败只记录警告，不阻止查看结果。导航先取得 mainView 引用，临时 automationResult 引用随后释放；离开记录表格会取消尚未完成的打开请求。缺失、legacy 和读取失败明确显示，不根据 sessionId/sessionKey 猜测，不调用 create/startSession 兜底。会话运行时、模型和凭证沿用 DSH。
 
-冷会话删除通过 `session-persistence/deleted` 转发 `api-session/removed`，同步撤销各客户端侧栏的会话入口；当前客户端删除成功后还会刷新 Session 目录；分组初始化时也刷新目录，清除旧版本或重连时遗留的失效入口。只有确实删除持久化会话才发布移除；共享旧会话仅移除记录。运行删除独立调用 `deleteRun`，确认框支持取消、焦点恢复与 pending 防重，运行中禁删。清理失败保留确认框、历史和错误提示，可重试。不能用任务删除替代运行删除；活跃 Session 必须先由其拥有者释放。单纯关闭客户端视图不保证释放 Host Agent，无法自主释放时可在停止相关 Host 生命周期后重试。
+冷会话删除通过 `session-persistence/deleted` 转发 `api-session/removed`，同步撤销各客户端侧栏的会话入口。当前客户端删除成功后还会刷新 Session 目录，分组初始化时也刷新目录，清除旧版本或重连时遗留的失效入口。持久化会话删除后才发布移除。运行删除独立调用 `deleteRun`，确认框支持取消、焦点恢复与防止重复确认，运行结束后可删。清理失败保留确认框、历史和错误提示，可在活跃 Session 由其拥有者释放后重试。
 
 供子任务08/09集成：九个管理接口、持久化和 bindings schema 均未改；页面入口仍为 `registerAutomationUi` 的 schedules slots。`AutomationUiServices.openSession` 改为 `(id, standardTitle, signal) => Promise<void>`，调用方必须等待并处理失败。Client UI 的 `uiDependencies` 增加 `sessions`，包的 `dsh.client.inject` 增加现有 `@deepseek-ai/dsh-api-session-controller`；复用宿主 React，不增加会话运行时。后续打包须包含重建的 `lib/client.js` 与声明及前阶段必要 DSH 产物；仓库现有 tgz 未更新，不可作为本阶段最新交付。08已增加只读变更流，09打包时还须包含更新后的 remote 描述符和 changes 声明。
 

@@ -45,9 +45,9 @@ async function harness(clock = new Clock(), pool = new MemoryMediaPool(), fullHo
   const service = ctx.automation
   const scheduler = fullHost ? undefined : new AutomationScheduler(ctx, service, clock)
   if (scheduler) { await scheduler.start(); ctx.effect(() => () => scheduler.unload()) }
-  const create = async (schedule: ScheduleConfig = { frequency: 'manual' }, name = '任务') => {
+  const create = async (schedule: ScheduleConfig = { frequency: 'manual' }, name = '任务', executionMode?: ScheduledTask['executionMode']) => {
     const before = new Set((await service.list()).tasks.map(task => task.id))
-    return (await service.create({ name, prompt: '执行报告', schedule: { ...schedule, timezone: 'UTC' } })).tasks.find(task => !before.has(task.id))!
+    return (await service.create({ name, prompt: '执行报告', executionMode, schedule: { ...schedule, timezone: 'UTC' } })).tasks.find(task => !before.has(task.id))!
   }
   const get = async (task: ScheduledTask) => (await service.list()).tasks.find(value => value.id === task.id)!
   return { ctx, service, scheduler: scheduler!, clock, pool, fiber, create, get }
@@ -124,30 +124,68 @@ describe('Host scheduler', () => {
     await h.service.delete({ id: task.id })
   })
 
-  it('lets other due tasks run once a hung scheduled run is stopped', async () => {
-    const h = await harness()
-    const order: string[] = []
-    await h.service.attachExecutor(executor(async ({ task }) => {
-      order.push(task.name)
-      return task.name === 'hung' ? new Promise<AutomationRunOutcome>(() => {}) : completed
-    }))
-    const hung = await h.create({ frequency: 'custom', everyMs: 1000 }, 'hung')
-    await h.create({ frequency: 'custom', everyMs: 2000 }, 'other')
-    h.clock.time += 5000
-    const wake = h.scheduler.wake()
-    await vi.waitFor(() => expect(order).toEqual(['hung']))
-    await h.service.stopRun({ taskId: hung.id, runId: (await h.get(hung)).runs[0]!.id })
-    await wake
-    expect(order).toEqual(['hung', 'other'])
-  })
-
-  it('processes current due tasks in time order, awaits each run, and rechecks paused/deleted/edited tasks', async () => {
+  it('lets other due tasks finish while a scheduled Agent is still running', async () => {
     const h = await harness()
     const terminal = deferred<AutomationRunOutcome>()
     const order: string[] = []
     await h.service.attachExecutor(executor(async ({ task }) => {
       order.push(task.name)
-      if (task.name === 'first') return terminal.promise
+      return task.name === 'hung' ? terminal.promise : completed
+    }))
+    const hung = await h.create({ frequency: 'custom', everyMs: 1000 }, 'hung')
+    const other = await h.create({ frequency: 'custom', everyMs: 2000 }, 'other')
+    h.clock.time += 5000
+    try {
+      await h.scheduler.wake()
+      await vi.waitFor(async () => expect((await h.get(other)).runs[0]?.status).toBe('completed'))
+      expect((await h.get(hung)).runs[0]?.status).toBe('running')
+      expect(order).toEqual(['hung', 'other'])
+    } finally {
+      terminal.resolve(completed)
+    }
+  })
+
+  it('bounds concurrent Agents, still wakes for reminders, and admits waiting work when a slot opens', async () => {
+    const h = await harness()
+    const terminal = deferred<AutomationRunOutcome>()
+    const parked = deferred<AutomationRunOutcome>()
+    const execute = vi.fn<AutomationExecutor['execute']>(async ({ task }) => {
+      if (task.executionMode === 'reminder') return completed
+      return task.name === 'first' ? terminal.promise : parked.promise
+    })
+    await h.service.attachExecutor(executor(execute))
+    await h.create({ frequency: 'custom', everyMs: 1000 }, 'first')
+    await h.create({ frequency: 'custom', everyMs: 2000 }, 'second')
+    await h.create({ frequency: 'custom', everyMs: 3000 }, 'third')
+    const fourth = await h.create({ frequency: 'custom', everyMs: 4000 }, 'fourth')
+    const reminder = await h.create({ frequency: 'custom', everyMs: 4500 }, 'reminder', 'reminder')
+    const manual = await h.create({ frequency: 'manual' }, 'manual')
+    try {
+      h.clock.time += 4000
+      await h.scheduler.wake()
+      expect(execute.mock.calls.map(([input]) => input.task.name)).toEqual(['first', 'second', 'third'])
+      expect((await h.get(fourth)).runs).toEqual([])
+      await expect(h.service.runNow({ id: manual.id })).rejects.toMatchObject({ code: 'automation/agent_capacity' })
+      h.clock.fireAt(h.clock.time + 500)
+      await vi.waitFor(async () => expect((await h.get(reminder)).runs[0]?.status).toBe('completed'))
+      expect((await h.get(fourth)).runs).toEqual([])
+      terminal.resolve(completed)
+      await vi.waitFor(() => expect([...h.clock.timers.values()].some(timer => timer.at === h.clock.time)).toBe(true))
+      h.clock.fireAt(h.clock.time)
+      await vi.waitFor(async () => expect((await h.get(fourth)).runs[0]?.status).toBe('running'))
+    } finally {
+      terminal.resolve(completed)
+      parked.resolve(completed)
+    }
+  })
+
+  it('admits due tasks in time order and rechecks paused, deleted and edited tasks', async () => {
+    const h = await harness()
+    const started = deferred<void>()
+    const permit = deferred<void>()
+    const order: string[] = []
+    await h.service.attachExecutor(executor(async ({ task }) => {
+      order.push(task.name)
       return completed
     }))
     const second = await h.create({ frequency: 'custom', everyMs: 2000 }, 'second')
@@ -155,15 +193,25 @@ describe('Host scheduler', () => {
     const paused = await h.create({ frequency: 'custom', everyMs: 3000 }, 'paused')
     const edited = await h.create({ frequency: 'custom', everyMs: 4000 }, 'edited')
     const deleted = await h.create({ frequency: 'custom', everyMs: 4500 }, 'deleted')
+    const begin = h.service.beginRun.bind(h.service)
+    vi.spyOn(h.service, 'beginRun').mockImplementationOnce(async (...args) => {
+      const run = await begin(...args)
+      started.resolve()
+      await permit.promise
+      return run
+    })
     h.clock.time += 5000
     const wake = h.scheduler.wake()
-    expect(h.scheduler.wake()).toBe(wake)
-    await vi.waitFor(() => expect(order).toEqual(['first']))
-    await h.service.pause({ id: paused.id })
-    await h.service.update({ id: edited.id, data: { name: 'edited', prompt: 'new', schedule: { frequency: 'daily', timezone: 'UTC' } } })
-    await h.service.delete({ id: deleted.id })
-    await h.service.pause({ id: first.id })
-    terminal.resolve(completed)
+    try {
+      expect(h.scheduler.wake()).toBe(wake)
+      await started.promise
+      await h.service.pause({ id: paused.id })
+      await h.service.update({ id: edited.id, data: { name: 'edited', prompt: 'new', schedule: { frequency: 'daily', timezone: 'UTC' } } })
+      await h.service.delete({ id: deleted.id })
+      await h.service.pause({ id: first.id })
+    } finally {
+      permit.resolve()
+    }
     await wake
     expect(order).toEqual(['first', 'second'])
     expect((await h.get(first)).nextRunAt).toBeUndefined()
@@ -310,16 +358,21 @@ describe('Host scheduler', () => {
     const recover = vi.fn<AutomationExecutor['recover']>().mockImplementation(async ({ run }) => run.sessionId === 'evidence'
       ? { status: 'completed', completedAt: run.startedAt + 500, resultType: 'conversation', conversationAvailable: true } : undefined)
     await second.service.attachExecutor({ execute, recover })
-    expect(await second.get(old)).toMatchObject({ runs: [{ status: 'error', errorCode: 'run_interrupted' }] })
-    expect(await second.get(recovered)).toMatchObject({ status: 'completed', runs: [{ status: 'completed', turnId: 4, conversationAvailable: true, completedAt: run.startedAt + 500 }] })
+    await vi.waitFor(async () => {
+      expect(await second.get(old)).toMatchObject({ runs: [{ status: 'error', errorCode: 'run_interrupted' }] })
+      expect(await second.get(recovered)).toMatchObject({ status: 'completed', runs: [{ status: 'completed', turnId: 4, conversationAvailable: true, completedAt: run.startedAt + 500 }] })
+    })
     expect(execute).not.toHaveBeenCalled()
     expect(recover).toHaveBeenCalledTimes(2)
     await second.scheduler.wake()
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it('leaves recent unknown runs locked; recovery lookup failure does not misreport interruption or success', async () => {
+  it('isolates failed recovery lookups, retries safely, and keeps scheduling unrelated tasks', async () => {
     const h = await harness()
+    const healthy = await h.create()
+    await h.service.beginRun({ taskId: healthy.id, trigger: 'manual' })
+    h.clock.time++
     const task = await h.create()
     const run = await h.service.beginRun({ taskId: task.id, trigger: 'manual' })
     const execute = vi.fn<AutomationExecutor['execute']>().mockResolvedValue(completed)
@@ -328,10 +381,53 @@ describe('Host scheduler', () => {
     await expect(h.service.runNow({ id: task.id })).rejects.toMatchObject({ code: 'automation/task_running' })
     await detach()
     h.clock.time += 25 * 60 * 60 * 1000
-    await expect(h.service.attachExecutor({ execute, recover: async () => { throw new Error('unavailable') } })).rejects.toThrow('unavailable')
+    let unavailable = true
+    const recover = vi.fn<AutomationExecutor['recover']>(async input => {
+      if (input.task.id === healthy.id) return completed
+      if (unavailable) throw new Error('unavailable')
+    })
+    await h.service.attachExecutor({ execute, recover })
+    await vi.waitFor(async () => expect((await h.get(healthy)).runs[0]?.status).toBe('completed'))
     expect((await h.get(task)).runs[0]).toMatchObject({ id: run.id, status: 'running' })
-    expect((await h.service.list()).status.enabled).toBe(false)
-    expect(execute).not.toHaveBeenCalled()
+    expect((await h.service.list()).status.enabled).toBe(true)
+    const reminder = await h.create({ frequency: 'custom', everyMs: 1000 }, 'reminder', 'reminder')
+    h.clock.time += 1000
+    await h.scheduler.wake()
+    await vi.waitFor(async () => expect((await h.get(reminder)).runs[0]?.status).toBe('completed'))
+    expect(recover).toHaveBeenCalledTimes(2)
+    unavailable = false
+    h.clock.time += 60_000
+    await h.scheduler.wake()
+    await vi.waitFor(async () => expect((await h.get(task)).runs[0]).toMatchObject({ id: run.id, status: 'error', errorCode: 'run_interrupted' }))
+  })
+
+  it('times out a stalled recovery read, leaves its record alone and allows a replacement executor to recover it', async () => {
+    const h = await harness()
+    const healthy = await h.create()
+    await h.service.beginRun({ taskId: healthy.id, trigger: 'manual' })
+    h.clock.time++
+    const stalled = await h.create()
+    await h.service.beginRun({ taskId: stalled.id, trigger: 'manual' })
+    const late = deferred<AutomationRunOutcome>()
+    const timeout = new AbortController()
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(timeout.signal)
+    const recover = vi.fn<AutomationExecutor['recover']>(async ({ task }) => task.id === stalled.id ? late.promise : completed)
+    const detach = await h.service.attachExecutor({ ...executor(), recover })
+    try {
+      await vi.waitFor(() => expect(recover.mock.calls[0]?.[0].task.id).toBe(stalled.id))
+      const reminder = await h.create({ frequency: 'custom', everyMs: 1000 }, 'reminder', 'reminder')
+      h.clock.time += 1000
+      await h.scheduler.wake()
+      await vi.waitFor(async () => expect((await h.get(reminder)).runs[0]?.status).toBe('completed'))
+      timeout.abort()
+      await vi.waitFor(async () => expect((await h.get(healthy)).runs[0]?.status).toBe('completed'))
+      expect((await h.get(stalled)).runs[0]?.status).toBe('running')
+      await detach()
+      await h.service.attachExecutor({ ...executor(), recover: async () => completed })
+      await vi.waitFor(async () => expect((await h.get(stalled)).runs[0]?.status).toBe('completed'))
+    } finally {
+      late.resolve(completed)
+    }
   })
 
   it('does not execute when start persistence fails, and retains uncertain terminal writes for recovery', async () => {

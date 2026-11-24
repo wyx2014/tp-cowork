@@ -32,7 +32,9 @@ export const en = {
   templates: 'Scheduled task templates', templateHint: 'Choose a template, customize the draft, then save to create a task.',
   empty: 'No tasks yet', emptyHint: 'Create a task or choose a template to get started.', emptyRuns: 'No runs yet',
   loading: 'Loading…', error: 'Could not complete the request. Your draft has been kept.', retry: 'Retry', hostStopped: 'Task scheduling is not ready. Please try again shortly.',
-  edit: 'Edit', pause: 'Pause', resume: 'Resume', run: 'Run now', delete: 'Delete task', deleteHint: 'Delete the task and its history? Existing result conversations are kept.',
+  edit: 'Edit', pause: 'Pause', resume: 'Resume', run: 'Run now', delete: 'Delete task', deleteHint: 'Delete the task and its history? Result conversations are kept by default.',
+  deleteOwnedSessions: 'Also delete exclusively owned result conversations',
+  agentCapacity: 'Three Agent tasks are already running. Try again after one finishes.',
   cancel: 'Cancel', save: 'Save', saving: 'Saving…', back: 'Back', name: 'Task title', description: 'Description', prompt: 'Instructions',
   frequency: 'Frequency', once: 'Once', hourly: 'Hourly', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', weekdays: 'Weekdays', manual: 'Manual', custom: 'Custom',
   date: 'Date and time', time: 'Time', minute: 'Minute of the hour', dayOfWeek: 'Day of week', dayOfMonth: 'Day of month', timezone: 'Timezone',
@@ -94,7 +96,8 @@ export const zh: Record<UiKey, string> = {
   askPrompt: '帮我创建一个每天上午 9 点（本地时间）执行的定时任务：搜索过去 24 小时 AI 领域的重要动态，筛选 5 条真正有影响的信息。每条包含标题、两句摘要、影响判断和来源链接，最后给出今日最值得关注的一条。优先采用官方公告、论文和可信媒体，标明事件发生时间，避免重复、未经证实的消息和营销软文。',
   templates: '定时任务模板', templateHint: '选择模板后可编辑草稿，保存后才会创建任务。', empty: '还没有任务', emptyHint: '新建任务或选择模板开始。', emptyRuns: '暂无运行记录',
   loading: '加载中…', error: '操作未完成，草稿已保留。', retry: '重试', hostStopped: '任务调度尚未就绪，请稍候重试。', edit: '编辑', pause: '暂停', resume: '恢复', run: '立即运行', delete: '删除任务',
-  deleteHint: '删除任务及其历史记录？已有结果会话将保留。', cancel: '取消', save: '保存', saving: '保存中…', back: '返回',
+  deleteHint: '删除任务及其历史记录？默认保留结果会话。', deleteOwnedSessions: '同时清理专属结果会话',
+  agentCapacity: '已有 3 个 Agent 任务正在运行，请等其中一个结束后重试。', cancel: '取消', save: '保存', saving: '保存中…', back: '返回',
   name: '任务标题', description: '描述', prompt: '指令', frequency: '频率', once: '一次', hourly: '每小时', daily: '每天', weekly: '每周', monthly: '每月', weekdays: '工作日', manual: '手动', custom: '自定义',
   date: '日期和时间', time: '时间', minute: '每小时的分钟', dayOfWeek: '星期', dayOfMonth: '每月日期', timezone: '时区',
   cronExpression: 'Cron 表达式', everyMs: '间隔（毫秒）', customHint: 'Cron 表达式和间隔二选一，保留原有自定义参数。',
@@ -122,6 +125,7 @@ export function uiFailureKey(code: string | undefined): UiKey {
     case 'automation/invalid_rule': return 'invalidRule'
     case 'automation/invalid_input': return 'invalid'
     case 'automation/task_running': return 'taskRunning'
+    case 'automation/agent_capacity': return 'agentCapacity'
     case 'automation/run_running': return 'runRunning'
     case 'automation/session_cleanup_failed': return 'cleanupFailure'
     case 'automation/run_not_found': return 'runMissing'

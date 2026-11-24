@@ -4,7 +4,7 @@ import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import type { ZodType } from 'zod'
 import { z } from 'zod'
 import { parseInput } from './errors.ts'
-import { createSchema, payloadSchema, runRequestSchema, taskRequestSchema, updateSchema } from './schemas.ts'
+import { createSchema, deleteTaskSchema, payloadSchema, runRequestSchema, taskRequestSchema, updateSchema } from './schemas.ts'
 import type { AutomationServiceApi } from './types.ts'
 import { changesDescriptor } from './changes.ts'
 export type { ChangeFrame } from './changes.ts'
@@ -15,7 +15,7 @@ function codec(name: string, schema: ZodType, input = false): TypertCodec {
     create: () => input ? { parse: value => parseInput(schema, value) } : schema }
 }
 const methods: Array<[keyof AutomationServiceApi, ZodType | undefined]> = [
-  ['list', undefined], ['create', createSchema], ['update', updateSchema], ['delete', taskRequestSchema],
+  ['list', undefined], ['create', createSchema], ['update', updateSchema], ['delete', deleteTaskSchema],
   ['pause', taskRequestSchema], ['resume', taskRequestSchema], ['runNow', taskRequestSchema],
   ['markRunViewed', runRequestSchema], ['stopRun', runRequestSchema], ['deleteRun', runRequestSchema],
 ]

@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../../deepseek-harness/packages/storage/storage-domain/tests/helpers/memory-backend.ts'
@@ -258,6 +259,26 @@ describe('task page and detached editor', () => {
     await screen.findByText(en.empty)
     expect(screen.queryByRole('dialog')).toBeNull()
     expect((await ctx.automation.list()).tasks).toHaveLength(0)
+  })
+
+  it('offers session cleanup as an unchecked option when deleting a task with owned results', async () => {
+    const { ctx, services } = await harness()
+    const task = (await ctx.automation.create(draft({ frequency: 'manual' }))).tasks[0]!
+    const run = await ctx.automation.beginRun({ taskId: task.id, trigger: 'manual' })
+    await ctx.automation.bindRun({ taskId: task.id, runId: run.id, sessionId: SessionId('owned-result'), turnId: 1, ownsSession: true })
+    await ctx.automation.finishRun({ taskId: task.id, runId: run.id, status: 'completed', resultType: 'conversation', conversationAvailable: true })
+    const remove = vi.spyOn(ctx.automation, 'delete')
+    render(<AutomationPage services={services} locale="en" t={text} />)
+    fireEvent.click(await screen.findByRole('button', { name: en.edit }))
+    fireEvent.click(screen.getByRole('button', { name: en.taskActions }))
+    fireEvent.click(screen.getByRole('menuitem', { name: en.editorDelete }))
+    const dialog = screen.getByRole('dialog', { name: en.delete })
+    const option = within(dialog).getByRole('checkbox', { name: en.deleteOwnedSessions })
+    expect(option).toHaveProperty('checked', false)
+    fireEvent.click(option)
+    fireEvent.click(within(dialog).getByRole('button', { name: en.delete }))
+    await screen.findByText(en.empty)
+    expect(remove).toHaveBeenCalledExactlyOnceWith({ id: task.id, cleanupSessions: true })
   })
 
   it('renders trigger time, source, skipped and successful outcomes with compact durations and deletes only the chosen record', async () => {

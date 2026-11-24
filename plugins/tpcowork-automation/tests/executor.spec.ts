@@ -1,5 +1,5 @@
 /** Real AgentLoop + JSONL persistence; only the external LLM stream is scripted. */
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -218,6 +218,44 @@ describe('DSH automation execution', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { history: 'request header', available: true, expected: 'step-3.7-flash' },
+    { history: 'pending selection', available: false, expected: 'step-3.5-flash-2603' },
+  ])('runs an old task with a retired $history route using $expected on the current provider', async ({ history, available, expected }) => {
+    const h = await harness([textResponse('source'), textResponse('automation')])
+    const oldModel = { provider: 'step', model: 'step-3.7-flash' }
+    const legacy = h.ctx.llm.registerAdapter([oldModel.provider], h.adapter)
+    const source = await h.ctx.agents.create({ sessionId: SessionId('old-source'), meta: { cwd: h.workspaceA.path }, agentOptions: oldModel })
+    if (history === 'request header') {
+      source.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Old conversation' }], source: { kind: 'user' } }))
+      await source.agent.whenIdle()
+      expect(source.agent.session.snapshotEvents()).toContainEqual(expect.objectContaining({ type: 'request/header', data: expect.objectContaining({
+        header: expect.objectContaining({ config: expect.objectContaining(oldModel) }),
+      }) }))
+    } else {
+      source.agent.session.append('model/selection', { ...oldModel, reasoningEffort: 'high' })
+    }
+    await h.ctx.sessions.flush(source.agent.session)
+    await source.dispose()
+    const task = await h.create({ originSessionId: source.agent.id })
+    legacy.replace([])
+
+    const fallback = { provider: 'tpcowork-newapi', model: 'step-3.5-flash-2603' }
+    h.ctx.llm.registerAdapter([fallback.provider], h.adapter)
+    vi.spyOn(h.ctx.agentDefaultModel, 'currentSelection').mockReturnValue(fallback)
+    const listModels = h.ctx.llm.listModels.bind(h.ctx.llm)
+    vi.spyOn(h.ctx.llm, 'listModels').mockImplementation(async provider => provider === fallback.provider
+      ? [fallback.model, ...available ? [oldModel.model] : []].map(id => ({ provider, id, name: id })) : listModels(provider))
+    const save = vi.spyOn(h.ctx.agentDefaultModel, 'saveSelection')
+
+    await h.ctx.automation.runNow({ id: task.id })
+    const run = await h.settled(task)
+    expect(run.status).toBe('completed')
+    expect(h.adapter.requests.at(-1)).toMatchObject({ provider: fallback.provider, model: expected })
+    expect((await h.get(task)).modelSelection).toBeUndefined()
+    expect(save).not.toHaveBeenCalled()
+  })
+
   it('publishes explicit running conversation availability and can follow it before completion; unrelated turns cannot settle it', async () => {
     const h = await harness(['hang'])
     const frames: { sessionId: SessionId; type: string }[] = []
@@ -333,6 +371,28 @@ describe('DSH automation execution', () => {
     expect(h.adapter.requests).toHaveLength(1)
   })
 
+  it.each([false, true])('preserves a settled result or original failure when Agent disposal rejects (invalid skill: %s)', async invalidSkill => {
+    const h = await harness([textResponse('durable')])
+    const createAgent = h.ctx.agents.create.bind(h.ctx.agents)
+    const failure = vi.fn(() => { throw new Error('dispose failed') })
+    vi.spyOn(h.ctx.agents, 'create').mockImplementation(async options => {
+      const handle = await createAgent(options)
+      return {
+        ...handle, agent: handle.agent,
+        async dispose() {
+          await handle.dispose()
+          failure()
+        },
+      }
+    })
+    const task = await h.create(invalidSkill ? { skillName: 'missing-skill' } : {})
+    await h.ctx.automation.runNow({ id: task.id })
+    const run = await h.settled(task)
+    if (invalidSkill) expect(run).toMatchObject({ status: 'error', errorCode: 'execution_failed', error: '任务绑定的技能不可用。' })
+    else expect(run).toMatchObject({ status: 'completed', resultType: 'conversation', conversationAvailable: true })
+    expect(failure).toHaveBeenCalledOnce()
+  })
+
   it.each(['flush', 'read'])('retains running when terminal %s fails, then recovers the real persisted result without replay', async failure => {
     const h = await harness([textResponse('durable')])
     const task = await h.create()
@@ -358,7 +418,7 @@ describe('DSH automation execution', () => {
     await h.fiber.dispose()
     await h.ctx.fiber.dispose()
     const next = await harness([], h.root)
-    expect((await next.get(task)).runs[0]).toMatchObject({ id, status: 'completed', conversationAvailable: true })
+    await vi.waitFor(async () => expect((await next.get(task)).runs[0]).toMatchObject({ id, status: 'completed', conversationAvailable: true }))
     using restored = await next.ctx.sessionQuery.observeSession((await next.get(task)).runs[0]!.sessionId!)
     expect(restored.source).toBe('prepared')
     expect(next.adapter.requests).toEqual([])
@@ -463,6 +523,11 @@ describe('DSH automation run cleanup', () => {
     if (kind === 'duplicate') appendPluginRecord(session, 'plugin:tpcowork-automation/run', owner)
     if (kind !== 'late') session.append('turn/start', { turn: 1 })
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    if (kind === 'continued') {
+      session.append('turn/start', { turn: 2 })
+      session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Continue manually' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+      session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+    }
     const writer = await h.ctx.sessionPersistence.create(session.header,
       kind === 'seeded' ? { inheritedEventCount: SessionLogOffset(0) } : undefined)
     await writer.append(session.snapshotEvents())
@@ -474,6 +539,20 @@ describe('DSH automation run cleanup', () => {
     const request = { taskId: task.id, runId: run.id }
     return { ...h, task, run, request }
   }
+
+  it('removes opted-in result Sessions while preserving conversations the user continued', async () => {
+    const ordinary = await fixture()
+    const continued = await fixture('continued')
+    await ordinary.ctx.automation.delete({ id: ordinary.task.id, cleanupSessions: true })
+    await continued.ctx.automation.delete({ id: continued.task.id, cleanupSessions: true })
+    await vi.waitFor(async () => expect(await ordinary.ctx.sessionPersistence.stat(ordinary.run.sessionId!)).toBeUndefined())
+    const domainPath = join(continued.root, 'storage', 'tpcowork_automation.json')
+    await vi.waitFor(async () => {
+      const { tables } = JSON.parse(await readFile(domainPath, 'utf8'))
+      expect(tables.tasks).toEqual({})
+    })
+    expect(await continued.ctx.sessionPersistence.stat(continued.run.sessionId!)).toBeDefined()
+  })
 
   it('deletes a real Agent result from history, search and project membership through refresh and restart', async () => {
     const h = await harness([textResponse('AUTOMATION_DELETION_NEEDLE')], '', true, true)

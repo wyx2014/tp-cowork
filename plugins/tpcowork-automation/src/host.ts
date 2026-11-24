@@ -3,12 +3,13 @@ import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AutomationStore } from './storage.ts'
 import { AutomationError, parseInput } from './errors.ts'
 import { hostContribution } from './remote.ts'
 import { AutomationScheduler, systemClock } from './scheduler.ts'
-import { beginRunSchema, bindRunSchema, createSchema, finishRunSchema, runRequestSchema, taskRequestSchema, updateSchema } from './schemas.ts'
+import { beginRunSchema, bindRunSchema, createSchema, deleteTaskSchema, finishRunSchema, runRequestSchema, taskRequestSchema, updateSchema } from './schemas.ts'
 import { DshAutomationExecutor, executorDependencies } from './executor.ts'
 import { DshAutomationSessionCleanup, cleanupDependencies } from './cleanup.ts'
 import { registerAutomationTools } from './tools.ts'
@@ -17,7 +18,7 @@ import { watchChanges } from './changes.ts'
 import { NativeScheduleTransfer } from './native-transfer.ts'
 import { registerAutomationSessionProjection } from './session-projection.ts'
 import type {
-  AutomationBeginRunRequest, AutomationBindRunRequest, AutomationChanged, AutomationCreateRequest,
+  AutomationBeginRunRequest, AutomationBindRunRequest, AutomationChanged, AutomationCreateRequest, AutomationDeleteTaskRequest,
   AutomationFinishRunRequest, AutomationRunId, AutomationRunRequest, AutomationRuntime, AutomationServiceApi,
   AutomationSessionCleanup, AutomationTaskId, AutomationTaskRequest, AutomationUpdateRequest, AutomationClock, AutomationExecutor,
   ScheduleConfig, ScheduledTask, ScheduledTaskRun, ScheduleTasksPayload, AutomationMigrationStatus,
@@ -33,6 +34,9 @@ export type { AutomationOwnership } from './executor.ts'
 export { DshAutomationSessionCleanup } from './cleanup.ts'
 export { registerAutomationTools } from './tools.ts'
 export { AutomationBindings } from './bindings.ts'
+
+const retainedRunCount = 20
+const sessionCleanupRetryMs = 60_000
 
 declare module '@deepseek-ai/cordis' {
   interface Context { automation: AutomationService }
@@ -61,6 +65,9 @@ export class AutomationService extends TypertRemoteService implements Automation
   private cleanup: AutomationSessionCleanup | undefined
   private cleanupDisposing = false
   private cleanupDispose: (() => Promise<void>) | undefined
+  private cleanupTimer: unknown
+  private cleanupWork: Promise<void> | undefined
+  private readonly cleaningSessions = new Set<SessionId>()
   private readonly admissions = new Set<Promise<void>>()
   private readonly notifications = new Set<Promise<void>>()
 
@@ -152,6 +159,15 @@ export class AutomationService extends TypertRemoteService implements Automation
     this.changed(task.id, reason, runId)
     return this.catalog()
   }
+  private sessionReferenced(id: SessionId, except?: AutomationRunId): boolean {
+    return this.store.list().some(task => task.originSessionId === id
+      || task.runs.some(run => run.id !== except && run.sessionId === id))
+  }
+  private assertSessionNotCleaning(id: SessionId | undefined): void {
+    if (id !== undefined && this.cleaningSessions.has(id)) {
+      throw new AutomationError('session_cleanup_failed', '运行会话正在清理，暂时无法关联。')
+    }
+  }
 
   async list(): Promise<ScheduleTasksPayload> { await this.ready(); return this.catalog() }
   /** Host-only snapshot for an already admitted execution, including during orderly shutdown. */
@@ -159,6 +175,7 @@ export class AutomationService extends TypertRemoteService implements Automation
   /** Persist a reserved paused copy before the native owner can be stopped. */
   async stageNativeTask(task: ScheduledTask): Promise<void> {
     await this.serialize(async () => {
+      this.assertSessionNotCleaning(task.originSessionId)
       const current = this.store.list().find(value => value.id === task.id)
       if (current && (current.runs.length || current.status !== 'paused')) throw new AutomationError('invalid_persistence', '原生迁移副本已被执行或修改；拒绝覆盖。')
       await this.store.put({ ...task, createdAt: current?.createdAt ?? task.createdAt })
@@ -180,6 +197,7 @@ export class AutomationService extends TypertRemoteService implements Automation
   async create(request: AutomationCreateRequest): Promise<ScheduleTasksPayload> {
     const { timezone, ...data } = parseInput(createSchema, request)
     return this.serialize(async () => {
+      this.assertSessionNotCleaning(data.originSessionId)
       const now = this.now()
       const schedule = this.resolveSchedule({ ...data.schedule, timezone: timezone ?? data.schedule.timezone })
       this.validateFuture(schedule, now)
@@ -214,15 +232,15 @@ export class AutomationService extends TypertRemoteService implements Automation
       }, 'updated')
     })
   }
-  async delete(request: AutomationTaskRequest): Promise<ScheduleTasksPayload> {
-    const { id } = parseInput(taskRequestSchema, request)
+  async delete(request: AutomationDeleteTaskRequest): Promise<ScheduleTasksPayload> {
+    const { id, cleanupSessions } = parseInput(deleteTaskSchema, request)
     this.assertNativeEditable(id)
     return this.serialize(async () => {
       const task = this.store.get(id)
       if (this.running(task)) throw new AutomationError('task_running', '运行中的任务不能删除。')
-      // Task deletion matches the source: remove definitions/history; Session cleanup belongs to deleteRun.
-      await this.store.delete(id)
+      await this.store.delete(id, cleanupSessions)
       this.changed(id, 'deleted')
+      this.startSessionCleanup()
       return this.catalog()
     })
   }
@@ -266,6 +284,7 @@ export class AutomationService extends TypertRemoteService implements Automation
       if (task.schedule.frequency === 'once' && run.executionMode === 'reminder') {
         await this.store.delete(taskId)
         this.changed(taskId, 'deleted', runId)
+        this.startSessionCleanup()
         return this.catalog()
       }
       if (run.viewedAt !== undefined) return this.catalog()
@@ -293,8 +312,7 @@ export class AutomationService extends TypertRemoteService implements Automation
       const run = this.findRun(task, runId)
       if (run.status === 'running') throw new AutomationError('run_running', '运行中的记录不能删除。')
       if (run.ownsSession) {
-        if (this.store.list().some(other => other.originSessionId === run.sessionId
-          || other.runs.some(value => value.id !== run.id && value.sessionId === run.sessionId))) {
+        if (run.sessionId && this.sessionReferenced(run.sessionId, run.id)) {
           throw new AutomationError('session_cleanup_failed', '会话仍被其他任务或运行引用；运行记录保留。')
         }
         if (!this.cleanup) throw new AutomationError('runtime_unavailable', '会话清理模块尚未加载；运行记录保留。')
@@ -355,7 +373,9 @@ export class AutomationService extends TypertRemoteService implements Automation
       if (disposal) return disposal
       this.cleanup = undefined
       this.cleanupDisposing = true
+      this.clearCleanupTimer()
       disposal = (async () => {
+        await this.cleanupWork
         await cleanup.dispose?.()
         await this.chain
         this.cleanupDisposing = false
@@ -363,11 +383,53 @@ export class AutomationService extends TypertRemoteService implements Automation
       return disposal
     }
     this.cleanupDispose = detach
+    this.startSessionCleanup()
     return detach
   }
 
+  private clearCleanupTimer(): void {
+    if (this.cleanupTimer !== undefined) (this.options.clock ?? systemClock).clearTimeout(this.cleanupTimer)
+    this.cleanupTimer = undefined
+  }
+  private startSessionCleanup(): void {
+    const cleanup = this.cleanup
+    if (!cleanup || this.stopping || this.cleanupWork || this.cleanupTimer !== undefined) return
+    const jobs = this.store.cleanupJobs()
+    if (jobs.length === 0) return
+    const pending = (async () => {
+      for (const { owner, run } of jobs) {
+        if (this.stopping || this.cleanup !== cleanup) return
+        const sessionId = run.sessionId!
+        const claimed = await this.serialize(async () => {
+          if (this.stopping || this.cleanup !== cleanup || this.sessionReferenced(sessionId)) return false
+          this.cleaningSessions.add(sessionId)
+          return true
+        }, true)
+        if (!claimed) continue
+        try {
+          await cleanup.deleteRunSession(owner, run, { preserveUserWork: true })
+          await this.serialize(() => this.store.completeCleanup(owner.id, run.id), true)
+        } catch {
+          // The persisted intent also survives Host shutdown and an interrupted Session delete.
+          if (!this.stopping) this.ctx.logger.warn('自动化运行会话清理暂未完成，将稍后重试。')
+        } finally { this.cleaningSessions.delete(sessionId) }
+      }
+    })().catch(() => {
+      if (!this.stopping) this.ctx.logger.warn('自动化会话清理队列暂未完成，将稍后重试。')
+    }).finally(() => {
+      this.cleanupWork = undefined
+      if (this.cleanup === cleanup && !this.stopping && this.store.cleanupJobs().length > 0) {
+        this.cleanupTimer = (this.options.clock ?? systemClock).setTimeout(() => {
+          this.cleanupTimer = undefined
+          this.startSessionCleanup()
+        }, sessionCleanupRetryMs)
+      }
+    })
+    this.cleanupWork = pending
+  }
+
   /** Persist admission before dispatching any external operation; duplicate attempts cannot overlap. */
-  async beginRun(request: AutomationBeginRunRequest): Promise<ScheduledTaskRun> {
+  async beginRun(request: AutomationBeginRunRequest, reserve?: (mode: ScheduledTask['executionMode']) => void): Promise<ScheduledTaskRun> {
     const data = parseInput(beginRunSchema, request)
     return this.serialize(async () => {
       const task = this.store.get(data.taskId)
@@ -377,18 +439,23 @@ export class AutomationService extends TypertRemoteService implements Automation
       if (data.trigger === 'scheduled' && (data.scheduledAt === undefined || task.nextRunAt !== data.scheduledAt || data.scheduledAt > now)) {
         throw new AutomationError('invalid_rule', '任务的到期计划已变更。')
       }
+      reserve?.(task.executionMode)
       const id = `run-${randomUUID()}` as AutomationRunId
       const run: ScheduledTaskRun = {
         id, runId: id, scheduledTaskId: task.id, status: 'running', startedAt: now, trigger: data.trigger,
         scheduledAt: data.scheduledAt, resultType: 'none', conversationAvailable: false,
         ownsSession: false, executionMode: task.executionMode,
       }
-      task.runs = [run, ...task.runs].slice(0, 20)
+      const history = [run, ...task.runs]
+      task.runs = history.slice(0, retainedRunCount)
       task.totalRuns = task.runs.length
       task.lastRunAt = now
       task.updatedAt = now
       task.nextRunAt = undefined
-      await this.save(task, 'run_started', id)
+      const retired = history.slice(retainedRunCount)
+      await this.store.put(task, retired)
+      this.changed(task.id, 'run_started', id)
+      if (retired.length > 0) this.startSessionCleanup()
       return structuredClone(run)
     })
   }
@@ -402,8 +469,8 @@ export class AutomationService extends TypertRemoteService implements Automation
       if (run.sessionId && run.sessionId !== data.sessionId) throw new AutomationError('invalid_input', '运行不能更换关联会话。')
       if (run.turnId !== undefined && data.turnId !== undefined && run.turnId !== data.turnId) throw new AutomationError('invalid_input', '运行不能更换关联 Turn。')
       if (data.conversationAvailable && run.executionMode === 'reminder') throw new AutomationError('invalid_input', '纯提醒不能提供会话结果。')
-      if (data.ownsSession && this.store.list().some(other => other.originSessionId === data.sessionId
-        || other.runs.some(value => value.id !== run.id && value.sessionId === data.sessionId))) {
+      this.assertSessionNotCleaning(data.sessionId)
+      if (data.ownsSession && this.sessionReferenced(data.sessionId, run.id)) {
         throw new AutomationError('invalid_input', '创建会话或其他运行会话不能作为本次专属会话。')
       }
       run.sessionId = data.sessionId

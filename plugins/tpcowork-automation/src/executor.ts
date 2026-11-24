@@ -27,7 +27,7 @@ import type { AutomationExecution, AutomationExecutor, AutomationRecovery, Autom
 
 /** The scheduler stays unavailable until these existing Host capabilities are mounted. */
 export const executorDependencies = ['agents', 'agentLoop', 'sessions', 'sessionPersistence', 'sessionQuery',
-  'workingDirectory', 'workspaceRegistry', 'agentDefaultModel', 'tools'] as const
+  'workingDirectory', 'workspaceRegistry', 'agentDefaultModel', 'tools', 'llm'] as const
 
 const ownershipType = 'plugin:tpcowork-automation/run'
 const ownershipSchema = z.object({
@@ -104,14 +104,28 @@ function terminalOutcome(header: SessionHeader, events: readonly SessionEvent[],
 export class DshAutomationExecutor implements AutomationExecutor {
   constructor(private readonly ctx: Context) {}
 
-  /** Capture the source Session's effective choice, otherwise the user's current default; never save defaults. */
+  /** Keep a task's override. Reconcile inherited history with the live routes at execution time. */
   private async selection(task: ScheduledTask, signal: AbortSignal): Promise<ModelSelection> {
     if (task.modelSelection) return { provider: task.modelSelection.provider, model: task.modelSelection.model,
       ...task.modelSelection.reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(task.modelSelection.reasoningEffort) } }
+    const inherited = task.originSessionId ? await this.originSelection(task.originSessionId, signal) : undefined
     const fallback = this.ctx.agentDefaultModel.currentSelection()
-    if (!task.originSessionId) return fallback
+    if (!inherited) return fallback
+    const providers = this.ctx.llm.listProviders()
+    if (providers.some(provider => provider.id === inherited.provider)) return inherited
+
+    // Historical Sessions can use a retired vendor route while the current gateway still offers the same model.
+    if (inherited.model !== fallback.model && providers.some(provider => provider.id === fallback.provider)) {
+      const models = await this.ctx.llm.listModels(fallback.provider)
+      signal.throwIfAborted()
+      if (models.some(model => model.id === inherited.model)) return { provider: fallback.provider, model: inherited.model }
+    }
+    return fallback
+  }
+
+  private async originSelection(id: SessionId, signal: AbortSignal): Promise<ModelSelection | undefined> {
     try {
-      using observation = await this.ctx.sessionQuery.observeSession(task.originSessionId, { signal, projectionMode: 'none' })
+      using observation = await this.ctx.sessionQuery.observeSession(id, { signal, projectionMode: 'none' })
       let selected: ModelSelection | undefined
       let pending: ModelSelection | undefined
       for (const event of observation.events) {
@@ -124,10 +138,9 @@ export class DshAutomationExecutor implements AutomationExecutor {
           if (pending?.provider === selected.provider && pending.model === selected.model && pending.reasoningEffort === selected.reasoningEffort) pending = undefined
         }
       }
-      return pending ?? selected ?? fallback
+      return pending ?? selected
     } catch (error) {
-      // A deleted source does not import context or prevent a new independent execution.
-      if (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') return fallback
+      if (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') return undefined
       throw error
     }
   }
@@ -221,7 +234,7 @@ export class DshAutomationExecutor implements AutomationExecutor {
       if (cancel) signal.removeEventListener('abort', cancel)
       // Retain the persisted Session; release only this executor's live Agent and scoped resources.
       try { await handle?.dispose() }
-      catch { throw new AutomationEvidencePendingError() }
+      catch { this.ctx.logger.warn('自动化 Agent 清理失败。') }
     }
   }
 

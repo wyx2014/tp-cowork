@@ -53,7 +53,8 @@ try {
   await plugin.dispose();
   plugin = await ctx.plugin(AutomationService);
   assert.deepEqual(await ctx.automation.list(), saved);
-  assert.equal(ctx.typert.local.list().filter(value => value.namespace === 'automation').length, 9);
+  assert.deepEqual(ctx.typert.local.list().filter(value => value.namespace === 'automation').map(value => value.method).sort(),
+    ['create', 'delete', 'deleteRun', 'list', 'markRunViewed', 'pause', 'resume', 'runNow', 'stopRun', 'update']);
   assert.equal(ctx.typert.local.list().filter(value => value.namespace === 'automationChanges').length, 1);
 
   // Exercise the built scheduler/executor contract without a model or external side effects.
@@ -99,7 +100,7 @@ try {
   // Production build, real AgentLoop/JSONL/query services; the external model alone is scripted.
   const [{ default: LlmRuntime, LlmAdapter, createUserMessage }, { default: SessionStore }, { default: Projection },
     { default: SystemPrompt }, { default: Tools }, { default: Agents }, { default: Loop },
-    { default: JsonlSessions }, { default: Query }, { default: Workspaces }, { default: Fs },
+    JsonlSessions, { default: Query }, { default: Workspaces }, { default: Fs },
     { default: WorkingDirectory }, { default: DefaultModel }] = await Promise.all([
     import('@deepseek-ai/dsh-llm'), import('@deepseek-ai/dsh-session'), import('@deepseek-ai/dsh-session-projection'),
     import('@deepseek-ai/dsh-system-prompt'), import('@deepseek-ai/dsh-tools'), import('@deepseek-ai/dsh-agent'),
