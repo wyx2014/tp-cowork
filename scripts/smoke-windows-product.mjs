@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { assertNoPackagedComputerUse } from './packaged-computer-use.mjs'
+import bundledPetAnimations from '../plugins/dsh-pet/src/shared/bundled-animations.json' with { type: 'json' }
 
 const resources = process.argv[2]
 if (!resources) throw new Error('TP Cowork: packaged resources directory is required')
@@ -39,6 +40,12 @@ for (const name of product.bundles) {
   assert.equal(manifest.name, name)
   const patches = manifest.dsh.bundle.patch
   for (const patch of Array.isArray(patches) ? patches : [patches]) readFileSync(join(directory, patch))
+  if (name === 'dsh-pet') {
+    for (const file of Object.values(bundledPetAnimations)) {
+      const bytes = readFileSync(join(directory, 'assets/webm', file))
+      assert.equal(bytes.readUInt32BE(0), 0x1a45dfa3, `Packaged pet animation must be readable: ${file}`)
+    }
+  }
 }
 const anchor = join(runtime, 'package.json')
 const requireRuntime = createRequire(anchor)

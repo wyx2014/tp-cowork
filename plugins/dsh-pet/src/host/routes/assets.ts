@@ -6,6 +6,7 @@
  * @module dsh-pet/src/host/routes/assets
  */
 import { join } from 'node:path';
+import bundledAnimations from '../../shared/bundled-animations.json' with { type: 'json' };
 import { PACKAGE_ROOT } from '../paths.ts';
 import { MIME, resolveAsset, resolveExisting } from '../http.ts';
 import { isValidPetId } from '../config.ts';
@@ -13,6 +14,9 @@ import { petAvatarFile } from '../pet-avatar.ts';
 import { existsSync } from 'node:fs';
 import type { PetRouteDeps, RouteInput } from './types.ts';
 import type { RouteResult } from '../http.ts';
+
+// Linux Electron cannot resolve non-ASCII filenames inside the packaged ASAR.
+const bundledWebmFiles = new Map(Object.entries(bundledAnimations));
 
 /** 静态素材领域：未命中返回 undefined，命中返回应答。 */
 export async function handleAssetsRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
@@ -136,9 +140,10 @@ export async function handleAssetsRoutes(deps: PetRouteDeps, input: RouteInput):
   /** 按扩展名查同名素材（专属目录优先；否则用户根 → 包内根） */
   const findAnim = (e: string): string | undefined => {
     const name = animationName + e;
+    const bundledFile = e === '.webm' ? (bundledWebmFiles.get(animationName) ?? name) : name;
     return ownDirectory !== undefined
       ? resolveExisting(ownDirectory, name)
-      : (resolveExisting(userRootFor(e), name) ?? resolveExisting(assetRootFor(e), name));
+      : (resolveExisting(userRootFor(e), name) ?? resolveExisting(assetRootFor(e), bundledFile));
   };
 
   let file = findAnim(ext);

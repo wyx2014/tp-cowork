@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import bundledAnimations from '../src/shared/bundled-animations.json' with { type: 'json' };
 
 // 包根目录（scripts/ 的上一级）
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -93,8 +94,8 @@ for (const f of required) {
 }
 
 // 内置角色的待机和工作状态依赖这四段动画。
-for (const name of ['工作_招手打招呼', '工作_敲打键盘', '工作_犹豫思考', '工作_疑问问号']) {
-  const previewWebm = join('assets', 'webm', name + '.webm');
+for (const file of Object.values(bundledAnimations)) {
+  const previewWebm = join('assets', 'webm', file);
   existsSync(join(ROOT, previewWebm)) ? ok(`exists ${previewWebm}`) : fail(`missing ${previewWebm}`);
 }
 

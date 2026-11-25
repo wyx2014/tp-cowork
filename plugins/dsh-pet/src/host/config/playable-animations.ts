@@ -1,23 +1,29 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import bundledAnimations from '../../shared/bundled-animations.json' with { type: 'json' };
 import { BUILTIN_WEBM_DIRECTORY } from '../../shared/constants.ts';
 import type { Animations, Events, EventSlot } from '../../shared/types.ts';
 import type { ConfigPaths } from './constants.ts';
+
+const bundledNames = new Map(Object.entries(bundledAnimations).map(([name, file]) => [file, name]));
 
 /** 按主宠物素材路由的目录优先级收集可播放动作。 */
 export function mainAnimationFiles(paths: ConfigPaths): Set<string> {
   const own = join(paths.petDir, 'main-animation');
   const custom = join(dirname(paths.userFile), 'main-animation');
   const builtIn = dirname(paths.defaultFile);
+  const bundledWebm = join(builtIn, BUILTIN_WEBM_DIRECTORY);
   const directories = existsSync(own)
     ? [own]
-    : [join(custom, 'webm'), join(custom, 'mov'), join(builtIn, BUILTIN_WEBM_DIRECTORY), join(builtIn, 'mov')];
+    : [join(custom, 'webm'), join(custom, 'mov'), bundledWebm, join(builtIn, 'mov')];
   const available = new Set<string>();
   for (const directory of directories) {
     try {
       for (const entry of readdirSync(directory, { withFileTypes: true })) {
         if (!entry.isFile() && !(entry.isSymbolicLink() && existsSync(join(directory, entry.name)))) continue;
-        if (/\.(?:webm|mov)$/u.test(entry.name)) available.add(entry.name.replace(/\.(?:webm|mov)$/u, ''));
+        if (!/\.(?:webm|mov)$/u.test(entry.name)) continue;
+        const bundledName = directory === bundledWebm ? bundledNames.get(entry.name) : undefined;
+        available.add(bundledName ?? entry.name.replace(/\.(?:webm|mov)$/u, ''));
       }
     } catch {
       // 自定义素材目录可能不存在；继续扫描其余目录。

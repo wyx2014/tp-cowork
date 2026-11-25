@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
 import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup, productClientModules } from './installed-ui-checks.mjs'
+import bundledPetAnimations from '../plugins/dsh-pet/src/shared/bundled-animations.json' with { type: 'json' }
 
 const [executable, homeArgument, outputArgument, configArgument] = process.argv.slice(2)
 if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Linux executable, private home and evidence directory')
@@ -15,18 +16,28 @@ for (const name of config.bundles) {
   if (manifest.dsh?.client) expectedClients.push(name)
 }
 const home = resolve(homeArgument), output = resolve(outputArgument)
-await mkdir(home, { recursive: true })
+const configHome = join(home, 'config')
+// An isolated home never runs a desktop login to initialize XDG user directories.
+await mkdir(configHome, { recursive: true })
+await mkdir(join(home, 'Documents'), { recursive: true })
+await writeFile(join(configHome, 'user-dirs.dirs'), 'XDG_DOCUMENTS_DIR="$HOME/Documents"\n')
 await mkdir(output, { recursive: true })
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/iu.test(name)
   && !name.startsWith('DSH_') && name !== 'ELECTRON_RUN_AS_NODE'))
 const redact = value => String(value).replace(/token=[^\s&"']+/giu, 'token=[redacted]')
-const errors = [], logs = [], observed = new Map()
+const errors = [], failedRequests = [], logs = [], observed = new Map()
 let app, page, failure, state
 const observe = window => {
   if (observed.has(window)) return
   observed.set(window, observeInstalledStartup(window))
   window.on('pageerror', error => errors.push(redact(error.message)))
   window.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())) })
+  window.on('requestfailed', request => {
+    const url = new URL(request.url())
+    if (url.protocol === 'dsh-app:') {
+      failedRequests.push({ method: request.method(), path: url.pathname, error: request.failure()?.errorText })
+    }
+  })
 }
 const nativeState = () => app.evaluate(({ app, BrowserWindow }) => ({
   name: app.name, userData: app.getPath('userData'), home: process.env.DSH_HOME, argv: process.argv,
@@ -61,7 +72,7 @@ async function capture(filename, show = false) {
 try {
   app = await _electron.launch({ executablePath: resolve(executable), chromiumSandbox: true,
     args: [`--user-data-dir=${join(home, 'electron')}`],
-    env: { ...env, HOME: home, XDG_CONFIG_HOME: join(home, 'config'), XDG_CACHE_HOME: join(home, 'cache'),
+    env: { ...env, HOME: home, XDG_CONFIG_HOME: configHome, XDG_CACHE_HOME: join(home, 'cache'),
       XDG_DATA_HOME: join(home, 'data'), DSH_AGENTS_HOME: join(home, 'agents'), DSH_TELEMETRY_DISABLED: '1',
       DSH_DESKTOP_OPEN_DEVTOOLS: '0', DSH_DESKTOP_DIAGNOSTIC_FILE: join(output, 'startup-error.log') },
     timeout: 90_000 })
@@ -115,6 +126,17 @@ try {
     'Linux package must reveal its workspace after first-run setup')
   const renderer = await rendererState()
   assert.deepEqual([...renderer.productModules].sort(), expectedClients.sort(), 'Renderer must load exactly the selected product Client modules')
+  if (expectedClients.includes('dsh-pet')) {
+    for (const name of Object.keys(bundledPetAnimations)) {
+      const path = `/dsh-pet-7340/thumb/main/${encodeURIComponent(name)}.webm`
+      const { status, bytes } = await page.evaluate(async path => {
+        const response = await fetch(path, { headers: { Range: 'bytes=0-3' }, signal: AbortSignal.timeout(20_000) })
+        return { status: response.status, bytes: [...new Uint8Array(await response.arrayBuffer())] }
+      }, path)
+      assert.equal(status, 206, `Packaged pet animation must support range reads: ${name}`)
+      assert.deepEqual(bytes, [0x1a, 0x45, 0xdf, 0xa3], `Packaged pet animation must return WebM bytes: ${name}`)
+    }
+  }
   if (config.bundles.length > 0) {
     await page.locator('body[data-tpcowork-ui]').waitFor({ timeout: 30_000 })
     page.setDefaultTimeout(30_000)
@@ -157,7 +179,7 @@ finally {
     await capture('failed-window.png', true).catch(error => logs.push(redact(error)))
   }
   try {
-    await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), state, errors, logs }, null, 2) + '\n')
+    await writeFile(join(output, 'report.json'), JSON.stringify({ passed: !failure, error: failure && redact(failure.stack), state, errors, failedRequests, logs }, null, 2) + '\n')
   } finally {
     if (app) {
       const timer = setTimeout(() => app.process().kill('SIGKILL'), 10_000)

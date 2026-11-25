@@ -96,7 +96,7 @@ jobs:
             libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxshmfence1 \
             libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
             libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libatspi2.0-0 \
-            libx11-xcb1 libxtst6 fonts-noto-cjk xdg-utils
+            libx11-xcb1 libxtst6 fonts-noto-cjk xdg-utils xdg-user-dirs
       - name: Install product build tools
         run: npm ci
       - name: Resolve pnpm store directory

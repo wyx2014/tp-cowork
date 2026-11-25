@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import bundledAnimations from '../shared/bundled-animations.json' with { type: 'json' };
 import { buildMenuTree } from '../shared/menu.ts';
 import type { Animations } from '../shared/types.ts';
 import { animationNames } from './anim.ts';
@@ -1625,7 +1626,8 @@ test('CoWork 的默认动作只引用实际打包的四段视频，点播菜单�
   assert.deepEqual(animations.idle, names);
   assert.equal(animations.idleSequential, true);
   assert.deepEqual(animationNames(animations), names);
-  for (const name of names) assert.ok(existsSync(join(dirname(defaultFile), 'webm', name + '.webm')));
+  assert.deepEqual(Object.keys(bundledAnimations), names);
+  for (const file of Object.values(bundledAnimations)) assert.ok(existsSync(join(dirname(defaultFile), 'webm', file)));
   assert.deepEqual(buildMenuTree(animations, true), [
     {
       label: '动作',

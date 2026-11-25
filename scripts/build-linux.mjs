@@ -36,7 +36,8 @@ export async function collectLinuxInstallers(source, output, revisions) {
 /** Extract the Debian package and execute its bundled runtime before collecting it. */
 async function verifyLinuxInstallers(source, product, env, variant) {
   const [deb] = await linuxInstallerNames(source)
-  const scratch = await mkdtemp(join(tmpdir(), 'TP Cowork Linux '))
+  // Ubuntu 22.04's xdg-user-dir does not quote XDG_CONFIG_HOME in its file check.
+  const scratch = await mkdtemp(join(tmpdir(), 'tpcowork-linux-'))
   const smoke = async application => {
     await runCommand(join(application, product.artifactPrefix), ['--expose-internals',
       join(productRoot, variant === 'basic' ? 'scripts/smoke-linux-basic-product.mjs' : 'scripts/smoke-windows-product.mjs'), join(application, 'resources'),

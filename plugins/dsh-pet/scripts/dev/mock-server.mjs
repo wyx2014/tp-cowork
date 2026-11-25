@@ -12,12 +12,14 @@ import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs';
 import { join, resolve, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import bundledAnimations from '../../src/shared/bundled-animations.json' with { type: 'json' };
 
 const PORT = Number(process.argv[2] || 8231);
 const here = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const PACKAGE_ROOT = resolve(here, '..', '..');
 const WEBM_ROOT = join(PACKAGE_ROOT, 'assets', 'webm');
 const CONFIG_FILE = join(PACKAGE_ROOT, 'assets', 'config.jsonc');
+const bundledWebmFiles = new Map(Object.entries(bundledAnimations).map(([name, file]) => [name + '.webm', file]));
 
 /** 剥除 JSONC 注释（与真实宿主 readAllConfig 的 stripJsonc 同规则），返回纯 JSON。 */
 const stripJsonc = (src) =>
@@ -80,7 +82,7 @@ const server = createServer((req, res) => {
       res.end('bad path');
       return;
     }
-    const candidate = normalize(join(WEBM_ROOT, rel));
+    const candidate = normalize(join(WEBM_ROOT, bundledWebmFiles.get(rel) ?? rel));
     const rootWithSep = WEBM_ROOT.endsWith(sep) ? WEBM_ROOT : WEBM_ROOT + sep;
     if (candidate !== WEBM_ROOT && !candidate.startsWith(rootWithSep)) {
       res.writeHead(400);
