@@ -41,14 +41,22 @@ export async function finishFirstRunGuide(page) {
   assert.equal(await page.evaluate(() => localStorage.getItem('tpcowork.first-run-guide.v1')), 'skipped', 'Setup dismissal must persist for the next launch')
 }
 
+const defaultClientModules = ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage']
+  .map(name => `@tpcowork/dsh-${name}`)
+
+/** Product modules include plugins that retain their original npm package identity. */
+export function productClientModules(ids) {
+  return ids.filter(id => id.startsWith('@tpcowork/') || id === 'dsh-pet')
+}
+
 /** Require the shipped Client modules and verify either the login barrier or an authenticated workspace. */
 export async function checkInstalledProductUi(page, { capture = async () => {}, startup,
-  clientPlugins = ['ui', 'browser', 'toolbox', 'automation', 'experts', 'memory', 'archives', 'usage'] } = {}) {
+  clientModules = defaultClientModules } = {}) {
   const graph = await page.evaluate(() => window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [])
-  for (const name of clientPlugins) {
-    assert.ok(graph.includes(`@tpcowork/dsh-${name}`), `Installed Client graph omits ${name}`)
+  for (const id of clientModules) {
+    assert.ok(graph.includes(id), `Installed Client graph omits ${id}`)
   }
-  console.log('Installed product Client modules:', graph.filter(id => id.startsWith('@tpcowork/')))
+  console.log('Installed product Client modules:', productClientModules(graph))
   assert.ok(startup, 'Observe the initial session list before checking the application')
   await startup
   const account = await page.evaluate(async () => {

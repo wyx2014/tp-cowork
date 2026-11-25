@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
-import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup } from './installed-ui-checks.mjs'
+import { finishFirstRunGuide, checkInstalledProductUi, observeInstalledStartup, productClientModules } from './installed-ui-checks.mjs'
 
 const [executable, homeArgument, outputArgument, configArgument] = process.argv.slice(2)
 if (!executable || !homeArgument || !outputArgument) throw new Error('Expected Linux executable, private home and evidence directory')
@@ -34,11 +34,13 @@ const nativeState = () => app.evaluate(({ app, BrowserWindow }) => ({
   windows: BrowserWindow.getAllWindows().map(window => ({ url: window.webContents.getURL(), visible: window.isVisible() })),
   versions: process.versions,
 }))
-const rendererState = () => page.evaluate(() => ({ title: document.title, text: document.body.innerText.slice(0, 4000),
-  bodyClass: document.body.className, readyState: document.readyState, visibility: document.visibilityState,
-  rootChildren: document.querySelector('#root')?.childElementCount,
-  bootEntries: window.__DSH_BOOT__?.entries?.length,
-  productModules: window.__DSH_BOOT__?.entries?.filter(entry => entry.id.startsWith('@tpcowork/')).map(entry => entry.id) }))
+const rendererState = async () => {
+  const { clientIds, ...state } = await page.evaluate(() => ({ title: document.title, text: document.body.innerText.slice(0, 4000),
+    bodyClass: document.body.className, readyState: document.readyState, visibility: document.visibilityState,
+    rootChildren: document.querySelector('#root')?.childElementCount,
+    clientIds: window.__DSH_BOOT__?.entries?.map(entry => entry.id) ?? [] }))
+  return { ...state, bootEntries: clientIds.length, productModules: productClientModules(clientIds) }
+}
 async function capture(filename, show = false) {
   const native = await app.browserWindow(page)
   let timer
@@ -135,7 +137,7 @@ try {
       await originalDialog.dispose()
     }
     const access = await checkInstalledProductUi(page, { startup: observed.get(page),
-      clientPlugins: expectedClients.map(name => name.replace('@tpcowork/dsh-', '')),
+      clientModules: expectedClients,
       capture: name => capture(`${name}.png`) })
     if (access.authenticated) {
       await page.getByTestId('toolbox-navigation').click()

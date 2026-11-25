@@ -9,6 +9,12 @@ import { promisify } from 'node:util'
 import { buildLinux, collectLinuxInstallers, linuxInstallerNames } from '../build-linux.mjs'
 import { prepareDesktopBasic } from '../prepare-desktop-basic.mjs'
 import { prepareLinuxDesktopUtilities } from '../prepare-linux-desktop-utilities.mjs'
+import { productClientModules } from '../installed-ui-checks.mjs'
+
+test('installer GUI checks recognize the unscoped desktop pet Client module', () => {
+  assert.deepEqual(productClientModules(['@deepseek-ai/dsh-ui-settings', '@tpcowork/dsh-ui', 'dsh-pet']),
+    ['@tpcowork/dsh-ui', 'dsh-pet'])
+})
 
 test('collects the DEB with its exact bytes, checksum and source revisions', async t => {
   const root = await mkdtemp(join(tmpdir(), 'TP Linux packages '))
