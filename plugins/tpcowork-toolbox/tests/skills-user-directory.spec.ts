@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { userSkillsDirectory } from '../src/host/skills/user-directory.ts'
@@ -98,4 +98,52 @@ it('selects a personal override ahead of an existing product copy without overwr
   expect(items.find(item => item.origin === 'bundled')?.readiness.reasons).toContainEqual(expect.objectContaining({ code: 'shadowed' }))
   expect(items.find(item => item.origin === 'user')?.readiness.state).toBe('ready')
   expect(await readFile(join(dir, 'skills/brainstorming/SKILL.md'), 'utf8')).toBe(original)
+})
+
+it('removes unmanaged, store-modified and override personal skills while protecting bundled skills and symlinks', async () => {
+  const { ctx, installer, userRoot, home, dir } = await skillsFixture({ separateUserRoot: true })
+  const bundled = await installer.install({ requestId: 'default', source: { kind: 'bundled', resourceId: 'brainstorming' }, scope: { kind: 'user' }, conflict: 'reject' })
+  // Dropped unmanaged personal directory skill
+  const droppedDir = join(userRoot, 'dropped-skill-1.0')
+  await mkdir(droppedDir, { recursive: true })
+  await writeFile(join(droppedDir, 'SKILL.md'), entry('dropped-skill', 'Manually placed skill'))
+  // Personal override of a bundled skill
+  const overrideDir = join(userRoot, 'brainstorming')
+  await mkdir(overrideDir, { recursive: true })
+  await writeFile(join(overrideDir, 'SKILL.md'), entry('brainstorming', 'Personal override'))
+  // Symlinked directory pointing outside userRoot must remain protected
+  const outside = join(home, 'outside-skill')
+  await mkdir(outside, { recursive: true })
+  await writeFile(join(outside, 'SKILL.md'), entry('linked-skill', 'Outside target'))
+  await symlink(outside, join(userRoot, 'linked-skill'))
+
+  await vi.waitFor(async () => {
+    const names = (await ctx.toolboxSkills.inventory({})).items.map(item => item.name)
+    expect(names).toContain('dropped-skill')
+    expect(names).toContain('linked-skill')
+    expect(names.filter(name => name === 'brainstorming')).toHaveLength(2)
+  }, { timeout: 5000 })
+
+  // Bundled skill cannot be removed
+  const firstCatalog = await ctx.toolboxSkills.inventory({})
+  await expect(ctx.toolboxSkills.remove({ id: bundled.skillId!, expectedRevision: firstCatalog.revision })).rejects.toMatchObject({ code: 'skills/bundled-protected' })
+
+  // Symlinked skill cannot be removed and outside target stays intact
+  const linked = firstCatalog.items.find(item => item.name === 'linked-skill')!
+  await expect(ctx.toolboxSkills.remove({ id: linked.id, expectedRevision: firstCatalog.revision })).rejects.toMatchObject({ code: 'skills/not-owned' })
+  expect(await readFile(join(outside, 'SKILL.md'), 'utf8')).toContain('Outside target')
+
+  // Unmanaged personal directory skill CAN be removed
+  const dropped = firstCatalog.items.find(item => item.name === 'dropped-skill')!
+  expect(dropped.managed).toBe(false)
+  await ctx.toolboxSkills.remove({ id: dropped.id, expectedRevision: firstCatalog.revision })
+  await expect(readFile(join(droppedDir, 'SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' })
+
+  // Personal override CAN be removed and restores bundled brainstorming
+  const secondCatalog = await ctx.toolboxSkills.inventory({})
+  const override = secondCatalog.items.find(item => item.name === 'brainstorming' && item.origin === 'user')!
+  await ctx.toolboxSkills.remove({ id: override.id, expectedRevision: secondCatalog.revision })
+  await expect(readFile(join(overrideDir, 'SKILL.md'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect((await ctx.skills.get('brainstorming'))?.content).toContain('方案')
+  expect(await readFile(join(dir, 'skills/brainstorming/SKILL.md'), 'utf8')).toContain('方案')
 })

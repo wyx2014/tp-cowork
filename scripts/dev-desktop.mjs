@@ -1,7 +1,7 @@
 /** Launch existing local artifacts; prepare or rebuild them only when needed. */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -25,8 +25,8 @@ function missingDependencies(directory, sections) {
     .some(name => !existsSync(join(directory, 'node_modules', name, 'package.json'))))
 }
 
-const pluginNames = ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts']
-const builtPlugins = pluginNames.filter(name => name !== 'workbench')
+const pluginNames = ['core', 'ui', 'workbench', 'browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts', 'pet']
+const builtPlugins = pluginNames.filter(name => name !== 'workbench' && name !== 'pet')
 const harnessArtifacts = ['apps/desktop/lib/main.js', 'apps/desktop/lib/types/project-manager.js',
   'apps/desktop-host/lib/index.js', 'apps/cli/lib/bin.js', 'apps/web/dist/index.html']
 
@@ -49,14 +49,30 @@ function missingPluginLinks(product, profile) {
   if (!existsSync(manifestPath)) return pluginNames
   const { dependencies = {} } = JSON.parse(readFileSync(manifestPath, 'utf8'))
   return pluginNames.filter(name => {
-    const source = resolve(product, 'plugins', `tpcowork-${name}`)
-    const installed = join(profile, 'node_modules', '@tpcowork', `dsh-${name}`)
-    const reference = dependencies[`@tpcowork/dsh-${name}`]
+    const directory = name === 'pet' ? 'dsh-pet' : `tpcowork-${name}`
+    const packageName = name === 'pet' ? 'dsh-pet' : `@tpcowork/dsh-${name}`
+    const source = resolve(product, 'plugins', directory)
+    const installed = join(profile, 'node_modules', packageName)
+    const reference = dependencies[packageName]
     if (typeof reference !== 'string' || !reference.startsWith('link:')) return true
     const linked = resolve(profile, reference.slice('link:'.length))
     return !existsSync(linked) || !existsSync(installed)
       || realpathSync(linked) !== realpathSync(source) || realpathSync(installed) !== realpathSync(source)
   })
+}
+
+function desktopPetBuildStale(directory) {
+  const outputs = ['lib/index.js', 'lib/client.js', 'runtime/electron-helper/shared-core.js'].map(file => join(directory, file))
+  if (outputs.some(path => !existsSync(path))) return true
+  const oldestOutput = Math.min(...outputs.map(path => statSync(path).mtimeMs))
+  const inputs = ['package.json', 'pnpm-lock.yaml', 'tsdown.config.mjs', 'tsconfig.types.json', 'src', 'scripts']
+    .map(path => join(directory, path))
+  for (const root of [join(directory, 'src'), join(directory, 'scripts')]) {
+    for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+      inputs.push(join(entry.parentPath, entry.name))
+    }
+  }
+  return inputs.some(path => (statSync(path, { throwIfNoEntry: false })?.mtimeMs ?? Infinity) > oldestOutput)
 }
 
 /** Keep the data paths identical to the framework's ordinary development launcher. */
@@ -119,6 +135,15 @@ export function desktopPlan({ product = productRoot, harness = harnessRoot, envi
       node(`构建 ${name} 插件`, `plugins/tpcowork-${name}/build.mjs`, name === 'browser' ? ['--install-native'] : [])
     }
   }
+  const pet = join(product, 'plugins/dsh-pet')
+  const petLock = join(pet, 'pnpm-lock.yaml')
+  const installedPetLock = join(pet, 'node_modules/.pnpm/lock.yaml')
+  const readLock = path => readFileSync(path, 'utf8').replaceAll('\r\n', '\n')
+  const installPetDependencies = !existsSync(installedPetLock)
+    || readLock(petLock) !== readLock(installedPetLock)
+    || missingDependencies(pet, ['dependencies', 'devDependencies'])
+  if (installPetDependencies) add('安装桌宠依赖', 'pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], pet)
+  if (rebuild || plugins || installPetDependencies || desktopPetBuildStale(pet)) add('构建桌宠插件', 'npm', ['run', 'build'], pet)
   const profile = join(env.DSH_HOME, 'profiles/desktop')
   const missingLinks = missingPluginLinks(product, profile)
   if (missingLinks.length > 0) {

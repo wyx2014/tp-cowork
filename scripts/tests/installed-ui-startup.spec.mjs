@@ -122,5 +122,6 @@ it('waits for a delayed startup baseline before opening settings on an existing 
   await page.waitForTimeout(250)
   expect(await settings.isVisible()).toBe(true)
   expect(settingsClicks).toBe(1)
-  await settings.getByRole('switch', { name: 'Developer mode', exact: true }).waitFor()
+  await settings.getByRole('button', { name: 'General', exact: true }).waitFor()
+  expect(await settings.getByRole('switch', { name: 'Developer mode', exact: true }).count()).toBe(0)
 })

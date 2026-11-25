@@ -13,7 +13,7 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
     expect(catalog.items.find(item => item.name === 'skill-creator')?.readiness).toMatchObject({ state: 'blocked', reasons: expect.arrayContaining([expect.objectContaining({ code: 'python-unavailable' })]) })
   })
 
-  it('installs, disables in /name and loader, survives restart, re-enables and removes with tombstone', async () => {
+  it('installs, disables in /name and loader, survives restart, re-enables and protects bundled skills from removal', async () => {
     const { ctx, installer, start, dir } = await skillsFixture()
     const installed = await installer.install({ requestId: 'brainstorming', source: { kind: 'bundled', resourceId: 'brainstorming' }, scope: { kind: 'user' }, conflict: 'reject' })
     expect(installed.state).toBe('installed')
@@ -37,10 +37,10 @@ describe('skills profile lifecycle through real Loader and Gateway', () => {
     const enabled = await restarted.toolboxSkills.setEnabled({ id: installed.skillId!, enabled: true, expectedRevision: restored.revision })
     expect((await restarted.skills.get('brainstorming'))?.content).toContain('方案')
     expect((await restarted.toolboxSkills.checkReadiness({ id: installed.skillId! })).readiness.state).toBe('ready')
-    await restarted.toolboxSkills.remove({ id: installed.skillId!, expectedRevision: enabled.revision })
-    expect(await restarted.skills.list()).toEqual([])
-    expect((await readdir(join(dir, 'skills'))).length).toBe(0)
-    expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('removedBundled')
+    await expect(restarted.toolboxSkills.remove({ id: installed.skillId!, expectedRevision: enabled.revision })).rejects.toMatchObject({ code: 'skills/bundled-protected' })
+    expect((await restarted.skills.get('brainstorming'))?.content).toContain('方案')
+    expect((await readdir(join(dir, 'skills'))).length).toBe(1)
+    expect(await readFile(join(dir, 'cordis.patch.yml'), 'utf8')).not.toContain('removedBundled')
     await restarted.fiber.dispose()
     expect(restarted.get('toolboxSkills')).toBeUndefined()
     expect(restarted.get('toolboxInstaller')).toBeUndefined()

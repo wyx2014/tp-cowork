@@ -56,16 +56,19 @@ test('Basic plan selects an independent identity and no product plugins', async 
   assert.equal(basic.variant, 'basic')
   assert.deepEqual(basic.formats, ['deb'])
   assert.deepEqual(basic.bundles, [])
+  assert.deepEqual(basic.excludedBundles, ['@tpcowork/dsh-computer-use'])
   assert.equal(basic.appId, 'com.tparuyi.tpcowork.dsh.basic')
   const { stdout: fullOutput } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--variant', 'full', '--plan'])
   const full = JSON.parse(fullOutput)
   assert.deepEqual(full.formats, ['deb'])
   assert.ok(full.bundles.length > 0)
+  assert.ok(!full.bundles.includes('@tpcowork/dsh-computer-use'))
+  assert.deepEqual(full.excludedBundles, ['@tpcowork/dsh-computer-use'])
   assert.notEqual(full.appId, basic.appId)
   await assert.rejects(buildLinux(['--variant', 'unknown', '--plan']), /variant must be standard, full or basic/u)
 })
 
-test('default Linux product includes the browser and every full-product bundle except Computer Use', async () => {
+test('the standard and full Linux products have the same bundles and exclude Computer Use', async () => {
   const { stdout } = await promisify(execFile)(process.execPath, ['scripts/build-linux.mjs', '--plan'], {
     env: { ...process.env, PACKAGE_VARIANT: 'standard' },
   })
@@ -75,8 +78,9 @@ test('default Linux product includes the browser and every full-product bundle e
   assert.equal(standard.product, 'TP Cowork Linux')
   assert.equal(standard.variant, 'standard')
   assert.deepEqual(standard.formats, ['deb'])
-  assert.deepEqual(standard.bundles, full.bundles.filter(name => name !== '@tpcowork/dsh-computer-use'))
-  assert.equal(standard.bundles.length, 11)
+  assert.deepEqual(standard.bundles, full.bundles)
+  assert.ok(standard.bundles.includes('@tpcowork/dsh-browser'))
+  assert.ok(standard.bundles.includes('dsh-pet'))
   assert.deepEqual(standard.excludedBundles, ['@tpcowork/dsh-computer-use'])
   assert.notEqual(standard.appId, full.appId)
   assert.notEqual(standard.appId, basic.appId)

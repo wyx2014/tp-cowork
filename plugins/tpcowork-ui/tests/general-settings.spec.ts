@@ -1,14 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import {
-  ASK_AUTO_CONTINUE_NOTE, createGeneralPreferences, generalLayout, markLaterReasoning, systemLocale, watchQuestionAutoContinue,
+  ASK_AUTO_CONTINUE_NOTE, GENERAL_CARDS, createGeneralPreferences, generalLayout, markLaterReasoning, systemLocale, watchQuestionAutoContinue,
 } from '../src/general-settings.js'
 
 afterEach(() => { vi.useRealTimers() })
 
-it('orders rows card by card with one break between cards', () => {
+it('orders rows card by card with one break between cards and omits developer-tools and current-version from General', () => {
   const { rows, breaks } = generalLayout([['a'], ['b', 'c'], ['d']])
   expect(rows).toEqual({ a: 0, b: 2, c: 3, d: 5 })
   expect(breaks).toEqual([1, 4])
+  expect(GENERAL_CARDS.flat()).not.toContain('developer-tools')
+  expect(GENERAL_CARDS.flat()).not.toContain('current-version')
+  expect(generalLayout().rows['developer-tools']).toBeUndefined()
+  expect(generalLayout().rows['current-version']).toBeUndefined()
 })
 
 it('keeps the switches in storage with the reference defaults', () => {

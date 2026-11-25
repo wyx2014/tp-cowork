@@ -1,8 +1,8 @@
 /**
  * TP Cowork workspace memory, modeled on ZCode's project memory: a `# Memory` system-prompt section,
  * a bounded index of recent facts at the start of each conversation, model tools that own the fact files, and an
- * optional background extraction after each completed turn. Off by default, like ZCode, because
- * extraction adds a model call per turn; the Settings switch turns it on from the next request.
+ * optional background extraction after each completed turn. Memory starts enabled and follows the
+ * saved Settings switch on subsequent requests. Extraction adds one model call per completed turn.
  * @module @tpcowork/dsh-memory
  */
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -36,7 +36,7 @@ export const inject = ['tools', 'systemPrompt', 'llm']
 
 export interface Config {
   /**
-   * Settings switch, read live; off by default because memory adds prompt text and, with extraction, model calls.
+   * Settings switch, enabled by default and read live.
    * Switching applies to every conversation's next request without remounting the plugin.
    */
   enabled: Volatile<boolean>
@@ -49,7 +49,7 @@ export interface Config {
 }
 
 export const Config = z.object({
-  enabled: z.boolean().default(false).volatile().description('Remember facts across conversations in each workspace.'),
+  enabled: z.boolean().default(true).volatile().description('Remember facts across conversations in each workspace.'),
   extraction: z.boolean().default(true).description('After each completed turn, ask the model to save new facts. Adds one model call per turn.'),
   extractionMaxTokens: z.natural().min(256).default(2_048),
   extractionTimeoutMs: z.natural().min(5_000).default(120_000),

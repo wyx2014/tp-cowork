@@ -398,7 +398,6 @@ html[data-windows-titlebar]:has(body[data-tpcowork-ui] [data-sidebar-collapsed='
 /* General › Show todos / Show reasoning: todo cards and every reasoning row after a Turn's first leave the transcript. */
 body[data-tpcowork-hide-todos] [data-tool="todo_write"],
 body[data-tpcowork-hide-reasoning] [data-tpcowork-later-reasoning] { display: none; }
-.tpcowork-current-version { padding: 16px 0; color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
 
 /* Composer model picker after the reference product's combined ModelConfigSelect (ZCode 3.16): one ghost trigger
    naming the model and its effort, and a 288px menu above it with a provider row, the models, and an effort slider. */
@@ -1048,4 +1047,201 @@ body[data-tpcowork-ui] .tpcowork-login-spinner { width: 14px; height: 14px; box-
 @media (max-width: 480px) {
   body[data-tpcowork-ui] .tpcowork-login-page { padding-inline: 16px; }
   body[data-tpcowork-ui] .tpcowork-login-card { padding: 32px 24px; }
+}
+.tpcowork-help { position: relative; -webkit-app-region: no-drag; }
+.tpcowork-help-floating {
+  position: fixed; inset: 8px 14px auto auto; z-index: 60; pointer-events: auto;
+}
+html[data-windows-titlebar] .tpcowork-help-floating {
+  top: calc(var(--dsh-windows-titlebar-height, 32px) + 4px);
+}
+body:has([data-dsh-modal-part="overlay"] .tpcowork-help) .tpcowork-help-workspace,
+body:has(.tpcowork-settings-title) .tpcowork-help-workspace { visibility: hidden; }
+body:has(.tpcowork-help-floating) header:has(> [data-conversation-header-leading]) { padding-inline-end: 56px; }
+[data-conversation-header-corner]:has(> .tpcowork-help-workspace) { gap: 6px; }
+[data-conversation-header-corner] > .tpcowork-help-workspace { order: 1; }
+.tpcowork-help-trigger {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 7px;
+  background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer;
+}
+.tpcowork-help-trigger:hover, .tpcowork-help-trigger[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-hover); }
+.tpcowork-help-notice {
+  position: absolute; inset: calc(100% + 8px) 0 auto auto; width: max-content; max-width: 280px; padding: 9px 12px;
+  border: 1px solid var(--dsw-alias-border-l3); border-radius: 8px; background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+}
+.tpcowork-feedback-dialog {
+  width: min(580px, 100%); max-height: 100%; padding: 0; gap: 0;
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+.tpcowork-feedback-dialog [data-dsh-modal-part="content"] { min-height: 0; }
+.tpcowork-feedback-dialog [data-dsh-modal-part="header"] {
+  flex: none; padding: 14px 16px; border-bottom: 1px solid var(--dsw-alias-border-l3);
+}
+.tpcowork-feedback-dialog [data-dsh-modal-part="body"] {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0; margin: 0; padding: 18px 16px;
+}
+.tpcowork-feedback-dialog [data-dsh-modal-part="footer"] {
+  flex: none; padding: 12px 16px; border-top: 1px solid var(--dsw-alias-border-l3);
+}
+.tpcowork-feedback-form, .tpcowork-feedback-field { display: grid; gap: 7px; min-width: 0; }
+.tpcowork-feedback-form { gap: 12px; }
+.tpcowork-feedback-label { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.tpcowork-feedback-label small {
+  font-weight: 400; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-secondary); white-space: nowrap;
+}
+.tpcowork-feedback-field :is(textarea, input:not([type="file"])) {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit;
+}
+.tpcowork-feedback-field textarea { min-height: 106px; height: 110px; resize: vertical; line-height: 1.5; }
+.tpcowork-feedback-attachments { display: grid; gap: 7px; }
+.tpcowork-feedback-drop {
+  display: grid; gap: 10px; padding: 10px; border: 1px dashed var(--dsw-alias-border-l4); border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+}
+.tpcowork-feedback-drop[data-dragging="true"] { background: var(--dsw-alias-interactive-bg-hover); }
+.tpcowork-feedback-drop-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tpcowork-feedback-drop-footer p { margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.tpcowork-feedback-drop-footer p + p { margin-top: 4px; }
+.tpcowork-feedback-drop-footer > button { flex: none; }
+.tpcowork-feedback-previews { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.tpcowork-feedback-thumb { position: relative; min-width: 0; }
+.tpcowork-feedback-preview {
+  display: block; padding: 0; width: 100%; aspect-ratio: 4 / 3; overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l3); border-radius: 6px; background: var(--dsw-alias-bg-layer-2);
+  cursor: zoom-in;
+}
+.tpcowork-feedback-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tpcowork-feedback-remove {
+  position: absolute; inset: 3px 3px auto auto; box-shadow: 0 1px 4px #0003;
+  display: grid; place-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); cursor: pointer; font-size: 17px;
+}
+.tpcowork-feedback-logs {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+.tpcowork-feedback-logs > button { flex: none; }
+.tpcowork-feedback-logs > span { display: grid; gap: 3px; }
+.tpcowork-feedback-logs small, .tpcowork-feedback-progress { color: var(--dsw-alias-label-secondary); }
+.tpcowork-feedback-actions, .tpcowork-feedback-actions > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tpcowork-feedback-actions { width: 100%; justify-content: space-between; }
+.tpcowork-feedback-actions > div { margin-inline-start: auto; justify-content: flex-end; }
+.tpcowork-feedback-error { color: var(--dsw-alias-label-danger, #bb3434); margin: 0; }
+.tpcowork-feedback-progress { margin: 0; }
+.tpcowork-feedback-image-dialog { width: min(840px, 100%); max-height: 100%; }
+.tpcowork-feedback-image-dialog img { display: block; max-width: 100%; max-height: 68vh; object-fit: contain; }
+.tpcowork-feedback-history { display: grid; gap: 8px; }
+.tpcowork-feedback-history details {
+  padding: 9px 11px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 8px; overflow-wrap: anywhere;
+}
+.tpcowork-feedback-history summary { cursor: pointer; }
+.tpcowork-feedback-history summary span { display: inline-block; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.tpcowork-feedback-history summary small { float: inline-end; }
+.tpcowork-feedback-history :is(p, small), .tpcowork-feedback-job-details :is(p, small) { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tpcowork-feedback-history details > small { display: block; color: var(--dsw-alias-label-secondary); }
+.tpcowork-feedback-job-details { display: grid; gap: 8px; }
+.tpcowork-feedback-job-details p { margin: 0; }
+html body [data-dsh-modal="headless"].tpcowork-about-dialog {
+  --dsh-modal-width: 256px;
+  width: min(256px, 100%);
+  max-width: 256px;
+  min-height: 280px;
+  gap: 0;
+  padding: 22px 15px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 16px;
+  background: #f4f4f5;
+  color: #1d1d1f;
+  user-select: none;
+}
+html body[data-ds-dark-theme] [data-dsh-modal="headless"].tpcowork-about-dialog {
+  background: #171717;
+  color: #e8e8e8;
+}
+.tpcowork-about-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 244px;
+}
+.tpcowork-about-content {
+  width: 100%;
+  max-width: 222px;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+}
+.tpcowork-about-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #000000 0%, #151718 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 13px -3px rgb(0 0 0 / 0.2), 0 4px 5px -3px rgb(0 0 0 / 0.2);
+}
+.tpcowork-about-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: contain;
+  display: block;
+}
+.tpcowork-about-title {
+  margin: 20px 0 0;
+  font-size: 13.5px;
+  line-height: 1.24;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.tpcowork-about-meta {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #303033;
+}
+body[data-ds-dark-theme] .tpcowork-about-meta {
+  color: #e2e2e2;
+}
+.tpcowork-about-ok {
+  width: 100%;
+  max-width: 222px;
+  height: 36px;
+  margin: 16px auto 0;
+  border: 0;
+  border-radius: 18px;
+  background: #0a0a0a;
+  color: #fafafa;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  outline: none;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+body[data-ds-dark-theme] .tpcowork-about-ok {
+  background: #fafafa;
+  color: #0a0a0a;
+}
+.tpcowork-about-ok:hover { opacity: 0.88; }
+.tpcowork-about-ok:active { opacity: 0.8; }
+.tpcowork-about-ok:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+@media (max-width: 480px) {
+  .tpcowork-feedback-previews { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tpcowork-feedback-drop-footer { flex-wrap: wrap; }
 }

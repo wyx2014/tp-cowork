@@ -5,9 +5,11 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assertNoPackagedComputerUse } from './packaged-computer-use.mjs'
 
 const resources = process.argv[2]
 if (!resources) throw new Error('Basic runtime resources directory is required')
+assertNoPackagedComputerUse(resources)
 const runtime = join(resources, 'app.asar/dsh')
 const productFile = join(runtime, 'desktop-product.json')
 if (existsSync(productFile)) assert.deepEqual(JSON.parse(readFileSync(productFile, 'utf8')).bundles, [])

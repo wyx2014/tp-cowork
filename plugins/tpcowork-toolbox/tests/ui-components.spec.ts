@@ -78,7 +78,7 @@ describe('toolbox user paths', () => {
     }
     fireEvent.submit(editor)
     expect(fields.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
-    expect(fields.getByRole('button', { name: 'Toolbox', exact: true }).hasAttribute('disabled')).toBe(true)
+    expect(fields.getByRole('button', { name: 'Experts · Skills · Connectors', exact: true }).hasAttribute('disabled')).toBe(true)
     fireEvent.submit(editor)
     expect(api.mcpCreate).toHaveBeenCalledOnce()
     expect(api.mcpCreate).toHaveBeenCalledWith({ expectedRevision: current.mcp.revision, definition: { id: 'local-tools', label: 'Local tools', origin: 'custom', enabled: true, transport: 'stdio', command: 'node', args: ['server.mjs', '--verbose'], credentials: [], connectTimeout: 15, toolTimeout: 30 } })
@@ -110,7 +110,7 @@ describe('toolbox user paths', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add MCP' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     const editor = screen.getByRole('form', { name: 'Add MCP server' })
-    const navigation = within(editor).getByRole('navigation', { name: 'Back to toolbox' })
+    const navigation = within(editor).getByRole('navigation', { name: 'Back to Experts · Skills · Connectors' })
     expect(navigation.querySelector('[aria-current=page]')?.textContent).toBe('Add MCP server')
     expect(surface.scrollTop).toBe(0)
     fireEvent.change(within(editor).getByLabelText('Service name'), { target: { value: 'Unsaved draft' } })
@@ -125,7 +125,7 @@ describe('toolbox user paths', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('form', { name: 'Edit MCP server' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: 'Connection method' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Toolbox', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Experts · Skills · Connectors', exact: true }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit' })))
     expect(surface.scrollTop).toBe(240)
     expect(api.mcpUpdate).not.toHaveBeenCalled()
@@ -209,7 +209,7 @@ describe('toolbox user paths', () => {
     expect(screen.queryByText('My skills directory')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'My skills (1)' }))
     expect(screen.queryByText(path)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Details' }))
     const page = screen.getByRole('article', { name: 'my-skill' })
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -218,7 +218,7 @@ describe('toolbox user paths', () => {
     expect(await within(page).findByText('My personal instructions')).toBeTruthy()
     fireEvent.click(within(page).getByRole('button', { name: 'Open skill folder' }))
     await waitFor(() => expect(api.openSkillDirectory).toHaveBeenCalledWith(userDirectory + '\\my-skill\\'))
-    const navigation = within(page).getByRole('navigation', { name: 'Back to toolbox' })
+    const navigation = within(page).getByRole('navigation', { name: 'Back to Experts · Skills · Connectors' })
     expect(navigation.querySelector('[aria-current=page]')?.textContent).toBe('my-skill')
     fireEvent.click(within(navigation).getByRole('button', { name: 'Skills', exact: true }))
     expect(screen.getByRole('button', { name: 'My skills (1)' }).getAttribute('aria-pressed')).toBe('true')
@@ -383,14 +383,13 @@ describe('toolbox user paths', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Details' })))
     expect(screen.queryByText('Late instructions')).toBeNull()
   })
-  it('toggles without a toolbox refresh and imports the selected complete folder into personal skills', async () => {
+  it('omits disable and readiness check actions on skill cards and imports the selected complete folder into personal skills', async () => {
     const api = actions(), current = catalog()
     render(React.createElement(Skills, { load: { value: current.skills, failed: false, loading: false }, available: true, query: '', t, actions: api }))
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
-    await waitFor(() => expect(api.skillEnable).toHaveBeenCalledWith({ id: current.skills.items[0]!.id, enabled: false, expectedRevision: current.skills.revision }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Import skill' }).hasAttribute('disabled')).toBe(false))
-    expect(api.refresh).not.toHaveBeenCalled()
-    expect(api.refreshSkills).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Disable' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Check readiness' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Import skill' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Import skill folder' }))
     await screen.findByText('Installation completed')
@@ -401,6 +400,86 @@ describe('toolbox user paths', () => {
     expect(api.refresh).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'My skills (0)' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.queryByRole('form')).toBeNull()
+  })
+  it('forbids removing bundled skills and removes any personal skill with floating top toast feedback', async () => {
+    const api = actions(), current = catalog()
+    const base = current.skills.items[0]!
+    current.skills.items = [
+      { ...base, id: 'bundled-1', name: 'summarize', origin: 'bundled', managed: true },
+      { ...base, id: 'mine-managed', name: 'my-managed', origin: 'user', managed: true },
+      { ...base, id: 'mine-unmanaged', name: 'my-dropped', origin: 'user', managed: false },
+      { ...base, id: 'mine-hub', name: 'hub-skill', origin: 'tpcoworkhub', managed: false },
+    ]
+    let finish!: () => void
+    api.skillRemove = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+    const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Skills, { load: { value: current.skills, failed: false, loading: false }, available: true, query: '', t, actions: api })))
+    const cards = screen.getAllByRole('article')
+    const cardFor = (label: string) => cards.find(card => within(card).queryByRole('heading', { name: label }))!
+    expect(within(cardFor('Content Summary')).queryByRole('button', { name: 'Remove' })).toBeNull()
+    expect(within(cardFor('my-managed')).getByRole('button', { name: 'Remove' })).toBeTruthy()
+    expect(within(cardFor('my-dropped')).getByRole('button', { name: 'Remove' })).toBeTruthy()
+    expect(within(cardFor('hub-skill')).getByRole('button', { name: 'Remove' })).toBeTruthy()
+
+    fireEvent.click(within(cardFor('my-dropped')).getByRole('button', { name: 'Remove' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    const pendingToast = await screen.findByRole('status')
+    expect(pendingToast.getAttribute('data-state')).toBe('pending')
+    expect(pendingToast.textContent).toContain('Removing my-dropped…')
+    expect(container.contains(pendingToast)).toBe(false)
+    expect(api.skillRemove).toHaveBeenCalledWith({ id: 'mine-unmanaged', expectedRevision: current.skills.revision })
+
+    finish()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(screen.getByRole('status').getAttribute('data-state')).toBe('success'))
+    expect(api.refreshSkills).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status').textContent).toContain('my-dropped removed')
+    expect(container.contains(screen.getByRole('status'))).toBe(false)
+    expect(container.textContent).not.toContain('Removed')
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss removal notice' }))
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+  it('keeps transient incomplete or failed catalog reads after removal out of the list and re-reads until settled', async () => {
+    const api = actions(), current = catalog()
+    current.skills.items = [{ ...current.skills.items[0]!, id: 'mine-1', name: 'my-skill', origin: 'user', managed: false }]
+    const settled = { ...current.skills, items: [] }
+    const renderWith = (load: { value: typeof current.skills; failed: boolean; loading: boolean }) => React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Skills, { load, available: true, query: '', t, actions: api }))
+    let finish!: () => void
+    api.skillRemove = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+    let reads = 0
+    const view = render(renderWith({ value: current.skills, failed: false, loading: false }))
+    api.refreshSkills = vi.fn(async () => {
+      reads++
+      view.rerender(renderWith(reads === 1 ? { value: { ...settled, complete: false }, failed: false, loading: false } : reads === 2 ? { value: { ...settled, complete: false }, failed: true, loading: false } : { value: settled, failed: false, loading: false }))
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+    finish()
+    await waitFor(() => expect(api.refreshSkills).toHaveBeenCalled())
+    expect(view.container.textContent).not.toContain('The catalog is incomplete')
+    expect(view.container.querySelector('[role=alert]')).toBeNull()
+    await waitFor(() => expect(screen.getByRole('status').getAttribute('data-state')).toBe('success'), { timeout: 3000 })
+    expect(api.refreshSkills).toHaveBeenCalledTimes(3)
+    expect(view.container.querySelector('[role=alert]')).toBeNull()
+  })
+  it('shows skill removal failures in a floating top alert toast outside the list', async () => {
+    const api = actions(), current = catalog()
+    current.skills.items = [{ ...current.skills.items[0]!, id: 'mine-1', name: 'my-skill', origin: 'user', managed: false }]
+    api.skillRemove = vi.fn(async () => { throw { code: 'toolbox/stale-selection' } })
+    const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+      React.createElement(Skills, { load: { value: current.skills, failed: false, loading: false }, available: true, query: '', t, actions: api })))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const alert = await screen.findByRole('alert')
+    expect(container.contains(alert)).toBe(false)
+    expect(alert.getAttribute('data-state')).toBe('failure')
+    expect(alert.textContent).toContain('Failed to remove my-skill')
+    expect(alert.textContent).toContain('The catalog changed')
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss removal notice' }))
+    expect(screen.queryByRole('alert')).toBeNull()
   })
   it('updates only a matching skill folder and keeps a different skill untouched', async () => {
     const api = actions(), current = catalog()

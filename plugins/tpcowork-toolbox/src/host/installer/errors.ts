@@ -6,7 +6,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 const messages: Partial<Record<SkillFailureCode, string>> = {
   'skills/not-owned': '该目录不属于工具箱安装器，请通过文件管理器处理用户自有内容。',
-  'skills/user-modified': '技能包含用户修改，已保留原文件。请另存修改后再更新或移除。',
+  'skills/bundled-protected': '内置技能不支持移除。',
+  'skills/user-modified': '技能包含用户修改，已保留原文件。请另存修改后再更新。',
   'skills/not-found': '未找到技能，请刷新清单。',
   'skills/name-conflict': '技能名称冲突，已保留现有内容。请选择其他名称或更新同一来源。',
   'toolbox/stale-selection': '技能清单已变化，请刷新后重试。',

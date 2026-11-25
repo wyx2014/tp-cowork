@@ -43,3 +43,4 @@ agents.local.json
 *.pem
 /plugins/tpcowork-core/model.js
 /plugins/tpcowork-core/hub-model.js
+/plugins/dsh-pet/runtime/electron-helper/shared-core.js

@@ -21,6 +21,12 @@ it('walks a fresh install through DSH Desktop-style setup once, applies each cho
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 }, locale: 'zh-CN' })
+  await page.addInitScript(() => {
+    window.dshDesktop = { tpcoworkHub: {
+      state: async () => ({ status: 'signed_in', phase: 'idle', user: { id: 'setup-fixture', username: 'fixture' } }),
+      subscribe: () => () => {},
+    } }
+  })
   page.setDefaultTimeout(20000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -76,14 +82,14 @@ it('walks a fresh install through DSH Desktop-style setup once, applies each cho
   await shot('4-font')
   await guide.getByRole('button', { name: '下一步' }).click()
 
-  // What TP Cowork is for: the product default is 办公与创作 (Developer mode off); 代码与开发 turns it on with the
-  // detailed usage readout, as DSH's own onboarding does.
+  // Choosing 代码与开发 selects detailed usage without enabling Developer mode.
   const saved = ns => scaffold.ctx.settings.describe().find(row => row.ns === ns)?.value ?? {}
   expect(await progress()).toBe('5 / 7')
   expect(await guide.getByRole('heading', { level: 1 }).textContent()).toBe('你希望 TP Cowork 帮你做什么？')
   expect(await guide.locator('input[value="office"]').isChecked()).toBe(true)
   await guide.getByText('代码与开发', { exact: true }).click()
-  await expect.poll(() => [saved('ui-settings').enabled, saved('ui-chat').performanceUsage]).toEqual([true, 'detailed'])
+  await expect.poll(() => [saved('ui-settings').enabled, saved('ui-chat').performanceUsage]).toEqual([false, 'detailed'])
+  await expect.poll(() => guide.locator('input[value="development"]').isChecked()).toBe(true)
   await shot('5-purpose')
   await guide.getByText('办公与创作', { exact: true }).click()
   await expect.poll(() => [saved('ui-settings').enabled, saved('ui-chat').performanceUsage]).toEqual([false, 'compact'])

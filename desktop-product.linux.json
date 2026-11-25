@@ -18,6 +18,7 @@
     "@tpcowork/dsh-archives",
     "@tpcowork/dsh-usage",
     "@tpcowork/dsh-diagnostics",
-    "@tpcowork/dsh-experts"
+    "@tpcowork/dsh-experts",
+    "dsh-pet"
   ]
 }

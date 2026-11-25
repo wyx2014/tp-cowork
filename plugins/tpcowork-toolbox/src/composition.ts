@@ -64,7 +64,7 @@ export async function initializeDefaults(ctx: Context, config: Config, signal: A
     const item = catalog.items.find(item => item.id === skillId(target) && item.origin === 'bundled')
     if (!item) throw new SkillError('skills/retired-skill-missing')
     signal.throwIfAborted()
-    await ctx.toolboxSkills.remove({ id: item.id, expectedRevision: catalog.revision })
+    await ctx.toolboxSkills.retireBundled({ id: item.id, expectedRevision: catalog.revision })
     delete skillVersions[name]
   })
   await attempt('resources', 'bundled-skills', async () => {

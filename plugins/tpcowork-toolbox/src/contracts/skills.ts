@@ -21,6 +21,8 @@ export interface SkillItem {
   path?: string
   /** Only unmodified trees owned by the installer can be updated or removed through it. */
   managed?: boolean
+  /** Store skill ID when installed from TP Cowork Hub, even if the store slug differs from SKILL.md `name`. */
+  hubSkillId?: string
 }
 export interface SkillScope { sessionId?: string }
 export interface SkillsApi {

@@ -8,6 +8,7 @@ import { constants } from 'node:fs'
 import { lstat, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDesktopLogFileName } from './log-files.ts'
+import { maskSecrets } from './mask-secrets.ts'
 import { createZip, type ZipEntry } from './zip.ts'
 
 /** Bounds both memory and how much potentially sensitive history leaves the machine. */
@@ -104,6 +105,45 @@ async function readStable(candidate: Candidate, remaining: number): Promise<Buff
 }
 
 const newestFirst = (a: Candidate, b: Candidate): number => b.mtimeMs - a.mtimeMs || b.name.localeCompare(a.name, 'en')
+
+/** Only recent, redacted product logs are attached to an issue report. */
+export async function createFeedbackLogArchive(mainLogsDir: string, hostLogsDir: string): Promise<string | null> {
+  const entries: ZipEntry[] = []
+  for (const [directory, prefix] of [[mainLogsDir, 'main/'], [hostLogsDir, 'host/']] as const) {
+    if (!await ownedDirectory(directory, 'feedback log')) continue
+    const files = await regularFiles(directory, isDesktopLogFileName, prefix, 'log')
+    let remaining = 480 * 1024
+    for (const candidate of files.sort(newestFirst).slice(0, 4)) {
+      if (remaining <= 0) break
+      try {
+        const flags = constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW)
+        const handle = await open(candidate.path, flags)
+        try {
+          const stats = await handle.stat()
+          if (!stats.isFile() || !stats.size) continue
+          const length = Math.min(stats.size, remaining)
+          const { buffer, bytesRead } = await handle.read(Buffer.alloc(length), 0, length, stats.size - length)
+          if (!bytesRead) continue
+          let text = buffer.subarray(0, bytesRead).toString('utf8')
+          // A partial first line may start in the middle of a credential.
+          if (stats.size > length) {
+            const lineEnd = text.indexOf('\n')
+            text = lineEnd === -1 ? '' : text.slice(lineEnd + 1)
+          }
+          const data = Buffer.from(maskSecrets(text), 'utf8').subarray(0, remaining)
+          if (!data.length) continue
+          entries.push({ name: candidate.name, data, modified: new Date(stats.mtimeMs) })
+          remaining -= data.length
+        } finally {
+          await handle.close()
+        }
+      } catch (cause) {
+        if (!skippable(cause)) throw cause
+      }
+    }
+  }
+  return entries.length ? (await createZip(entries)).toString('base64') : null
+}
 
 /** Write one diagnostics ZIP and return its path. */
 export async function createDiagnosticsArchive(options: DiagnosticArchiveOptions): Promise<string> {

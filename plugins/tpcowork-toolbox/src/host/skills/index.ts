@@ -14,10 +14,10 @@ import type { SkillCandidate, SkillViewOptions } from '@deepseek-ai/dsh-skill'
 import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { basename, join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readFile, rename, rm, mkdtemp } from 'node:fs/promises'
+import { lstat, readFile, rename, rm, mkdtemp } from 'node:fs/promises'
 import type { Catalog, InstallRequest, SkillItem, SkillScope, SkillsApi } from '../../contracts/index.ts'
 import { SkillInstaller, skillId } from '../installer/index.ts'
-import { fingerprint, markerName, parseSkill, readTree, sha256 } from '../installer/files.ts'
+import { contained, fingerprint, markerName, parseSkill, readTree, sha256 } from '../installer/files.ts'
 import { PythonModuleChecks, readiness } from './readiness.ts'
 import { hostContribution } from './remote.ts'
 import { applyNativeTools, type NativeOptions } from './native.ts'
@@ -108,11 +108,15 @@ export class ToolboxSkills extends TypertRemoteService implements SkillsApi {
           let origin: SkillItem['origin'] = candidate.source.startsWith('project') ? 'project' : candidate.source === 'bundled' ? 'bundled' : 'user'
           let version = hash.slice(0, 12)
           let managed = false
+          let hubSkillId: string | undefined
           if (candidate.resourceBase?.kind === 'directory') {
             try {
               const marker = JSON.parse(await readFile(join(candidate.resourceBase.path, markerName), 'utf8')) as { owner?: string; source?: string; version?: string; fingerprint?: string }
               if (marker.source?.startsWith('bundled:')) origin = 'bundled'
-              if (marker.source?.startsWith('tpcoworkhub:')) origin = 'tpcoworkhub'
+              if (marker.source?.startsWith('tpcoworkhub:')) {
+                origin = 'tpcoworkhub'
+                hubSkillId = marker.source.slice('tpcoworkhub:'.length) || undefined
+              }
               if (typeof marker.version === 'string') version = marker.version
               managed = marker.owner === 'tpcowork-toolbox' && marker.fingerprint === hash
             } catch { /* Unmanaged skills have no ownership marker. */ }
@@ -120,7 +124,7 @@ export class ToolboxSkills extends TypertRemoteService implements SkillsApi {
           const ready = await readiness(this.ctx, files, options, this.config.python, this.config, this.pythonChecks)
           if (!files.length) { ready.state = 'unknown'; ready.reasons.push({ code: 'opaque-resources', message: '该提供方未公开可验证的技能资源，请使用原生管理入口。' }) }
           if (!entry.selected) { ready.state = 'blocked'; ready.reasons.push({ code: 'shadowed', message: '同名技能由更高优先级来源提供。' }) }
-          items.push({ id, name: candidate.name, description: candidate.description, origin, provider: candidate.provider, version, fingerprint: hash, installed: true, enabled: entry.enabled, invocation: { ...candidate.invocation }, readiness: ready, resources: files.map(file => file.path).sort(), ...(candidate.path ? { path: candidate.path } : {}), managed })
+          items.push({ id, name: candidate.name, description: candidate.description, origin, provider: candidate.provider, version, fingerprint: hash, installed: true, enabled: entry.enabled, invocation: { ...candidate.invocation }, readiness: ready, resources: files.map(file => file.path).sort(), ...(candidate.path ? { path: candidate.path } : {}), managed, ...(hubSkillId ? { hubSkillId } : {}) })
         } catch {
           items.push({ id, name: candidate.name, description: candidate.description, origin: 'user', provider: candidate.provider, version: 'unknown', fingerprint: '', installed: true, enabled: entry.enabled, invocation: { ...candidate.invocation }, readiness: { state: 'error', reasons: [{ code: 'invalid-resources', message: '技能资源不可读取或不完整。' }] }, resources: [], ...(candidate.path ? { path: candidate.path } : {}), managed: false })
         }
@@ -172,20 +176,62 @@ export class ToolboxSkills extends TypertRemoteService implements SkillsApi {
     return this.installer.serialize(async () => {
       const catalog = await this.inventory(request)
       this.assertRevision(request.expectedRevision, catalog)
+      const item = catalog.items.find(entry => entry.id === request.id)
+      const candidate = this.entries.get(request.id)
+      if (!item || !candidate) throw new SkillError('skills/not-found')
+      if (item.origin === 'bundled' || candidate.source === 'bundled') throw new SkillError('skills/bundled-protected')
+      if (item.origin === 'project' || candidate.source.startsWith('project')) throw new SkillError('skills/not-owned')
+      const roots = [this.installer.options.userRoot, this.installer.options.root].filter((root): root is string => root !== undefined)
+      const directoryEntry = candidate.path !== undefined && basename(candidate.path) === 'SKILL.md'
+      if (candidate.resourceBase?.kind === 'directory' && directoryEntry) {
+        const target = candidate.resourceBase.path
+        const matchingRoot = roots.find(root => contained(root, target))
+        if (!matchingRoot || (await lstat(target)).isSymbolicLink()) throw new SkillError('skills/not-owned')
+        try {
+          const marker = JSON.parse(await readFile(join(target, markerName), 'utf8')) as { source?: unknown }
+          if (typeof marker.source === 'string' && marker.source.startsWith('bundled:')) {
+            throw new SkillError('skills/bundled-protected')
+          }
+        } catch (error) {
+          if (error instanceof SkillError) throw error
+        }
+        await this.removeDirectory(target, matchingRoot)
+        return
+      }
+      if (candidate.path && !directoryEntry) {
+        const matchingRoot = roots.find(root => contained(root, candidate.path!))
+        if (!matchingRoot) throw new SkillError('skills/not-owned')
+        const stat = await lstat(candidate.path)
+        if (stat.isSymbolicLink() || !stat.isFile()) throw new SkillError('skills/not-owned')
+        await rm(candidate.path)
+        this.invalidateProvider()
+        this.changed()
+        return
+      }
+      throw new SkillError('skills/not-owned')
+    })
+  }
+  /** Internal Host-only cleanup for retiring deprecated bundled skills during product upgrades. */
+  async retireBundled(request: SkillScope & { id: string; expectedRevision: number }): Promise<void> {
+    return this.installer.serialize(async () => {
+      const catalog = await this.inventory(request)
+      this.assertRevision(request.expectedRevision, catalog)
       const candidate = this.entries.get(request.id)
       if (candidate?.resourceBase?.kind !== 'directory') throw new SkillError('skills/not-owned')
       const target = candidate.resourceBase.path
       const marker = await this.installer.owned(target)
-      if (marker.source.startsWith('bundled:')) {
-        const removed = new Set(this.config.removedBundled.get()); removed.add(candidate.name)
-        await this.writePolicy('removedBundled', [...removed])
-      }
-      const transaction = await mkdtemp(join(dirname(dirname(target)), '.skill-remove-'))
-      await rename(target, join(transaction, 'removed'))
-      this.invalidateProvider()
-      this.changed()
-      await rm(transaction, { recursive: true, force: true })
+      if (!marker.source.startsWith('bundled:')) throw new SkillError('skills/not-owned')
+      const removed = new Set(this.config.removedBundled.get()); removed.add(candidate.name)
+      await this.writePolicy('removedBundled', [...removed])
+      await this.removeDirectory(target, this.installer.options.root)
     })
+  }
+  private async removeDirectory(target: string, root: string): Promise<void> {
+    const transaction = await mkdtemp(join(dirname(resolve(root)), '.skill-remove-'))
+    await rename(target, join(transaction, 'removed'))
+    this.invalidateProvider()
+    this.changed()
+    await rm(transaction, { recursive: true, force: true })
   }
   private assertRevision(expected: number, catalog: Catalog<SkillItem>): void {
     if (!catalog.complete) throw new SkillError('skills/incomplete-inventory')

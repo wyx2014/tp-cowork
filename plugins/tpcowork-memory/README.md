@@ -1,10 +1,10 @@
 # DSH 工作区记忆
 
-按工作区保存跨会话事实的 Host 插件，行为参照 ZCode 的 Project Memory（`ZCode.app/Contents/Resources/glm/zcode.cjs`，设计见 `tp-cowork/apps/tpcowork-cli/docs/design/v2/memory/README.md`）。默认关闭：与 ZCode 一样，自动提取会在每轮对话后多发一次模型请求。
+按工作区保存跨会话事实的 Host 插件，行为参照 ZCode 的 Project Memory（`ZCode.app/Contents/Resources/glm/zcode.cjs`，设计见 `tp-cowork/apps/tpcowork-cli/docs/design/v2/memory/README.md`）。新安装默认开启。自动提取会在每轮对话后多发一次模型请求。
 
 ## 启用
 
-在「设置 → 记忆」中打开「工作区记忆」。开关写入本插件配置的 `enabled`（`.volatile()` 字段，保存在用户配置层），插件不重启：打开后注册提示段和工具，所有会话从下一条消息起生效；关闭后撤下提示段和工具，并中止进行中的提取。设置页只在 Host 提供本插件的配置时出现。开关说明沿用 ZCode 的文案：「在工作区中保存并复用长期上下文，新会话生效。开启后可能增加模型调用和 Token 成本。」
+在「设置 → 记忆」中管理「工作区记忆」。开关写入用户配置层的 `enabled`（`.volatile()` 字段），后续启动和升级沿用已保存的选择。开启后注册提示段和工具，所有会话从下一条消息起生效。关闭后撤下提示段和工具，并中止进行中的提取。Host 提供本插件配置时显示设置页。
 
 开启后，开关下方出现 ZCode 的记忆查看器（`MemorySettingsSection` / `MemorySettingsViewer` 的布局与文案）：没有记忆时显示虚线框「暂无已保存的工作区记忆」；有记忆时显示工作区选择器、记忆条数、文件搜索、「文件」标题和刷新按钮，以及 `MEMORY.md` 在前、其余按名称排序的文件列表，每行带更新时间（30 分钟内相对时间，之后为今天/昨天/星期/日期）。列表来自 Host 的只读 Remote `memoryCatalog.list`，扫描 `$DSH_HOME/memories/projects/*/memory/*.md`；已注册工作区使用其标题并按侧栏顺序排在前面，其余按最近更新排序并显示目录名。Host 有桌面时，每行右侧是打开按钮：主按钮用默认应用打开，下拉列出其他可用应用和「在文件夹中显示」（经 Session Remote 的 `openWorkspacePath`）。
 

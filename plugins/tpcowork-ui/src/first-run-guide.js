@@ -77,7 +77,7 @@ export function createFirstRunGuide(React, primitives) {
     const index = FIRST_RUN_STEPS.indexOf(step);
     const go = offset => setStep(FIRST_RUN_STEPS[Math.max(0, Math.min(FIRST_RUN_STEPS.length - 1, index + offset))]);
     const next = h(primitives.Button, { variant: 'primary', size: 'lg', onClick: () => go(1) }, t('guideNext'), arrowRight());
-    const version = String(t('currentVersion')).split(/[:：]/u).pop().trim();
+    const version = String(t('aboutVersionValue')).trim();
     let page;
     if (step === 'welcome') {
       page = h(Page, { step, title: t('guideWelcomeTitle'), subtitle: t('guideWelcomeBody'), badge: `${t('preview')} · v${version}`,

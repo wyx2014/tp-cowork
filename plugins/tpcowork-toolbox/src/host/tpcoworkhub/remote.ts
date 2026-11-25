@@ -19,6 +19,34 @@ export const listSchema = z.object({ query: z.string().max(200).optional(), curs
 export const detailSchema = z.object({ id, preview: z.boolean().optional() }).strict()
 export const hubInstallSchema = installSchema.extend({ source: z.object({ kind: z.literal('tpcoworkhub'), skillId: id, versionId: id, fingerprint: hash }).strict() })
 export const publishSchema = z.object({ requestId: id, sourceSkillId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64), displayName: z.string().min(1).max(200), version: z.string().regex(/^\d+\.\d+(?:\.\d+)?(?:[-+][a-zA-Z0-9.-]+)?$/).max(100) }).strict()
+const feedbackAttachments = z.object({
+  images: z.array(z.string().max(2_800_000).regex(/^data:image\/(?:png|jpeg|webp);base64,/u)).max(5),
+  logArchive: z.string().max(1_400_000).regex(/^UEsDB[A-Za-z0-9+/=]+$/u).optional(),
+}).strict()
+const attachmentsFit = (request: z.infer<typeof feedbackAttachments>) =>
+  request.images.reduce((total, image) => total + image.length, request.logArchive?.length ?? 0) <= 12_000_000
+const attachmentLimit = 'Feedback attachments exceed the combined limit'
+export const feedbackSchema = z.discriminatedUnion('type', [
+  feedbackAttachments.extend({
+    type: z.literal('issue'), requestId: z.string().uuid(), content: z.string().trim().min(1).max(4000),
+    contact: z.string().trim().max(250).optional(),
+  }),
+  z.object({
+    type: z.literal('feature'), requestId: z.string().uuid(), content: z.string().trim().min(1).max(2000),
+    solution: z.string().trim().min(1).max(2000), contact: z.string().trim().max(250).optional(),
+  }).strict(),
+]).refine(request => request.type !== 'issue' || attachmentsFit(request), attachmentLimit)
+export const feedbackReceiptSchema = z.string().uuid()
+export const feedbackIssueAttachments = feedbackAttachments.extend({ id: feedbackReceiptSchema })
+  .refine(attachmentsFit, attachmentLimit)
+export const feedbackIssueQuery = z.object({ page: z.number().int().min(1).max(10000) }).strict()
+export const feedbackIssuePage = z.object({
+  items: z.array(z.object({
+    id: z.string().uuid(), content: z.string(), status: z.enum(['new', 'in_progress', 'closed']),
+    createdAt: z.number().nonnegative(),
+  })).max(20),
+  total: z.number().int().nonnegative(),
+})
 export const hubSkillSchema = z.object({ id, name: z.string(), description: z.string(), versionId: z.string(), version: z.string(), displayName: z.string().optional(), tags: z.array(z.string()).optional(), visibility: z.string().optional(), approvalStatus: z.string().optional() }).strict()
 export const fileSchema = z.object({ path: z.string().min(1).max(1000), size: z.number().int().nonnegative(), sha256: hash, contentType: z.string().max(200) })
 const installResult = z.object({ operationId: z.string(), state: z.enum(['installed', 'unchanged', 'failed', 'cancelled']), skillId: z.string().optional(), fingerprint: z.string().optional(), error: z.object({ code: z.string(), message: z.string() }).optional() }).strict()
@@ -37,6 +65,9 @@ export const descriptors = [
   descriptor('selectLoginChannel', loginChannelSchema, loginChannelSchema),
   descriptor('acceptBrowserSession', browserSessionSchema, z.object({ configured: z.boolean() }).strict(), true),
   descriptor('account', undefined, accountSchema), descriptor('login', loginSchema, z.object({ configured: z.boolean() }).strict(), true), descriptor('logout', undefined, z.void()),
+  descriptor('submitFeedback', feedbackSchema, feedbackReceiptSchema, true),
+  descriptor('attachFeedbackIssue', feedbackIssueAttachments, feedbackReceiptSchema, true),
+  descriptor('listFeedbackIssues', feedbackIssueQuery, feedbackIssuePage, true),
   descriptor('modelConnection', undefined, z.object({ baseURL: z.string(), api: z.string(), grantId: modelGrantId }).strict().nullable()),
   descriptor('revealModelKey', modelKeyRevealSchema, z.object({ publicKey: revealPublicKey, iv: z.string(), ciphertext: z.string() }).strict()),
   descriptor('list', listSchema, z.object({ items: z.array(hubSkillSchema), cursor: z.string().optional() }).strict(), true),

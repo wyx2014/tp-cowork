@@ -4,9 +4,11 @@ import { dirname, join, resolve } from 'node:path'
 import { harnessRoot, productRoot, runCommand } from './package-command.mjs'
 import { stageCoreBundle } from './stage-core-bundle.mjs'
 import { prepareLinuxDesktopUtilities } from './prepare-linux-desktop-utilities.mjs'
+import { assertNoComputerUseBundles } from './packaged-computer-use.mjs'
 import { resolveDesktopTargetBuildPaths } from '../../deepseek-harness/apps/desktop/scripts/desktop-build-paths.mjs'
 
 const product = JSON.parse(await readFile(process.env.DSH_DESKTOP_PRODUCT_CONFIG ?? join(productRoot, 'desktop-product.json'), 'utf8'))
+assertNoComputerUseBundles(product.bundles)
 const packages = resolve(productRoot, product.packages)
 if (!['product', 'linux'].some(name => packages === join(productRoot, '.desktop-build', name, 'packages'))) {
   throw new Error('Unexpected product package staging directory')
@@ -20,7 +22,7 @@ const env = { ...process.env, TPCOWORK_HUB_ENV: process.env.TPCOWORK_HUB_ENV || 
 await rm(join(harnessRoot, 'apps/desktop/lib/tpcowork-browser'), { recursive: true, force: true })
 for (const [directory, buildArgs] of [
   ['tpcowork-ui', ['build.mjs']], ['tpcowork-browser', ['build.mjs', '--install-native']],
-  ['tpcowork-toolbox', ['build.mjs', '--install-native']], ['tpcowork-automation', ['build.mjs']], ['tpcowork-memory', ['build.mjs']], ['tpcowork-archives', ['build.mjs']], ['tpcowork-usage', ['build.mjs']], ['tpcowork-diagnostics', ['build.mjs']], ['tpcowork-computer-use', ['build.mjs']], ['tpcowork-experts', ['build.mjs']],
+  ['tpcowork-toolbox', ['build.mjs', '--install-native']], ['tpcowork-automation', ['build.mjs']], ['tpcowork-memory', ['build.mjs']], ['tpcowork-archives', ['build.mjs']], ['tpcowork-usage', ['build.mjs']], ['tpcowork-diagnostics', ['build.mjs']], ['tpcowork-experts', ['build.mjs']],
 ]) {
   if (!product.bundles.includes(directory.replace('tpcowork-', '@tpcowork/dsh-'))) continue
   const cwd = join(productRoot, 'plugins', directory)
@@ -29,6 +31,11 @@ for (const [directory, buildArgs] of [
 }
 if (!product.bundles.includes('@tpcowork/dsh-browser') && product.bundles.includes('@tpcowork/dsh-diagnostics')) {
   await prepareLinuxDesktopUtilities()
+}
+if (product.bundles.includes('dsh-pet')) {
+  const cwd = join(productRoot, 'plugins/dsh-pet')
+  await runCommand('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], { cwd, env })
+  await runCommand('npm', ['run', 'build'], { cwd, env })
 }
 await runCommand(process.execPath, [join(productRoot, 'scripts/prepare-toolbox-runtime.mjs'), '--download'], { env })
 // Exercise the compiled services with fresh and existing profiles before creating the installer.

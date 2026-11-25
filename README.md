@@ -10,12 +10,13 @@
 | [browser](plugins/tpcowork-browser/README.md) | 内置浏览器与桌面桥接 |
 | [toolbox](plugins/tpcowork-toolbox/README.md) | 技能、MCP、团队管理及可选 Step 搜索 |
 | [automation](plugins/tpcowork-automation/README.md) | 自动化模板、定时任务和运行记录 |
-| [memory](plugins/tpcowork-memory/README.md) | 按工作区保存跨会话记忆，默认关闭 |
+| [memory](plugins/tpcowork-memory/README.md) | 按工作区保存跨会话记忆，默认开启 |
 | [archives](plugins/tpcowork-archives/README.md) | 设置 › 归档管理：按工作区查看、取消归档和删除已归档会话 |
 | [usage](plugins/tpcowork-usage/README.md) | 设置 › 使用统计：按本地会话记录统计 Token、活跃度和模型用量 |
-| [computer-use](plugins/tpcowork-computer-use/README.md) | 设置 › 电脑控制：参照 ZCode，让 Agent 按应用授权查看并操作 Windows、macOS 桌面应用（Linux X11 实验） |
+| [computer-use](plugins/tpcowork-computer-use/README.md) | 设置 › 电脑控制，按应用授权查看并操作桌面应用，供本地开发按需安装 |
 | [diagnostics](plugins/tpcowork-diagnostics/README.md) | 脱敏的 Host 与桌面日志文件；设置 › 通用设置 › 诊断信息导出诊断包（参照 DSH Desktop） |
 | [experts](plugins/tpcowork-experts/README.md) | 专家协作，复用原生任务与子会话 |
+| [dsh-pet](plugins/dsh-pet/README.md) | 桌宠、动画和桌宠配置 |
 
 ## 本地运行
 
@@ -43,7 +44,7 @@ npm run dev
 
 麒麟上排查启动问题时，选择 `variant=basic` 构建 **TP Cowork Basic**：排除全部 TP Cowork 产品插件，保留底座默认界面，使用独立的应用数据目录，并验证 DEB 的真实图形窗口启动。基础版发布在 `linux-basic-packages-<version>`，附带启动诊断脚本。
 
-Linux 默认选择 `variant=standard` 构建 **TP Cowork Linux**：包含浏览器在内的 11 个产品插件，仅排除 Computer Use。浏览器自动化、界面缩放与诊断导出随包交付，工具箱保留自己的 Chromium 和离线 Python 依赖。该版本使用独立数据目录，发布在 `linux-standard-packages-<version>`，并验证真实窗口、浏览器启用状态、产品界面、记忆、归档、统计和工具箱页面；`full` 仍可构建全部 12 个插件。
+Linux 默认选择 `variant=standard` 构建 **TP Cowork Linux**，包含浏览器和桌宠等 12 个产品插件。浏览器自动化、界面缩放与诊断导出随包交付，工具箱保留自己的 Chromium 和离线 Python 依赖。该版本使用独立数据目录，发布在 `linux-standard-packages-<version>`，并验证真实窗口、浏览器启用状态、产品界面、记忆、归档、统计和工具箱页面。`full` 使用与 Windows 相同的产品插件列表。Windows 和所有 Linux 安装包均排除 Computer Use。
 
 安装包、登录欢迎页、系统菜单、关于窗口和应用图标统一使用 TP Cowork 品牌；Windows 构建和本地启动自动准备品牌资源，品牌图片使用 `plugins/tpcowork-ui/icon.png`。
 
@@ -62,6 +63,8 @@ Windows 顶栏“应用”菜单不显示“检查更新”和“管理 dsh 命�
 产品代码推送到本仓库 `main`；底座改动推送到 fork 的 `feat/tpcowork-workbench-ui`。Actions 同时检出两个仓库，安装包内记录各自的 commit。
 
 `npm run dev:rebuild` 统一完成底座和插件构建。单独管理已初始化桌面的插件可使用 `node scripts/desktop-plugin.mjs install all`。检查源码和依赖链接使用 `node scripts/check-worktree.mjs`。
+
+桌宠源码在 [plugins/dsh-pet](plugins/dsh-pet)。`npm run dev` 编译并链接该目录，Windows 和 Linux 标准安装包从同一份源码构建。桌宠默认显示在 TP Cowork 窗口内，可在「设置 → 桌宠配置」调整显示位置。
 
 模型配置默认由 SkillHub 登录账号下发。登录或重启恢复账号后，Host 请求 `/tpcoworkapi/client-config`，加载该账号的 New API 网关和模型列表。模型请求直接发往 New API。退出、账号切换或配置失效后移除托管模型，模型请求需重新获得网关授权。模型密钥保存在 Host 内存，用户可在「设置 → 模型 → 太资模型网关」点击 API Key 旁的图标临时查看。登录凭证仍由 DSH 凭证服务管理。
 

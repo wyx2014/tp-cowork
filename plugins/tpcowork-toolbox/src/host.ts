@@ -7,6 +7,7 @@ import { hostContribution } from './remote.ts'
 import { watchChanges } from './changes.ts'
 import { Config, composeToolbox } from './composition.ts'
 import { userSkillsDirectory } from './host/skills/user-directory.ts'
+import type { ToolboxSkills } from './host/skills/index.ts'
 import type { ToolboxTpcoworkHub } from './host/tpcoworkhub/index.ts'
 export { Config } from './composition.ts'
 export type * from './contracts/index.ts'
@@ -14,7 +15,7 @@ export type * from './contracts/index.ts'
 declare module '@deepseek-ai/cordis' {
   interface Context {
     toolbox: ToolboxApi
-    toolboxSkills: SkillsApi
+    toolboxSkills: SkillsApi & Pick<ToolboxSkills, 'retireBundled'>
     toolboxMcp: McpApi
     toolboxTeams: TeamsApi
     toolboxInstaller: InstallerApi

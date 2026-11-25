@@ -50,56 +50,79 @@ it('waits for cancelled Host installation cleanup before allowing retry', async 
     signal = active
     return new Promise(resolve => { finish = () => resolve({ state: 'cancelled', operationId: 'test', error: { code: 'skills/cancelled', message: 'cancelled' } }) })
   })
-  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+  const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+    React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api })))
   fireEvent.click(await screen.findByRole('button', { name: /^Details:/ }))
   await screen.findByText('SKILL.md (10)')
   fireEvent.click(screen.getByRole('button', { name: 'Download to My skills' }))
   await waitFor(() => expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({ conflict: 'reject' }), expect.anything()))
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel download' }))
+  const pendingToast = await screen.findByRole('status')
+  expect(container.contains(pendingToast)).toBe(false)
+  expect(pendingToast.getAttribute('data-state')).toBe('pending')
+  expect(pendingToast.textContent).toContain('Downloading /Research skill…')
+  fireEvent.click(within(pendingToast).getByRole('button', { name: 'Cancel download' }))
   expect(signal?.aborted).toBe(true)
   expect(screen.getByRole('button', { name: 'Download to My skills' }).hasAttribute('disabled')).toBe(true)
   finish()
-  await screen.findByText('Operation cancelled')
-  expect(screen.queryByText('Downloaded to My skills')).toBeNull()
+  await waitFor(() => expect(screen.getByRole('status').getAttribute('data-state')).toBe('cancelled'))
+  expect(screen.getByRole('status').textContent).toContain('Operation cancelled')
+  expect(screen.queryByText(/downloaded to My skills/i)).toBeNull()
   expect(screen.getByRole('button', { name: 'Download to My skills' }).hasAttribute('disabled')).toBe(false)
 })
-it('shows safe installation conflicts and does not turn a failure into success', async () => {
+it('shows safe installation conflicts in a floating top toast and does not turn a failure into success', async () => {
   const api = actions()
   api.hubInstall = vi.fn(async () => ({ state: 'failed', operationId: 'test', error: { code: 'skills/user-modified', message: 'private remote body' } }))
-  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+  const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+    React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api })))
   fireEvent.click(await screen.findByRole('button', { name: /^Details:/ }))
   await screen.findByText('SKILL.md (10)')
   fireEvent.click(screen.getByRole('button', { name: 'Download to My skills' }))
-  await screen.findByRole('alert')
-  expect(screen.queryByText('Downloaded to My skills')).toBeNull()
+  const alert = await screen.findByRole('alert')
+  expect(container.contains(alert)).toBe(false)
+  expect(alert.getAttribute('data-state')).toBe('failure')
+  expect(alert.textContent).toContain('Failed to download /Research skill:')
+  expect(screen.queryByText(/downloaded to My skills/i)).toBeNull()
   expect(document.body.textContent).not.toContain('private remote body')
-  expect(api.refresh).not.toHaveBeenCalled()
+  expect(api.refreshSkills).not.toHaveBeenCalled()
 })
-it('downloads directly from a store row to My skills and updates the installed status', async () => {
+it('downloads directly from a store row with a floating top toast without wiping the list', async () => {
   const api = actions()
-  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api }))
+  const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+    React.createElement(TpcoworkHub, { available: true, epoch: 1, skills: catalog().skills, t, query: '', actions: api })))
   fireEvent.click(await screen.findByRole('button', { name: 'Download to My skills: /Research skill' }))
-  await screen.findByText('Downloaded to My skills')
+  await waitFor(() => expect(screen.getByRole('status').getAttribute('data-state')).toBe('success'))
+  const toast = screen.getByRole('status')
+  expect(container.contains(toast)).toBe(false)
+  expect(toast.textContent).toContain('/Research skill downloaded to My skills')
   expect(api.hubDetail).toHaveBeenCalledWith({ id: 'hub-1' }, expect.anything())
   expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({ scope: { kind: 'user' }, conflict: 'reject', source: { kind: 'tpcoworkhub', skillId: 'hub-1', versionId: 'v1', fingerprint: 'sha256:1' } }), expect.anything())
   expect(screen.getByText('Installed')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Update skill: /Research skill' })).toBeTruthy()
   expect(screen.queryByRole('heading', { name: 'Skill instructions' })).toBeNull()
-  expect(api.refresh).toHaveBeenCalledOnce()
+  expect(api.refreshSkills).toHaveBeenCalledOnce()
+  expect(api.refresh).not.toHaveBeenCalled()
+  expect(api.hubList).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss download notice' }))
+  expect(screen.queryByRole('status')).toBeNull()
 })
-it('requires confirmation to update an installed personal skill and preserves modified files', async () => {
+it('requires confirmation to update an installed personal skill and shows failures in a floating top toast', async () => {
   const api = actions(), skills = catalog().skills
   skills.items[0] = { ...skills.items[0]!, origin: 'user', name: 'research SKILL', installed: true }
   api.hubInstall = vi.fn(async () => ({ operationId: 'conflict', state: 'failed', error: { code: 'skills/user-modified', message: 'private remote body' } }))
-  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills, t, query: '', actions: api }))
+  const { container } = render(React.createElement('section', { className: 'tp-toolbox' },
+    React.createElement(TpcoworkHub, { available: true, epoch: 1, skills, t, query: '', actions: api })))
   fireEvent.click(await screen.findByRole('button', { name: 'Update skill: /Research skill' }))
   expect(screen.getByText('Installed')).toBeTruthy()
   expect(api.hubInstall).not.toHaveBeenCalled()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Update skill' }))
-  await screen.findByRole('alert')
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  const alert = await screen.findByRole('alert')
+  expect(container.contains(alert)).toBe(false)
+  expect(alert.getAttribute('data-state')).toBe('failure')
+  expect(alert.textContent).toContain('Failed to update /Research skill:')
   expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({ conflict: 'replace-owned' }), expect.anything())
-  expect(api.refresh).not.toHaveBeenCalled()
-  expect(screen.queryByText('Downloaded to My skills')).toBeNull()
+  expect(api.refreshSkills).not.toHaveBeenCalled()
+  expect(screen.queryByText(/downloaded to My skills/i)).toBeNull()
   expect(document.body.textContent).not.toContain('private remote body')
 })
 it('shows tags and review badges without a download action for unapproved submissions', async () => {
@@ -145,4 +168,22 @@ it('ignores a late pagination result when the search changes', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Details: /new-search' }).hasAttribute('disabled')).toBe(false))
   expect(screen.queryByText('/late-result')).toBeNull()
   expect(screen.queryByText('/first-skill')).toBeNull()
+})
+it('recognizes an installed store skill by hubSkillId even when its store slug differs from SKILL.md name', async () => {
+  const api = actions(), skills = catalog().skills
+  api.hubList = vi.fn(async () => ({ items: [{ id: 'hub-self-improving', name: 'self-improving-agent', description: 'Learn from errors', versionId: 'v2', version: '3.0.23' }] }))
+  api.hubDetail = vi.fn(async () => ({
+    skill: { id: 'hub-self-improving', name: 'self-improving-agent', description: 'Learn from errors', versionId: 'v2', version: '3.0.23' },
+    fingerprint: 'sha256:2', content: '# Self improvement', files: [{ path: 'SKILL.md', size: 18, sha256: '2', contentType: 'text/markdown' }],
+  }))
+  skills.items = [{ ...skills.items[0]!, origin: 'tpcoworkhub', name: 'self-improvement', hubSkillId: 'hub-self-improving', installed: true }]
+  render(React.createElement(TpcoworkHub, { available: true, epoch: 1, skills, t, query: '', actions: api }))
+  const updateButton = await screen.findByRole('button', { name: 'Update skill: /self-improving-agent' })
+  expect(screen.getByText('Installed')).toBeTruthy()
+  fireEvent.click(updateButton)
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Update skill' }))
+  await waitFor(() => expect(api.hubInstall).toHaveBeenCalledWith(expect.objectContaining({
+    conflict: 'replace-owned',
+    source: { kind: 'tpcoworkhub', skillId: 'hub-self-improving', versionId: 'v2', fingerprint: 'sha256:2' },
+  }), expect.anything()))
 })

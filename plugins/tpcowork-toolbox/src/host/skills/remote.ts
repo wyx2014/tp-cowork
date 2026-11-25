@@ -8,7 +8,7 @@ export const skillSchema = z.object({
   id: z.string(), name: z.string(), description: z.string(), origin: z.enum(['bundled', 'user', 'project', 'tpcoworkhub']),
   provider: z.string(), version: z.string(), fingerprint: z.string(), installed: z.boolean(), enabled: z.boolean(),
   invocation: z.object({ modelInvocable: z.boolean(), userInvocable: z.boolean() }).strict(), readiness: readinessSchema, resources: z.array(z.string()),
-  path: z.string().optional(), managed: z.boolean().optional(),
+  path: z.string().optional(), managed: z.boolean().optional(), hubSkillId: z.string().min(1).optional(),
 }).strict()
 export const scopeSchema = z.object({ sessionId: z.string().min(1).optional() }).strict()
 export const installSchema = z.object({

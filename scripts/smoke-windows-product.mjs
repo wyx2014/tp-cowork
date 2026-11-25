@@ -7,9 +7,11 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assertNoPackagedComputerUse } from './packaged-computer-use.mjs'
 
 const resources = process.argv[2]
 if (!resources) throw new Error('TP Cowork: packaged resources directory is required')
+assertNoPackagedComputerUse(resources)
 const runtime = join(resources, 'app.asar/dsh')
 const expected = JSON.parse(readFileSync(process.argv[3] ?? new URL('../desktop-product.json', import.meta.url), 'utf8'))
 const hasBrowser = expected.bundles.includes('@tpcowork/dsh-browser')
@@ -19,7 +21,8 @@ for (const entry of [...(hasBrowser ? ['tpcowork-browser/desktop.js'] : []), 'tp
 const product = JSON.parse(readFileSync(join(runtime, 'desktop-product.json'), 'utf8'))
 assert.deepEqual(product.bundles, expected.bundles)
 assert.deepEqual(readdirSync(join(runtime, 'node_modules/@tpcowork')).sort(),
-  expected.bundles.map(name => name.split('/')[1]).sort(), 'Installed product package set must match its descriptor exactly')
+  expected.bundles.filter(name => name.startsWith('@tpcowork/')).map(name => name.slice('@tpcowork/'.length)).sort(),
+  'Installed TP Cowork packages must match the scoped packages in the descriptor exactly')
 if (!hasBrowser) {
   const utilities = join(resources, 'app.asar/lib/tpcowork-browser')
   assert.deepEqual(readdirSync(utilities).sort(), ['desktop.js', 'utilities.json'], 'Only the shared utility bridge may use the legacy transport path')

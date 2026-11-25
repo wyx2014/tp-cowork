@@ -14,7 +14,6 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       h('h1', { className: 'tpcowork-greeting' }, h('span', null, t(hello)), h('span', null, t('greetingTitle'))),
       h('p', { className: 'tpcowork-greeting-subtitle' }, t('greetingSubtitle')));
   };
-  const CurrentVersion = ({ t }) => h('div', { className: 'tpcowork-current-version' }, t('currentVersion'));
   // Settings is a full-window page, so its close control reads as a way back, as in the reference product.
   const BackToWorkspace = ({ t }) => t('backToWorkspace');
   // The page shows the active section's name as its title. DSH keeps the selection inside the shell, so this header
@@ -53,6 +52,8 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
   const ShortcutSettings = createShortcutSettings(React, primitives);
   const NavigationControls = createNavigationControls(React, ReactDOM.createPortal, primitives, classes);
   const ModelControls = createModelControls(React, ReactDOM.createPortal, primitives);
+  const feedbackToast = createFloatingToast(React, ReactDOM.createPortal);
+  const HelpMenu = createHelpMenu(React, ReactDOM.createPortal, primitives, brandIcon, classes.frame.frame, feedbackToast);
   // With the archive filter hidden, a view saved as "show" or "only archived" would strand archived rows in the
   // sidebar. The filter lives in the workspace browser's view store, which its slot registration carries.
   const keepArchivedHidden = slots => {
@@ -81,22 +82,22 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
       // DSH Desktop's first-run setup wizard, with TP Cowork's choices: language, theme and 界面字号. It shows once per
       // device and can be reopened from General settings.
       const guide = createFirstRunGuideState();
-      // DSH's onboarding choices over the same stores it writes: 代码与开发 turns on Developer mode with the detailed
-      // usage readout, 办公与创作 keeps both off; the work process is the chat transcript view.
+      // DSH's onboarding choices over the same stores it writes: 代码与开发 shows the detailed usage readout,
+      // 办公与创作 keeps it compact; Developer mode stays off, and the work process is the chat transcript view.
       const chatForm = ctx.configForms.get('ui-chat');
-      const developer = ctx.configForms.developerTools;
       let workSnapshot;
       const readWork = () => {
-        const purpose = developer.enabled.getSnapshot() === true ? 'development' : 'office';
-        const process = chatForm.getSnapshot().value?.transcriptView ?? 'detailed';
+        const { user, value } = chatForm.getSnapshot();
+        // The native chat default is detailed. Keep Office selected until the user expresses a preference.
+        const purpose = user?.performanceUsage === 'detailed' ? 'development' : 'office';
+        const process = value?.transcriptView ?? 'detailed';
         if (workSnapshot?.purpose !== purpose || workSnapshot.process !== process) workSnapshot = { purpose, process };
         return workSnapshot;
       };
       const guideWork = {
-        subscribe: listener => { const offs = [developer.enabled.subscribe(listener), chatForm.subscribe(listener)]; return () => offs.forEach(off => off()); },
+        subscribe: listener => chatForm.subscribe(listener),
         get: readWork,
         choosePurpose: purpose => {
-          void developer.setEnabled(purpose === 'development');
           void chatForm.set('performanceUsage', purpose === 'development' ? 'detailed' : 'compact');
         },
         chooseProcess: mode => { void chatForm.set('transcriptView', mode); },
@@ -182,6 +183,23 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
           cancelSignIn: account.cancelSignIn, refreshAccount: account.refreshAccount,
         }),
       }, LoginGate));
+      const desktop = window.dshDesktop;
+      if (desktop?.tpcoworkHub) {
+        const feedbackRequest = method => async (request, signal) => {
+          const result = await ctx.get('remote.toolboxTpcoworkHub')?.[method]?.(request, signal);
+          if (!result?.ok) throw new Error('SkillHub feedback request failed');
+          return result.value;
+        };
+        const submitFeedback = feedbackRequest('submitFeedback');
+        const attachFeedbackIssue = feedbackRequest('attachFeedbackIssue');
+        const listFeedbackIssues = feedbackRequest('listFeedbackIssues');
+        for (const [name, workspace] of [['shell.overlay', true], ['settings.action', false]]) {
+          ctx.slots.inject(name, () => ctx.slots.register({
+            name, id: 'tpcowork-help', locale: 'tpcowork', order: 100,
+            inject: () => ({ submitFeedback, attachFeedbackIssue, listFeedbackIssues, account: account.source, desktop, workspace }),
+          }, HelpMenu));
+        }
+      }
       // The reference product's interface zoom: the whole window, from the account menu and Command/Control +, - and 0.
       // The keys replace DSH's text-size keys; chat text size stays in Appearance.
       const zoom = createWindowZoom(window.dshDesktop?.browserAutomation);
@@ -256,8 +274,11 @@ export function createPlugin(React, ReactDOM, primitives, tokens, css, locales, 
         })));
       }
       ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-        name: 'settings.general.item', id: 'current-version', order: generalLayout().rows['current-version'], priority: -10, locale: 'tpcowork',
-      }, CurrentVersion));
+        name: 'settings.general.item', id: 'developer-tools', priority: -10,
+      }, () => null));
+      ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+        name: 'settings.general.item', id: 'current-version', priority: -10,
+      }, () => null));
       // Native notifications belong to the desktop shell; a plain browser has no bridge.
       const notifications = window.dshDesktop?.notifications;
       if (notifications) {

@@ -7,6 +7,14 @@ export interface TpcoworkHubSkill {
 export interface TpcoworkHubFile { path: string; size: number; sha256: string; contentType: string }
 export interface TpcoworkHubUser { id: string; username: string; name?: string }
 export type TpcoworkHubLoginChannel = 'internal' | 'outsource'
+export interface TpcoworkHubIssueAttachments { images: string[]; logArchive?: string }
+export type TpcoworkHubFeedback =
+  | ({ type: 'issue'; requestId: string; content: string; contact?: string } & TpcoworkHubIssueAttachments)
+  | { type: 'feature'; requestId: string; content: string; solution: string; contact?: string }
+export interface TpcoworkHubIssuePage {
+  items: { id: string; content: string; status: 'new' | 'in_progress' | 'closed'; createdAt: number }[]
+  total: number
+}
 export interface TpcoworkHubApi {
   account(): Promise<{ configured: boolean; writable: boolean; state?: 'unconfigured' | 'signed_out' | 'signed_in' | 'expired'; user?: TpcoworkHubUser }>
   /** Select whether desktop browser login uses the internal (内勤) or outsource (外包) Hub address. */
@@ -22,6 +30,9 @@ export interface TpcoworkHubApi {
   /** Host resolves the DSH credential reference. Encoding follows the deployed login protocol. */
   login(request: { username: string; passwordRef: string }, signal?: AbortSignal): Promise<{ configured: boolean }>
   logout(): Promise<void>
+  submitFeedback(request: TpcoworkHubFeedback, signal?: AbortSignal): Promise<string>
+  attachFeedbackIssue(request: TpcoworkHubIssueAttachments & { id: string }, signal?: AbortSignal): Promise<string>
+  listFeedbackIssues(request: { page: number }, signal?: AbortSignal): Promise<TpcoworkHubIssuePage>
   list(request: { query?: string; cursor?: string }, signal?: AbortSignal): Promise<{ items: TpcoworkHubSkill[]; cursor?: string }>
   detail(request: { id: string; preview?: boolean }, signal?: AbortSignal): Promise<{ skill: TpcoworkHubSkill; fingerprint: string; files: TpcoworkHubFile[]; content?: string }>
   /** Authentication and file download stay on Host; delegates to toolboxInstaller.install. */

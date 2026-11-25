@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util'
 import { harnessRoot, npmCli, productRoot, runCommand } from './package-command.mjs'
 import { builtHub, standaloneBuildVersion } from './build-windows.mjs'
 import { prepareDesktopBranding } from './desktop-branding.mjs'
+import { COMPUTER_USE_BUNDLE } from './packaged-computer-use.mjs'
 
 /** Refuse incomplete or ambiguous output so an old package cannot masquerade as this build. */
 export async function linuxInstallerNames(directory) {
@@ -99,7 +100,7 @@ export async function buildLinux(argv = process.argv.slice(2)) {
   if (!Object.hasOwn(configs, variant)) throw new Error('TP Cowork: Linux variant must be standard, full or basic')
   const config = join(productRoot, configs[variant])
   const product = JSON.parse(await readFile(config, 'utf8'))
-  const excludedBundles = variant === 'standard' ? ['@tpcowork/dsh-computer-use'] : []
+  const excludedBundles = [COMPUTER_USE_BUNDLE]
   if (values.plan) {
     console.log(JSON.stringify({ product: product.productName, variant, bundles: product.bundles, excludedBundles, appId: product.appId,
       target: 'linux-x64', runner: 'ubuntu-22.04',

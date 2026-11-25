@@ -1,8 +1,6 @@
 /**
- * Undo the native onboarding's Developer mode for installations that ran before the product skipped it.
- * That onboarding stored `developerTools: true` in its own user layer when it found a model key; the product
- * composes it as false, so a stored true can only come from there. Clearing both fields re-inherits the
- * product defaults once: a later manual opt-in writes only the developer-tools preference and is kept.
+ * Keep Developer mode disabled across the product, clearing any persisted opt-in from earlier builds or native
+ * onboarding (`ui-settings.enabled` and `ui-settings-account.developerTools`).
  * @param forms - `ctx.configForms`.
  * @returns stop observing.
  */
@@ -10,12 +8,20 @@ export function resetOnboardingDeveloperMode(forms) {
   const account = forms.get('ui-settings-account');
   const developer = forms.get('ui-settings');
   let running = false;
-  const ready = form => form.getSnapshot().status === 'ready' && form.getSnapshot().writable;
+  const ready = form => form.getSnapshot().status === 'ready' && form.getSnapshot().writable === true;
   const check = () => {
-    if (running || !ready(account) || !ready(developer) || account.getSnapshot().user?.developerTools !== true) return;
+    if (running || !ready(developer)) return;
+    const devSnap = developer.getSnapshot();
+    const devOn = devSnap.value?.enabled === true;
+    const accOn = ready(account) && account.getSnapshot().user?.developerTools === true;
+    if (!devOn && !accOn) return;
     running = true;
-    // The preference goes first, so a refused write leaves the marker for the next launch to retry.
-    void developer.unset('enabled').then(cleared => cleared && account.unset('developerTools'))
+    // Clear the preference first so a refused write retries on the next launch.
+    const clearDev = !devOn ? Promise.resolve(true)
+      : (devSnap.base?.enabled === true ? developer.set('enabled', false) : developer.unset('enabled'));
+    void clearDev.then(cleared => (cleared && ready(account) && account.getSnapshot().user?.developerTools === true
+      ? account.unset('developerTools')
+      : cleared))
       .catch(() => false).finally(() => { running = false; });
   };
   const disposers = [account.subscribe(check), developer.subscribe(check)];

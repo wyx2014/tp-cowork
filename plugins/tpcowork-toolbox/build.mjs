@@ -21,8 +21,8 @@ for (const module of ['tpcoworkhub', 'teams', 'web-search-step']) {
 const paths = {
   zod: [resolve(harness, 'node_modules/zod')],
   yaml: [resolve(harness, 'packages/skill/skill-filesystem/node_modules/yaml')],
-  react: [resolve(harness, 'apps/web/node_modules/@types/react/index.d.ts')],
-  'react-dom': [resolve(harness, 'apps/web/node_modules/@types/react-dom/index.d.ts')],
+  react: [resolve(dirname(requireHarness.resolve('@types/react/package.json')), 'index.d.ts')],
+  'react-dom': [resolve(dirname(requireHarness.resolve('@types/react-dom/package.json')), 'index.d.ts')],
 }
 async function collect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -58,6 +58,7 @@ for (const face of ['host', 'client']) {
 }
 if (checking) { console.log('Toolbox Host, Client and contract examples typecheck passed.'); process.exit(0) }
 await mkdir(output, { recursive: true })
+await cp(resolve(root, 'src/ui/floating-toast.d.ts'), resolve(output, 'types/tpcowork-toolbox/src/ui/floating-toast.d.ts'))
 const imageExtractDeployment = await loadImageExtractDeployment(new URL('./', import.meta.url))
 const imageExtractFile = resolve(output, 'image-extract.local.json')
 await writeFile(imageExtractFile, JSON.stringify(imageExtractDeployment, null, 2) + '\n', { mode: 0o600 })

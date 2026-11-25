@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { createDiagnosticsArchive } from '../src/archive.ts'
+import { createDiagnosticsArchive, createFeedbackLogArchive } from '../src/archive.ts'
 import { createZip } from '../src/zip.ts'
 
 const cleanup: (() => Promise<void>)[] = []
@@ -16,6 +16,25 @@ async function temporary() {
 /** List and read an archive with the system's own unzip, so the writer is checked against an independent reader. */
 const list = (zip: string) => execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' }).trim().split('\n').sort()
 const read = (zip: string, name: string) => execFileSync('unzip', ['-p', zip, name], { encoding: 'utf8' })
+
+it('attaches redacted recent product logs without including unrelated files or crash dumps', async () => {
+  const root = await temporary()
+  const main = join(root, 'main')
+  const host = join(root, 'host')
+  await mkdir(main)
+  await mkdir(host)
+  await writeFile(join(main, 'dsh-2026-11-03.log'), 'Authorization: Bearer fixture-credential\nWindow opened\n')
+  await writeFile(join(host, 'dsh-2026-11-03.log'), 'Agent started\n')
+  await writeFile(join(main, 'crash-2026-11-03T01-02-03-004Z-host.log'), 'Crash report\n')
+  await writeFile(join(host, 'outside.txt'), 'Unrelated file\n')
+  const archive = await createFeedbackLogArchive(main, host)
+  expect(archive).toBeTruthy()
+  const zip = join(root, 'feedback.zip')
+  await writeFile(zip, Buffer.from(archive!, 'base64'))
+  expect(list(zip)).toEqual(['host/dsh-2026-11-03.log', 'main/dsh-2026-11-03.log'])
+  expect(read(zip, 'main/dsh-2026-11-03.log')).toContain('Window opened')
+  expect(read(zip, 'main/dsh-2026-11-03.log')).not.toContain('fixture-credential')
+})
 
 it('writes archives that standard unzip reads back intact, compressed and stored', async () => {
   const directory = await temporary()

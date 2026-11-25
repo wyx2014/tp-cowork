@@ -9,7 +9,7 @@
  */
 import { app, dialog, shell, type BrowserWindow, type MessageBoxOptions } from 'electron'
 import { join } from 'node:path'
-import { createDiagnosticsArchive } from './archive.ts'
+import { createDiagnosticsArchive, createFeedbackLogArchive } from './archive.ts'
 import { localTimestamp } from './file-exporter.ts'
 import { LogFileSink } from './log-files.ts'
 import { maskSecrets } from './mask-secrets.ts'
@@ -132,14 +132,27 @@ export function createDesktopDiagnostics(options: DesktopDiagnosticsOptions, run
       return { status: 'failed', message }
     }
   }
+  function request(payload: { action: 'export'; locale?: unknown }): Promise<DiagnosticsResult>
+  function request(payload: unknown): Promise<DiagnosticsResult | string | null>
+  async function request(payload: unknown): Promise<DiagnosticsResult | string | null> {
+    const input = (payload ?? {}) as { action?: unknown; locale?: unknown }
+    if (input.action === 'feedbackLogs') return createFeedbackLogArchive(runtime.logsDir, hostLogsDir())
+    if (input.action === 'feedbackScreenshot') {
+      const window = options.window()
+      if (!window || window.isDestroyed()) return null
+      const image = await window.webContents.capturePage()
+      if (image.isEmpty()) return null
+      const { width, height } = image.getSize()
+      const bounded = Math.max(width, height) > 1600
+        ? image.resize(width >= height ? { width: 1600 } : { height: 1600 }) : image
+      return 'data:image/jpeg;base64,' + bounded.toJPEG(85).toString('base64')
+    }
+    if (input.action !== 'export') throw new Error('tpcowork-diagnostics: unknown action')
+    running ??= exportDiagnostics(input.locale === 'en' ? 'en' : 'zh').finally(() => { running = undefined })
+    return running
+  }
   return {
-    /** `{ action: 'export', locale }`: concurrent requests share one prompt and one archive. */
-    request(payload: unknown): Promise<DiagnosticsResult> {
-      const request = (payload ?? {}) as { action?: unknown; locale?: unknown }
-      if (request.action !== 'export') return Promise.reject(new Error('tpcowork-diagnostics: unknown action'))
-      running ??= exportDiagnostics(request.locale === 'en' ? 'en' : 'zh').finally(() => { running = undefined })
-      return running
-    },
+    request,
     dispose(): void {
       try {
         runtime.off('child-process-gone', childGone as (...args: unknown[]) => void)

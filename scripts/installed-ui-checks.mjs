@@ -77,9 +77,9 @@ export async function checkInstalledProductUi(page, { capture = async () => {}, 
   assert.equal(await page.locator('.tpcowork-login-modal').count(), 0, 'Successful login must release the workbench')
   const settings = await openInstalledSettings(page, startup)
   const developerMode = settings.getByRole('switch', { name: /^(开发者模式|Developer mode)$/u })
-  await developerMode.waitFor()
-  assert.equal(await developerMode.getAttribute('aria-checked'), 'false', 'Fresh installations must keep Developer mode disabled')
-  assert.equal(await settings.getByRole('button', { name: /^(Agent 预设|Agent presets)$/u }).count(), 0, 'Developer preset management must be hidden by default')
+  await settings.getByRole('button', { name: /^(通用设置|General)$/u }).click()
+  assert.equal(await developerMode.count(), 0, 'Settings must not offer a Developer mode switch')
+  assert.equal(await settings.getByRole('button', { name: /^(Agent 预设|Agent presets)$/u }).count(), 0, 'Developer preset management must be hidden')
   for (const name of [/^(记忆|Memory)$/u, /^(归档管理|Archive management)$/u, /^(使用统计|Usage stats)$/u]) {
     await settings.getByRole('button', { name }).waitFor({ state: 'visible' })
   }
@@ -89,14 +89,19 @@ export async function checkInstalledProductUi(page, { capture = async () => {}, 
   const memory = settings.getByRole('switch', { name: /^(工作区记忆|Workspace Memory)$/u })
   await memory.waitFor()
   await page.waitForFunction(() => document.querySelector('.tpm-page [role="switch"]')?.disabled === false)
-  assert.equal(await memory.getAttribute('aria-checked'), 'false', 'Fresh profiles must keep memory disabled')
-  await memory.click()
+  assert.equal(await memory.getAttribute('aria-checked'), 'true', 'Fresh profiles must enable workspace memory')
   await settings.getByText(/^(暂无已保存的工作区记忆|No saved workspace memories)$/u).waitFor()
   await capture('settings-memory')
   await memory.click()
   await page.waitForFunction(() => {
     const control = document.querySelector('.tpm-page [role="switch"]')
     return control?.disabled === false && control.getAttribute('aria-checked') === 'false'
+  })
+  await memory.click()
+  await settings.getByText(/^(暂无已保存的工作区记忆|No saved workspace memories)$/u).waitFor()
+  await page.waitForFunction(() => {
+    const control = document.querySelector('.tpm-page [role="switch"]')
+    return control?.disabled === false && control.getAttribute('aria-checked') === 'true'
   })
 
   await settings.getByRole('button', { name: /^(归档管理|Archive management)$/u }).click()

@@ -11,6 +11,7 @@ import { sessionKey } from '../src/host/tpcoworkhub/index.ts'
 import type { TpcoworkHubApi } from '../src/contracts/tpcoworkhub.ts'
 import { ownerPeer } from '../../../../deepseek-harness/packages/api/gateway/tests/peer.ts'
 import LlmRuntime from '../../../../deepseek-harness/packages/llm/llm/src/index.ts'
+import * as PiAi from '../../../../deepseek-harness/packages/llm/llm-pi-ai/src/index.ts'
 import * as HubModel from '../../tpcowork-core/src/hub-model.ts'
 import * as Mcp from '../src/host/mcp/index.ts'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -19,6 +20,39 @@ import { assemble } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/te
 import { textEvents } from '../../../../deepseek-harness/packages/llm/llm-pi-ai/tests/mock-server.ts'
 
 describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile installer', () => {
+  it('sends both feedback types to the signed-in Hub while keeping the token in the Host', async () => {
+    const { ctx, state, requests, service } = await hubFixture()
+    const receipt = '9f1f66e7-8fd6-4a5d-b3d4-a566e8dc3043'
+    const requestId = '30c3d4c1-127f-4403-b2a2-d34885f81ef6'
+    const feedbackList = { items: [{ id: receipt, content: 'The task stopped', status: 'new', createdAt: 10 }], total: 1 }
+    state.override = (request, response) => {
+      if (!request.url?.startsWith('/tpcoworkapi/feedback/')) return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 200, data: request.method === 'GET' ? feedbackList : receipt }))
+      return true
+    }
+    const submit = (request: Parameters<TpcoworkHubApi['submitFeedback']>[0]) => ctx.typertGateway.invoke({
+      peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'submitFeedback', args: { request },
+    })
+    await service.acceptBrowserSession({ token: secret })
+    expect(await submit({ type: 'issue', requestId, content: 'The task stopped', images: [] })).toBe(receipt)
+    expect(await submit({ type: 'feature', requestId, content: 'Add a shortcut', solution: 'Assign a key' })).toBe(receipt)
+    expect(await ctx.typertGateway.invoke({
+      peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'attachFeedbackIssue', args: {
+        request: { id: receipt, images: [], logArchive: 'UEsDBBQAAAA=' },
+      },
+    })).toBe(receipt)
+    expect(await ctx.typertGateway.invoke({
+      peer: ownerPeer(ctx), namespace: 'toolboxTpcoworkHub', method: 'listFeedbackIssues', args: { request: { page: 1 } },
+    })).toEqual(feedbackList)
+    expect(requests.filter(request => request.path.startsWith('/tpcoworkapi/feedback/'))).toEqual([
+      { path: '/tpcoworkapi/feedback/issues', authorization: `Bearer ${secret}`, body: { requestId, content: 'The task stopped', images: [] } },
+      { path: '/tpcoworkapi/feedback/feature-requests', authorization: `Bearer ${secret}`, body: { requestId, content: 'Add a shortcut', solution: 'Assign a key' } },
+      { path: '/tpcoworkapi/feedback/issues/' + receipt + '/attachments', authorization: `Bearer ${secret}`, body: { images: [], logArchive: 'UEsDBBQAAAA=' } },
+      { path: '/tpcoworkapi/feedback/issues?page=1', authorization: `Bearer ${secret}`, body: undefined },
+    ])
+  })
+
   it.each([
     ['local', 'http://localhost:8080'],
     ['test', 'http://isptest.tpasset.com:54905'],
@@ -156,6 +190,65 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(ctx.tpcoworkGateway.readModelKey(restored.grantId)).toBe(key)
   })
 
+  it('switches a signed-in desktop to the SkillHub backup and restores the primary gateway', async () => {
+    const { ctx, login, state, endpoint, requests } = await hubFixture()
+    const timer = vi.spyOn(globalThis, 'setInterval')
+    onTestFinished(() => timer.mockRestore())
+    const backupKey = 'sk-backup-relay-credential-fixture'
+    let backup: string | null = null
+    let primaryUnavailable = false
+    state.override = (request, response) => {
+      const send = (value: object) => {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify(value))
+        return true
+      }
+      if (request.url === '/tpcoworkapi/model-fallback/status') return send({ revision: backup })
+      if (request.url === '/tpcoworkapi/client-config') {
+        if (backup) return send({
+          userId: 'user-1', quotaStatus: 'active', fallbackRevision: backup, apiKey: backupKey,
+          baseURL: 'https://irrelevant-origin.example/v1', models: [{ id: 'backup-chat' }], defaultModel: 'backup-chat',
+        })
+        if (primaryUnavailable) {
+          response.statusCode = 502
+          return send({})
+        }
+        return send({
+          userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1',
+          apiKey: 'sk-primary-gateway-credential-fixture', models: [{ id: 'primary-chat' }],
+        })
+      }
+      if (request.url === '/tpcoworkapi/model-fallback/v1/chat/completions') {
+        response.setHeader('Content-Type', 'text/event-stream')
+        response.end(textEvents.map(event => `data: ${event}\n\n`).join(''))
+        return true
+      }
+      if (request.url?.endsWith('/direct-config')) { response.statusCode = 404; response.end(); return true }
+      return false
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    await login()
+    const modelIds = async () => (await ctx.llm.listModels(HubModel.providerId)).map(model => model.id)
+    await vi.waitFor(async () => expect(await modelIds()).toEqual(['primary-chat']))
+    const poll = timer.mock.calls.find(([, interval]) => interval === 30_000)?.[0]
+    if (typeof poll !== 'function') throw new Error('Missing fallback status poll')
+
+    primaryUnavailable = true
+    backup = 'fallback-1'
+    await vi.waitFor(async () => { poll(); expect(await modelIds()).toEqual(['backup-chat']) })
+    expect(ctx.tpcoworkGateway.modelConnection()?.baseURL).toBe(endpoint + '/tpcoworkapi/model-fallback/v1')
+    expect((await assemble(ctx, { provider: HubModel.providerId, model: 'backup-chat', messages: [] })).message.content)
+      .toEqual([{ type: 'text', text: 'hello' }])
+    expect(requests.find(row => row.path === '/tpcoworkapi/model-fallback/v1/chat/completions')?.authorization).toBe(`Bearer ${backupKey}`)
+    expect(requests.some(row => row.path.startsWith('/tpcoworkapi/model-fallback/api/mcp/'))).toBe(false)
+
+    primaryUnavailable = false
+    backup = null
+    await vi.waitFor(async () => { poll(); expect(await modelIds()).toEqual(['primary-chat']) })
+    expect(ctx.tpcoworkGateway.modelConnection()?.baseURL).toBe(endpoint + '/modelgw/v1')
+  })
+
   it('discards delayed config after logout and rejects another users config', async () => {
     const { ctx, login, state, endpoint, service } = await hubFixture()
     const entered = deferred()
@@ -183,6 +276,69 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await vi.waitFor(() => expect(ctx.tpcoworkGateway.status).toBe('unavailable'))
     expect(configured).not.toHaveBeenCalled()
     expect(ctx.llm.listProviders()).toEqual([])
+  })
+
+  it('awaits in-flight client-config right after login and keeps models active across background refreshes and transient errors', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    onTestFinished(() => vi.useRealTimers())
+    vi.setSystemTime(new Date(2026, 10, 17, 10, 0, 0))
+    const { ctx, login, state, endpoint } = await hubFixture()
+    const key = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    let releaseConfig = deferred()
+    let configEntered = deferred()
+    let failConfig = false
+    state.override = (request, response) => {
+      if (request.url === '/tpcoworkapi/client-config') {
+        configEntered.resolve()
+        void releaseConfig.promise.then(() => {
+          if (failConfig) { response.statusCode = 503; response.end('upstream unavailable'); return }
+          response.setHeader('Content-Type', 'application/json')
+          response.end(JSON.stringify({ userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1', apiKey: key, defaultModel: 'qwen-chat', models: [{ id: 'qwen-chat' }] }))
+        })
+        return true
+      }
+      if (request.url === '/tpcoworkapi/model-fallback/status') {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ revision: null }))
+        return true
+      }
+      if (request.url === '/modelgw/v1/chat/completions' || request.url === '/own/v1/chat/completions') {
+        response.setHeader('Content-Type', 'text/event-stream')
+        response.end(textEvents.map(event => `data: ${event}\n\n`).join(''))
+        return true
+      }
+      return false
+    }
+    await ctx.credentials.set('OWN_MODEL_KEY' as never, 'own-secret-key')
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(PiAi, { providers: { own: { api: 'openai-completions', baseURL: endpoint + '/own/v1',
+      apiKeyEnv: 'OWN_MODEL_KEY', models: [{ id: 'own-model' }] } } }).await()
+    await ctx.plugin(HubModel).await()
+
+    // 1. Right after login, /tpcoworkapi/client-config is still in flight; calling another model waits for it instead of failing.
+    await login()
+    await configEntered.promise
+    expect(ctx.tpcoworkGateway.status).toBe('loading')
+    const immediateCall = assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })
+    releaseConfig.resolve()
+    expect((await immediateCall).message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(ctx.tpcoworkGateway.status).toBe('active')
+
+    // 2. Five-minute background refresh neither drops active status while loading nor wipes config on transient 503.
+    configEntered = deferred()
+    releaseConfig = deferred()
+    failConfig = true
+    vi.setSystemTime(new Date(2026, 10, 17, 10, 5, 1))
+    await vi.advanceTimersByTimeAsync(30_000)
+    await configEntered.promise
+    expect(ctx.tpcoworkGateway.status).toBe('active')
+    expect((await assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })).message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect((await assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).message.content).toEqual([{ type: 'text', text: 'hello' }])
+    releaseConfig.resolve()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(ctx.tpcoworkGateway.status).toBe('active')
+    expect((await assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })).message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect((await assemble(ctx, { provider: HubModel.providerId, model: 'qwen-chat', messages: [] })).message.content).toEqual([{ type: 'text', text: 'hello' }])
   })
 
   it('discards an authorized MCP response that arrives after logout', async () => {
@@ -625,6 +781,29 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     await writeFile(join(dir, 'skills/hub-sample/scripts/helper.py'), 'user changes')
     expect((await service.install({ ...installRequest('preserve'), conflict: 'replace-owned' })).error?.code).toBe('skills/user-modified')
     expect(await readFile(join(dir, 'skills/hub-sample/scripts/helper.py'), 'utf8')).toBe('user changes')
+  })
+  it('installs and updates a store skill whose slug differs from SKILL.md name and exposes hubSkillId', async () => {
+    const { ctx, login, service, state, dir, installRequest } = await hubFixture()
+    await login()
+    const makeFiles = (body: string) => [
+      ['SKILL.md', Buffer.from(`---\nname: self-improvement\ndescription: Continuous improvement\nmetadata:\n---\n${body}\n`)],
+      ['scripts/helper.py', Buffer.from('print("ok")\n')],
+    ].map(([path, bytes]) => ({ path: path as string, bytes: bytes as Buffer, sha256: sha256(bytes as Buffer) }))
+    state.files = makeFiles('Version 1 instructions with [helper](scripts/helper.py).')
+    // Store slug stays 'hub-sample' (id 'store-1') while SKILL.md name is 'self-improvement'.
+    const first = await service.install(installRequest('slug-mismatch-v1'))
+    expect(first.state).toBe('installed')
+    expect((await ctx.skills.get('self-improvement'))?.content).toContain('Version 1 instructions')
+    expect(await readFile(join(dir, 'skills/self-improvement/SKILL.md'), 'utf8')).toContain('name: self-improvement')
+    const catalog = await ctx.typertGateway.invoke({ peer: ownerPeer(ctx), namespace: 'toolboxSkills', method: 'inventory', args: { request: {} } }) as Awaited<ReturnType<typeof ctx.toolboxSkills.inventory>>
+    expect(catalog.items).toEqual([expect.objectContaining({
+      id: first.skillId, name: 'self-improvement', origin: 'tpcoworkhub', hubSkillId: 'store-1', managed: true,
+    })])
+    state.files = makeFiles('Version 2 instructions with [helper](scripts/helper.py).')
+    state.versionId = 'version-2'
+    const updated = await service.install({ ...installRequest('slug-mismatch-v2'), conflict: 'replace-owned' })
+    expect(updated.state).toBe('installed')
+    expect((await ctx.skills.get('self-improvement'))?.content).toContain('Version 2 instructions')
   })
   it('cancels a download through the Gateway and retries with a new request, then withdraws its resolver on unload', async () => {
     const { login, service, state, ctx, dir, installRequest, fiber, installer } = await hubFixture()

@@ -8,6 +8,34 @@ import { buildWindows, collectWindowsInstallers, standaloneBuildVersion } from '
 import { runCommand } from '../package-command.mjs'
 import { stageCoreBundle } from '../stage-core-bundle.mjs'
 import { withStagedWindowsApplication } from '../stage-windows-smoke.mjs'
+import { assertNoComputerUseBundles, assertNoPackagedComputerUse } from '../packaged-computer-use.mjs'
+
+test('Windows packaging keeps the browser and excludes Computer Use in all deployment modes', async () => {
+  for (const deployment of ['standalone', 'test', 'production']) {
+    const plan = JSON.parse(await runCommand(process.execPath, ['scripts/build-windows.mjs', '--plan'], {
+      env: { ...process.env, PACKAGE_DEPLOYMENT: deployment }, capture: true,
+    }))
+    assertNoComputerUseBundles(plan.bundles)
+    assert.ok(plan.bundles.includes('@tpcowork/dsh-browser'))
+  }
+})
+
+test('installer verification rejects Computer Use from the closure and packaged dependencies', async t => {
+  const resources = await mkdtemp(join(tmpdir(), 'tp-excluded-bundle-'))
+  t.after(() => rm(resources, { recursive: true, force: true }))
+  const runtime = join(resources, 'app.asar/dsh')
+  await mkdir(runtime, { recursive: true })
+  const manifest = join(runtime, 'package.json')
+  await writeFile(manifest, JSON.stringify({ dependencies: { '@tpcowork/dsh-computer-use': '0.2.0' } }))
+  assert.throws(() => assertNoPackagedComputerUse(resources), /excluded.*@tpcowork\/dsh-computer-use/u)
+  await writeFile(manifest, JSON.stringify({ dependencies: { '@tpcowork/dsh-browser': '0.2.0' } }))
+  assert.doesNotThrow(() => assertNoPackagedComputerUse(resources))
+  await mkdir(join(runtime, 'node_modules/@tpcowork/dsh-computer-use'), { recursive: true })
+  assert.throws(() => assertNoPackagedComputerUse(resources), /contains.*@tpcowork\/dsh-computer-use/u)
+  await rm(join(runtime, 'node_modules/@tpcowork/dsh-computer-use'), { recursive: true })
+  await mkdir(join(resources, 'app.asar.unpacked/dsh/node_modules/.pnpm/@deepseek-ai+dsh-computer-use@0.2.1'), { recursive: true })
+  assert.throws(() => assertNoPackagedComputerUse(resources), /contains.*@deepseek-ai\/dsh-computer-use.*app\.asar\.unpacked/u)
+})
 
 test('verifies the complete application from a private path with spaces and preserves its source', async t => {
   const root = await mkdtemp(join(tmpdir(), 'tp-source-'))

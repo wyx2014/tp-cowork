@@ -14,7 +14,17 @@ import { npmCli } from '../package-command.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
-it('keeps the packaged desktop default off with a model key and preserves an explicit opt-in after reload', async () => {
+async function seedSignedInProfile(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('tpcowork.first-run-guide.v1', 'done')
+    window.dshDesktop = { tpcoworkHub: {
+      state: async () => ({ status: 'signed_in', phase: 'idle', user: { id: 'preset-fixture', username: 'fixture' } }),
+      subscribe: () => () => {},
+    } }
+  })
+}
+
+it('keeps Developer mode off in the packaged desktop with a model key and hides its entry after reload', async () => {
   const requireUrls = registerHooks({ resolve(specifier, context, next) {
     return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)
   } })
@@ -36,13 +46,9 @@ it('keeps the packaged desktop default off with a model key and preserves an exp
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
-  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
-  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
+  await seedSignedInProfile(page)
   page.setDefaultTimeout(20000)
-  await page.addInitScript(() => {
-    window.dshDesktop = {}
-    window.dshOnboarding = { hasApiKey: async () => true }
-  })
+  await page.addInitScript(() => { window.dshOnboarding = { hasApiKey: async () => true } })
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   const settings = () => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings').value
@@ -55,19 +61,18 @@ it('keeps the packaged desktop default off with a model key and preserves an exp
   const openSettings = () => page.getByRole('button', { name: '设置', exact: true }).click()
   const toggle = dialog.getByRole('switch', { name: '开发者模式', exact: true })
   await openSettings()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+  expect(await toggle.count()).toBe(0)
   expect(await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
-  await toggle.click()
-  await expect.poll(() => settings().enabled).toBe(true)
   await page.reload()
   await page.locator('[data-conversation-content]').first().waitFor()
   await openSettings()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-  expect(await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(1)
+  expect(settings().enabled).toBe(false)
+  expect(await toggle.count()).toBe(0)
+  expect(await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
   expect(errors).toEqual([])
 })
 
-it('offers preset controls only in Developer mode and preserves existing task compositions', async () => {
+it('clears legacy Developer mode while preserving existing task compositions', async () => {
   const requireUrls = registerHooks({ resolve(specifier, context, next) {
     return next(specifier.startsWith('file:') ? fileURLToPath(specifier) : specifier, context)
   } })
@@ -75,15 +80,29 @@ it('offers preset controls only in Developer mode and preserves existing task co
   const peers = await artifactPeers()
   onTestFinished(() => peers.deregister())
   const scaffold = await launchWebScaffold({
+    developerTools: true,
     extraOverlayPath: [join(root, '../deepseek-harness/apps/web/tests/pin-browse-picker.overlay.yml')],
     profile: { hmr: false, packages: [{ dir: join(root, 'plugins/tpcowork-ui'), enabled: true }] },
   })
   onTestFinished(() => scaffold.close())
+  const developerEnabled = () => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings').value.enabled
+  expect(developerEnabled()).toBe(true)
+  const legacyResponse = await scaffold.hostFetch('/api/session/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      type: 'client-request', rpcId: 'legacy-creator-session', method: 'session/create',
+      payload: { args: { request: { cwd: scaffold.workspaceCwd, agentPreset: 'cordis' } } },
+    }),
+  })
+  const { result: legacy } = await legacyResponse.json()
+  expect(legacy).toMatchObject({ ok: true, value: { agentPreset: 'cordis' } })
+  const existing = scaffold.ctx.agents.get(legacy.value.sessionId)
+  expect(scaffold.ctx.agentPresets.composedPreset(existing.ctx)).toBe('cordis')
   const browser = await chromium.launch({ executablePath: process.env.TPCOWORK_TEST_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
   onTestFinished(() => browser.close())
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
-  // Existing profiles have finished the first-run guide; first-run-guide.spec.mjs covers it.
-  await page.addInitScript(() => localStorage.setItem('tpcowork.first-run-guide.v1', 'done'))
+  await seedSignedInProfile(page)
   page.setDefaultTimeout(20000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -97,6 +116,7 @@ it('offers preset controls only in Developer mode and preserves existing task co
   })
   await page.goto(scaffold.authenticatedUrl)
   await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+  await expect.poll(developerEnabled).toBe(false)
   const presetControls = page.locator('[data-slot="conversation.hero.agentPreset"] button')
   const settings = page.getByRole('dialog', { name: '设置', exact: true })
   const openSettings = () => page.getByRole('button', { name: '设置', exact: true }).click()
@@ -106,70 +126,20 @@ it('offers preset controls only in Developer mode and preserves existing task co
   const sessionId = () => page.locator('[data-conversation-content]').first().getAttribute('data-conversation-session')
 
   await openSettings()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+  expect(await toggle.count()).toBe(0)
   expect(await settings.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
   expect(await presetControls.count()).toBe(0)
   expect(defaultPreset()).toBe('standard')
   await page.screenshot({ path: join(output, 'ordinary-settings.png'), fullPage: true })
 
-  await toggle.click()
-  await settings.getByRole('button', { name: 'Agent 预设', exact: true }).click()
-  for (const name of ['标准模式', 'PTC 模式', '极简模式', '创造模式']) {
-    expect(await settings.getByRole('button', { name: `查看配置: ${name}`, exact: true }).count()).toBe(1)
-  }
-  // The page matches the other settings pages: one title, the presets as a single list of rows with a radio for the
-  // default, and no custom group or Creator entry.
-  const presetPage = await settings.locator('[data-agent-preset-id="standard"]').evaluate(row => {
-    const list = row.parentElement
-    const section = list.closest('section').parentElement.closest('section') ?? list.closest('section')
-    const visible = node => node.offsetParent !== null
-    const radio = getComputedStyle(row.querySelector('button'), '::before')
-    return {
-      headings: [...section.querySelectorAll('h2, h3')].filter(visible).length,
-      rows: [...list.children].map(item => item.getBoundingClientRect().left),
-      width: Math.round(list.getBoundingClientRect().width),
-      radio: radio.borderTopWidth,
-      text: section.innerText,
-    }
-  })
-  expect(presetPage.headings).toBe(0)
-  expect(new Set(presetPage.rows).size).toBe(1)
-  expect(presetPage.width).toBeGreaterThan(800)
-  expect(presetPage.radio).toBe('5px')
-  expect(presetPage.text).not.toContain('自定义')
-  expect(presetPage.text).not.toContain('让 Agent 帮我创建预设')
-  await page.screenshot({ path: join(output, 'preset-list.png'), fullPage: true })
-  await settings.getByRole('button', { name: '设为新任务默认: 创造模式', exact: true }).click()
-  await expect.poll(defaultPreset).toBe('cordis')
   await closeSettings()
-  await page.getByRole('button', { name: '创造模式', exact: true }).waitFor()
-  const existingId = await sessionId()
-  const existing = scaffold.ctx.agents.list().find(agent => agent.id === existingId)
   expect(scaffold.ctx.agentPresets.composedPreset(existing.ctx)).toBe('cordis')
-
-  await openSettings()
-  await settings.getByRole('button', { name: '通用设置', exact: true }).click()
-  await toggle.click()
-  await expect.poll(defaultPreset).toBe('standard')
-  expect(await settings.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
-  await closeSettings()
-  expect(await presetControls.count()).toBe(0)
-  expect(scaffold.ctx.agentPresets.composedPreset(existing.ctx)).toBe('cordis')
-
+  const previousId = await sessionId()
   await page.getByRole('button', { name: '新建会话', exact: true }).last().click()
-  await expect.poll(sessionId).not.toBe(existingId)
+  await expect.poll(sessionId).not.toBe(previousId)
   const nextId = await sessionId()
   const next = scaffold.ctx.agents.list().find(agent => agent.id === nextId)
   expect(scaffold.ctx.agentPresets.composedPreset(next.ctx)).toBe('standard')
   expect(scaffold.ctx.tools.schemas(next).map(tool => tool.name)).toEqual(expect.arrayContaining(['skill', 'subagent', 'schedule_create']))
-  await page.reload()
-  await page.locator('[data-conversation-content]').first().waitFor()
-  await openSettings()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-  expect(await settings.getByRole('button', { name: 'Agent 预设', exact: true }).count()).toBe(0)
-  await toggle.click()
-  await settings.getByRole('button', { name: 'Agent 预设', exact: true }).click()
-  await settings.getByRole('button', { name: '新任务默认: 标准模式', exact: true }).waitFor()
-  await page.screenshot({ path: join(output, 'developer-settings.png'), fullPage: true })
   expect(errors).toEqual([])
 })

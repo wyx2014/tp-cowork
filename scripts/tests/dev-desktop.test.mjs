@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { test } from 'node:test'
@@ -58,6 +58,15 @@ async function readyFixture(t) {
     await symlink(source, join(profile, 'node_modules/@tpcowork', `dsh-${name}`), process.platform === 'win32' ? 'junction' : 'dir')
     dependencies[`@tpcowork/dsh-${name}`] = `link:${source}`
   }
+  const pet = join(options.product, 'plugins/dsh-pet')
+  await mkdir(pet)
+  await writeFile(join(pet, 'package.json'), JSON.stringify({ name: 'dsh-pet' }))
+  for (const file of ['pnpm-lock.yaml', 'node_modules/.pnpm/lock.yaml', 'tsdown.config.mjs', 'tsconfig.types.json',
+    'src/index.ts', 'scripts/prepare.js', 'lib/index.js', 'lib/client.js', 'runtime/electron-helper/shared-core.js']) {
+    await touch(join(pet, file))
+  }
+  await symlink(pet, join(profile, 'node_modules/dsh-pet'), process.platform === 'win32' ? 'junction' : 'dir')
+  dependencies['dsh-pet'] = `link:${pet}`
   for (const file of ['tpcowork-core/model.js', 'tpcowork-ui/client.js', 'tpcowork-ui/upstream.css',
     ...['browser', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts'].flatMap(name => [`tpcowork-${name}/lib/host.js`, `tpcowork-${name}/lib/client.js`])]) {
     await touch(join(options.product, 'plugins', file))
@@ -81,6 +90,9 @@ test('one command builds, initializes, installs and launches in order, preservin
   assert.equal(launch, calls.length - 1)
   for (const name of ['core', 'ui', 'toolbox', 'automation', 'memory', 'archives', 'usage', 'experts']) assert.ok(find(join(options.product, `plugins/tpcowork-${name}/build.mjs`)) > build)
   assert.ok(find(join(options.product, 'plugins/tpcowork-browser/build.mjs'), '--install-native') > build)
+  const petSteps = calls.filter(call => call.cwd === join(options.product, 'plugins/dsh-pet'))
+  assert.deepEqual(petSteps.map(call => call.args), [['install', '--frozen-lockfile', '--ignore-scripts'], ['run', 'build']])
+  assert.ok(calls.indexOf(petSteps[1]) < install)
   for (const call of calls) {
     assert.equal(call.env.DSH_HOME, options.environment.DSH_HOME)
     assert.equal(call.env.DSH_DESKTOP_USER_DATA_DIR, options.environment.DSH_DESKTOP_USER_DATA_DIR)
@@ -107,7 +119,7 @@ test('installed dependencies are reused and a moved checkout still reinstalls th
     await writeFile(join(folder, 'package.json'), '{}')
   }
   const { steps } = desktopPlan(options)
-  assert.ok(!steps.some(step => step.command === 'npm'))
+  assert.ok(!steps.some(step => step.command === 'npm' && step.args.includes('ci')))
   assert.ok(steps.some(step => step.args.includes('install') && step.args.includes('all')))
 })
 
@@ -128,7 +140,8 @@ test('plugin changes and missing plugin output rebuild plugins without compiling
     const { steps } = desktopPlan({ ...options, plugins: explicit })
     assert.ok(steps.some(step => runsScript(step.args, 'tpcowork-experts/build.mjs')))
     assert.ok(steps.some(step => step.args.includes('--install-native')))
-    assert.ok(!steps.some(step => step.args.includes('build') || step.args.includes('build:desktop') || step.args.includes('install')))
+    assert.ok(!steps.some(step => step.cwd === options.harness && (step.args.includes('build') || step.args.includes('build:desktop'))))
+    assert.ok(!steps.some(step => step.args.includes('install')))
     assert.equal(steps.at(-1).args.at(-1), 'start:desktop')
   }
 })
@@ -159,10 +172,37 @@ test('equivalent relative plugin links are reused instead of reinstalled', async
   const path = join(profile, 'package.json')
   const manifest = JSON.parse(await readFile(path, 'utf8'))
   for (const [name, reference] of Object.entries(manifest.dependencies)) {
+    if (!reference.startsWith('link:')) continue
     manifest.dependencies[name] = `link:${relative(profile, reference.slice(5)).replaceAll('\\', '/')}`
   }
   await writeFile(path, JSON.stringify(manifest))
   assert.deepEqual(desktopPlan(options).steps.map(step => step.args), [['run', 'start:desktop']])
+})
+
+test('an existing development profile replaces the archived desktop pet with a source link', async t => {
+  const options = await readyFixture(t)
+  const path = join(options.environment.DSH_HOME, 'profiles/desktop/package.json')
+  const manifest = JSON.parse(await readFile(path, 'utf8'))
+  manifest.dependencies['dsh-pet'] = 'file:dsh-pet-0.4.9.tgz'
+  await writeFile(path, JSON.stringify(manifest))
+  const { steps } = desktopPlan(options)
+  assert.deepEqual(steps.map(step => step.args), [
+    ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'prepare:primary-runtime'],
+    [join(options.product, 'scripts/initialize-desktop-profile.mjs')],
+    [join(options.product, 'scripts/desktop-plugin.mjs'), 'install', 'pet'],
+    ['run', 'start:desktop'],
+  ])
+})
+
+test('editing desktop pet source rebuilds the linked plugin without reinstalling it', async t => {
+  const options = await readyFixture(t)
+  const pet = join(options.product, 'plugins/dsh-pet')
+  const edited = new Date(Date.now() + 1_000)
+  await utimes(join(pet, 'src/index.ts'), edited, edited)
+  const { steps } = desktopPlan(options)
+  assert.deepEqual(steps.map(step => [step.cwd, step.args]), [
+    [pet, ['run', 'build']], [options.harness, ['run', 'start:desktop']],
+  ])
 })
 
 test('a checkout with no recorded fingerprint yet launches without forcing a rebuild, then records a baseline', async t => {

@@ -15,7 +15,7 @@ import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
 import { allowedHubUrl, hubApiUrl } from './hub-url.ts'
 import { decode, detail, fileContentSchema, loginResultSchema, page, remoteCount, websiteUserSchema } from './protocol.ts'
-import { browserSessionSchema, detailSchema, hostContribution, hubInstallSchema, listSchema, loginChannelSchema, loginSchema, modelKeyRevealSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
+import { browserSessionSchema, detailSchema, feedbackIssueAttachments, feedbackIssuePage, feedbackIssueQuery, feedbackReceiptSchema, feedbackSchema, hostContribution, hubInstallSchema, listSchema, loginChannelSchema, loginSchema, modelKeyRevealSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
 import { apiBase, HUB_API, RelayAuthError, startRelay } from './relay.ts'
 import type {} from '@deepseek-ai/dsh-shell-env'
@@ -57,6 +57,8 @@ export const sessionKey = credentialKey(name, 'session')
 const VERIFY_INTERVAL_MS = 5 * 60_000
 /** Account reads never wait longer than this for the Hub; a slow or unreachable Hub keeps the stored login. */
 const VERIFY_TIMEOUT_MS = 5_000
+const MODEL_REFRESH_MS = 5 * 60_000
+const FALLBACK_CHECK_MS = 30_000
 type Session = { endpoint: string; token?: string; expiresAt?: number; expired?: boolean; user?: import('../../contracts/tpcoworkhub.ts').TpcoworkHubUser }
 type PublishResult = Awaited<ReturnType<TpcoworkHubApi['publish']>>
 function session(record: CredentialRecord | undefined): Session | undefined {
@@ -88,6 +90,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private loginChannel: TpcoworkHubLoginChannel = 'internal'
   private activeSessionEndpoint: string | undefined
   private gatewayMcp: GatewayMcpConnection | undefined
+  private resetGatewaySession: (() => void) | undefined
   constructor(ctx: Context, readonly config: Config, readonly installer: SkillInstaller) {
     super(ctx, 'toolboxTpcoworkHub')
     ctx.on('credentials/record-updated', key => {
@@ -114,27 +117,66 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     // The Hub session stays owned by this module; the personal gateway key is used only in Host services.
     ctx.inject(['tpcoworkGateway'], scope => {
       let revision = 0
-      let request: AbortController | undefined
-      const refresh = () => {
+      let inFlight: { controller: AbortController; promise: Promise<void> } | undefined
+      let checkController: AbortController | undefined
+      let configuredSessionId: string | undefined
+      let nextFullRefresh = 0
+      let fallbackRevision: string | null = null
+      this.resetGatewaySession = () => { configuredSessionId = undefined; fallbackRevision = null }
+      const refresh = (): Promise<void> => {
         const current = ++revision
-        request?.abort()
-        request = new AbortController()
-        scope.tpcoworkGateway.clear('loading')
-        void this.run(AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]), async active => {
+        checkController?.abort()
+        checkController = undefined
+        inFlight?.controller.abort()
+        const loading = new AbortController()
+        nextFullRefresh = Date.now() + MODEL_REFRESH_MS
+        if (!configuredSessionId) {
+          fallbackRevision = null
+          scope.tpcoworkGateway.clear('loading')
+        }
+        const promise = this.run(AbortSignal.any([loading.signal, AbortSignal.timeout(15_000)]), async active => {
           const allowed = this.allowedEndpoints()
           const record = await this.stored()
           active.throwIfAborted()
           if (current !== revision) return
           if (!record || !allowed.has(record.endpoint) || !record.token || record.expired || !record.user) {
-            scope.tpcoworkGateway.clear()
+            configuredSessionId = undefined
+            fallbackRevision = null
+            scope.tpcoworkGateway.clear(record?.expired ? 'expired' : 'signed_out')
             this.setGatewayMcp(undefined)
             return
+          }
+          const sessionId = `${record.endpoint}\0${record.user.id}\0${record.token}`
+          if (configuredSessionId !== sessionId) {
+            configuredSessionId = undefined
+            fallbackRevision = null
+            scope.tpcoworkGateway.clear('loading')
+            this.setGatewayMcp(undefined)
           }
           const config = await this.request('/tpcoworkapi/client-config', { method: 'GET' }, active, await this.token(), false, record.endpoint)
           active.throwIfAborted()
           if (current !== revision) return
-          if (!config || typeof config !== 'object' || (config as { userId?: unknown }).userId !== record.user.id) throw new TpcoworkHubError('protocol')
-          await scope.tpcoworkGateway.configure(config, record.expiresAt)
+          if (!config || typeof config !== 'object' || (config as { userId?: unknown }).userId !== record.user.id) {
+            configuredSessionId = undefined
+            throw new TpcoworkHubError('protocol')
+          }
+          const fallback = (config as { fallbackRevision?: unknown }).fallbackRevision
+          if (fallback !== undefined && (typeof fallback !== 'string' || !fallback)) {
+            configuredSessionId = undefined
+            throw new TpcoworkHubError('protocol')
+          }
+          const modelConfig = typeof fallback === 'string'
+            ? { ...config, baseURL: hubApiUrl(record.endpoint + '/tpcoworkapi/model-fallback/v1') }
+            : config
+          await scope.tpcoworkGateway.configure(modelConfig, record.expiresAt)
+          active.throwIfAborted()
+          if (current !== revision) return
+          configuredSessionId = sessionId
+          fallbackRevision = typeof fallback === 'string' ? fallback : null
+          if (fallbackRevision !== null) {
+            this.setGatewayMcp(undefined)
+            return
+          }
           const connection = scope.tpcoworkGateway.modelConnection()
           const key = connection && scope.tpcoworkGateway.readModelKey(connection.grantId)
           try {
@@ -148,19 +190,75 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
               scope.logger.warn('Personal gateway MCP catalog is unavailable.')
             }
           }
-        }).catch(() => {
-          if (current === revision) {
-            scope.tpcoworkGateway.clear('unavailable')
-            this.setGatewayMcp(undefined)
-            scope.logger.warn('Personal model configuration is unavailable; sign in or check the Hub configuration.')
+        }).catch(error => {
+          if (current !== revision) return
+          const authLost = error instanceof TpcoworkHubError && ['tpcoworkhub/session-expired', 'tpcoworkhub/login-required', 'tpcoworkhub/not-configured', 'tpcoworkhub/protocol'].includes(error.code)
+          if (configuredSessionId && !authLost && scope.tpcoworkGateway.status !== 'signed_out' && scope.tpcoworkGateway.status !== 'expired') {
+            nextFullRefresh = Date.now() + FALLBACK_CHECK_MS
+            scope.logger.warn('Personal model configuration refresh failed; keeping active configuration.')
+            return
           }
-        })
+          configuredSessionId = undefined
+          fallbackRevision = null
+          const expired = error instanceof TpcoworkHubError && error.code === 'tpcoworkhub/session-expired'
+          scope.tpcoworkGateway.clear(expired ? 'expired' : 'unavailable')
+          this.setGatewayMcp(undefined)
+          scope.logger.warn('Personal model configuration is unavailable; sign in or check the Hub configuration.')
+        }).finally(() => { if (inFlight?.controller === loading) inFlight = undefined })
+        inFlight = { controller: loading, promise }
+        return promise
       }
-      scope.on('credentials/record-updated', key => { if (key === sessionKey) refresh() })
+      const ensureReady = async (signal?: AbortSignal): Promise<void> => {
+        let pending = inFlight?.promise
+        if (!pending && !configuredSessionId) {
+          const record = await this.stored().catch(() => undefined)
+          if (record?.token && record.user && !record.expired && this.allowedEndpoints().has(record.endpoint)) {
+            pending = refresh()
+          }
+        }
+        if (!pending) return
+        if (!signal) { await pending; return }
+        await Promise.race([
+          pending,
+          new Promise<never>((_, reject) => {
+            if (signal.aborted) { reject(signal.reason ?? new DOMException('Aborted', 'AbortError')); return }
+            signal.addEventListener('abort', () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError')), { once: true })
+          }),
+        ])
+      }
+      const checkFallback = () => {
+        if (inFlight || checkController) return
+        if (Date.now() >= nextFullRefresh) { void refresh(); return }
+        const checking = checkController = new AbortController()
+        void this.run(AbortSignal.any([checking.signal, AbortSignal.timeout(VERIFY_TIMEOUT_MS)]), async active => {
+          const record = await this.stored()
+          if (!record?.token || !record.user || record.expired || !this.allowedEndpoints().has(record.endpoint)) return
+          const result = await this.request('/tpcoworkapi/model-fallback/status', { method: 'GET' }, active, record.token, false, record.endpoint)
+          active.throwIfAborted()
+          const marker = (result as { revision?: unknown } | null)?.revision
+          if ((marker === null || typeof marker === 'string') && marker !== fallbackRevision && checkController === checking) {
+            checkController = undefined
+            void refresh()
+          }
+        }).catch(() => undefined).finally(() => { if (checkController === checking) checkController = undefined })
+      }
+      scope.on('credentials/record-updated', key => { if (key === sessionKey) void refresh() })
       scope.effect(() => {
-        refresh()
-        const timer = setInterval(refresh, 5 * 60_000)
-        return () => { revision++; request?.abort(); clearInterval(timer); this.setGatewayMcp(undefined); scope.tpcoworkGateway.clear() }
+        scope.tpcoworkGateway.setLoader?.(ensureReady)
+        void refresh()
+        const timer = setInterval(checkFallback, FALLBACK_CHECK_MS)
+        return () => {
+          revision++
+          if (this.resetGatewaySession) this.resetGatewaySession = undefined
+          scope.tpcoworkGateway.setLoader?.(undefined)
+          inFlight?.controller.abort()
+          inFlight = undefined
+          checkController?.abort()
+          checkController = undefined
+          clearInterval(timer)
+          this.setGatewayMcp(undefined)
+          scope.tpcoworkGateway.clear()
+        }
       })
     })
     // Skills call internal APIs as the signed-in user through a loopback relay; see relay.ts and docs/toolbox/skill-api-auth.md.
@@ -311,6 +409,29 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const configured = matched && !!record.token && !expired
       return { configured, writable, state: configured ? 'signed_in' : expired ? 'expired' : 'signed_out', ...(configured && record?.user ? { user: record.user } : {}) }
     } catch { throw new TpcoworkHubError('credentials-unavailable') }
+  }
+  submitFeedback(request: Parameters<TpcoworkHubApi['submitFeedback']>[0], signal?: AbortSignal): Promise<string> {
+    if (this.ctx.invocation?.peer.principal.kind !== 'owner') throw new TpcoworkHubError('invalid-request')
+    const { type, ...body } = parse(feedbackSchema, request)
+    const path = type === 'issue' ? 'issues' : 'feature-requests'
+    return this.run(signal, async active => decode(feedbackReceiptSchema, await this.request(
+      '/tpcoworkapi/feedback/' + path, { method: 'POST', body: JSON.stringify(body) }, active, await this.token(),
+    )))
+  }
+  attachFeedbackIssue(request: Parameters<TpcoworkHubApi['attachFeedbackIssue']>[0], signal?: AbortSignal): Promise<string> {
+    if (this.ctx.invocation?.peer.principal.kind !== 'owner') throw new TpcoworkHubError('invalid-request')
+    const { id, ...body } = parse(feedbackIssueAttachments, request)
+    return this.run(signal, async active => decode(feedbackReceiptSchema, await this.request(
+      '/tpcoworkapi/feedback/issues/' + id + '/attachments',
+      { method: 'PUT', body: JSON.stringify(body) }, active, await this.token(),
+    )))
+  }
+  listFeedbackIssues(request: Parameters<TpcoworkHubApi['listFeedbackIssues']>[0], signal?: AbortSignal) {
+    if (this.ctx.invocation?.peer.principal.kind !== 'owner') throw new TpcoworkHubError('invalid-request')
+    const { page } = parse(feedbackIssueQuery, request)
+    return this.run(signal, async active => decode(feedbackIssuePage, await this.request(
+      '/tpcoworkapi/feedback/issues?page=' + String(page), {}, active, await this.token(),
+    )))
   }
   async selectLoginChannel(request: Parameters<TpcoworkHubApi['selectLoginChannel']>[0]): ReturnType<TpcoworkHubApi['selectLoginChannel']> {
     const invocation = this.ctx.invocation
@@ -484,7 +605,6 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     }
     try {
       validateFiles(files, this.installer.options.maxBytes, this.installer.options.maxFiles)
-      if (parseSkill(files.find(file => file.path === 'SKILL.md')!.bytes).name !== snapshot.skill.name) throw new TpcoworkHubError('invalid-package')
     } catch { throw new TpcoworkHubError('invalid-package') }
     signal.throwIfAborted()
     return files
@@ -496,7 +616,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const cancel = () => { void this.installer.cancel({ operationId: input.requestId }) }
       active.addEventListener('abort', cancel, { once: true })
       if (active.aborted) cancel()
-      try { const result = await pending; if (result.state === 'installed') this.changed(); return result }
+      try { return await pending }
       finally { active.removeEventListener('abort', cancel) }
     })
   }
@@ -595,6 +715,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         if (value?.endpoint !== endpoint || value.token !== token || expected && value.expiresAt !== expected.expiresAt) return
         this.rejected.add(sha256(endpoint + '\0' + token))
         this.verified.delete(sha256(endpoint + '\0' + token))
+        this.resetGatewaySession?.()
         this.ctx.get('tpcoworkGateway')?.clear('expired')
         this.setGatewayMcp(undefined)
         return { kind: 'grant', payload: { endpoint, expired: true } }
@@ -604,6 +725,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       if (this.revision === revision) {
         this.rejected.add(sha256(endpoint + '\0' + token))
         this.verified.delete(sha256(endpoint + '\0' + token))
+        this.resetGatewaySession?.()
         this.ctx.get('tpcoworkGateway')?.clear('expired')
         this.setGatewayMcp(undefined)
       }

@@ -79,6 +79,7 @@ it('boots layout without Host config through the browser Loader and retracts the
   } }, () => null)
   slotsService.register({ name: 'sidebar.settings', children: {
     'settings.launcher': { kind: 'single', scope: 'root' },
+    'settings.general.item': { kind: 'list', scope: 'root' },
   } }, () => null)
   const NativeSettings = () => null
   slotsService.register({ name: 'settings.launcher', locale: 'settings.account' }, NativeSettings)
@@ -88,7 +89,13 @@ it('boots layout without Host config through the browser Loader and retracts the
   } }, () => null)
   const NativeTodo = () => null
   slotsService.register({ name: 'conversation.input.dock', id: 'todo', order: 0, locale: 'conversation' }, NativeTodo)
+  const NativeDeveloperTools = () => React.createElement('div', null, 'dev')
+  slotsService.register({ name: 'settings.general.item', id: 'developer-tools', order: 15, locale: 'settings' }, NativeDeveloperTools)
+  const NativeVersion = () => React.createElement('div', null, '0.2.1')
+  slotsService.register({ name: 'settings.general.item', id: 'current-version', order: 99, locale: 'settings.general' }, NativeVersion)
   await modules.entries.sync(graph(layoutId, entry!.id))
+  expect(slotsService.entriesOfSlot('settings.general.item').find(row => row.options.id === 'developer-tools')?.component({}, {})).toBeNull()
+  expect(slotsService.entriesOfSlot('settings.general.item').find(row => row.options.id === 'current-version')?.component({}, {})).toBeNull()
   expect(layout.getSnapshot().layoutInfo.sidebar).toBe(264)
   const slots = ['sidebar.brand.name', 'sidebar.brand.mark', 'conversation.hero.brand.mark'] as const
   for (const name of slots) expect(slotsService.entries(name)).toHaveLength(1)

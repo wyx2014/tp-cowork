@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Catalog, TpcoworkHubApi, TpcoworkHubSkill, SkillItem } from '../../contracts/index.ts'
-import { type SectionProps } from '../shared.tsx'
+import { FloatingToast, useFloatingToast, type SectionProps } from '../shared.tsx'
 import { failureKey, visibleFailure, useHubOperation as useOperation } from './operation.tsx'
 import type { UiKey } from '../locales.ts'
 import { SectionLayout } from '../layout.tsx'
@@ -27,14 +27,27 @@ export function TpcoworkHub({ available, epoch, skills, t, query, actions }: Sec
   const [failed, setFailed] = React.useState<UiKey | null>(null)
   const [detail, setDetail] = React.useState<{ item: TpcoworkHubSkill; focusId: string; scrollTop: number } | null>(null)
   const [update, setUpdate] = React.useState<TpcoworkHubSkill | null>(null)
-  const [installedNames, setInstalledNames] = React.useState<string[]>([])
+  const [installedIds, setInstalledIds] = React.useState<string[]>([])
+  const [installing, setInstalling] = React.useState(false)
   const [acting, setActing] = React.useState<string | null>(null)
   const [revision, setRevision] = React.useState(0)
   const generation = React.useRef(0)
+  const installController = React.useRef<AbortController | null>(null)
+  const mountedRef = React.useRef(true)
+  const anchorRef = React.useRef<HTMLDivElement>(null)
+  const installToast = useFloatingToast()
   const operation = useOperation(t)
   const listId = React.useId()
   const refresh = () => setRevision(value => value + 1)
-  React.useEffect(() => { setInstalledNames([]) }, [skills])
+  React.useEffect(() => { setInstalledIds([]) }, [skills])
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      installController.current?.abort()
+      installController.current = null
+    }
+  }, [])
   React.useEffect(() => {
     if (!available) return
     let active = true
@@ -58,44 +71,73 @@ export function TpcoworkHub({ available, epoch, skills, t, query, actions }: Sec
     })()
     return () => { active = false; controller.abort(); generation.current++ }
   }, [available, epoch, query, revision, actions.hubAccount, actions.hubList])
-  const isInstalled = (item: TpcoworkHubSkill) => installedNames.includes(item.name.toLowerCase()) || !!skills?.items.some(local => local.installed && ['user', 'tpcoworkhub'].includes(local.origin) && local.name.toLowerCase() === item.name.toLowerCase())
-  const canInstall = !!account?.configured && !!skills?.complete && !operation.busy
+  const isInstalled = (item: TpcoworkHubSkill) => installedIds.includes(item.id) || !!skills?.items.some(local => local.installed && ['user', 'tpcoworkhub'].includes(local.origin) && (local.hubSkillId === item.id || local.name.toLowerCase() === item.name.toLowerCase()))
+  const canInstall = !!account?.configured && !!skills?.complete && !installing && !operation.busy
+  const cancelInstall = () => { installController.current?.abort() }
   const install = (item: TpcoworkHubSkill, replace = false, snapshot?: Snapshot) => {
-    if (!canInstall || !downloadable(item)) return
-    void operation.run(async signal => {
-      setActing(item.id)
+    if (!canInstall || !downloadable(item) || installController.current) return
+    const current = new AbortController()
+    installController.current = current
+    setInstalling(true)
+    setActing(item.id)
+    installToast.show('pending', t(replace ? 'storeUpdating' : 'storeDownloading', { name: item.name }))
+    void (async () => {
       try {
-        const source = snapshot ?? await actions.hubDetail({ id: item.id }, signal)
+        const source = snapshot ?? await actions.hubDetail({ id: item.id }, current.signal)
         if (!downloadable({ ...item, ...source.skill })) throw { code: 'tpcoworkhub/package-changed' }
-        const result = await actions.hubInstall({ requestId: crypto.randomUUID(), source: { kind: 'tpcoworkhub', skillId: item.id, versionId: source.skill.versionId, fingerprint: source.fingerprint }, scope: { kind: 'user' }, conflict: replace ? 'replace-owned' : 'reject' }, signal)
+        const result = await actions.hubInstall({ requestId: crypto.randomUUID(), source: { kind: 'tpcoworkhub', skillId: item.id, versionId: source.skill.versionId, fingerprint: source.fingerprint }, scope: { kind: 'user' }, conflict: replace ? 'replace-owned' : 'reject' }, current.signal)
         if (result.state === 'failed' || result.state === 'cancelled') throw result.error ?? { code: result.state === 'cancelled' ? 'tpcoworkhub/cancelled' : 'tpcoworkhub/operation-failed' }
-        if (signal.aborted) return
-        setInstalledNames(previous => [...new Set([...previous, item.name.toLowerCase()])])
+        if (!mountedRef.current) return
+        if (current.signal.aborted) {
+          setUpdate(null)
+          installToast.show('cancelled', t('cancelled'))
+          return
+        }
+        setInstalledIds(previous => [...new Set([...previous, item.id])])
         setUpdate(null)
-        await actions.refresh()
-      } finally { setActing(null) }
-    }, 'storeDownloaded')
+        try { await actions.refreshSkills() } catch { /* Local catalog errors are surfaced in Skills. */ }
+        if (!mountedRef.current) return
+        installToast.show('success', t(replace ? 'storeUpdateSucceeded' : 'storeDownloadSucceeded', { name: item.name }))
+      } catch (error) {
+        if (!mountedRef.current) return
+        setUpdate(null)
+        const key = failureKey(error)
+        if (current.signal.aborted && key !== 'hubUncertain') {
+          installToast.show('cancelled', t('cancelled'))
+        } else {
+          const visible = visibleFailure(key)
+          if (visible) {
+            installToast.show('failure', t(replace ? 'storeUpdateFailedReason' : 'storeDownloadFailedReason', { name: item.name, reason: t(visible) }))
+          } else {
+            installToast.clear()
+            void actions.hubAccount().then(status => { if (mountedRef.current) setAccount(status) }, () => {})
+          }
+        }
+      } finally {
+        if (installController.current === current) installController.current = null
+        if (mountedRef.current) { setActing(null); setInstalling(false) }
+      }
+    })()
   }
   const download = (item: TpcoworkHubSkill, snapshot?: Snapshot) => { if (isInstalled(item)) setUpdate(item); else install(item, false, snapshot) }
   const failure = visibleFailure(failed)
-  const updateDialog = update && <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('update')} description={`${t('storeUpdateConfirm', { name: update.name })}\n${t('hubConflict')}`} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!operation.busy) setUpdate(null) }}
-    footer={<><Button variant="outline" data-modal-autofocus disabled={operation.busy} onClick={() => setUpdate(null)}>{t('cancel')}</Button>
-      {operation.busy && <Button variant="outline" onClick={operation.cancel}>{t('storeCancelDownload')}</Button>}
-      <Button variant="primary" disabled={!canInstall} onClick={() => install(update, true)}>{t('update')}</Button></>}>
-    {operation.feedback}
-  </Modal>
-  if (detail) return <><HubDetail key={detail.item.id} item={detail.item} installed={isInstalled(detail.item)} actions={actions} t={t} canInstall={canInstall} busy={operation.busy} feedback={!update && operation.feedback} returnFocusId={detail.focusId} returnScrollTop={detail.scrollTop}
-    onDownload={snapshot => download({ ...detail.item, ...snapshot.skill }, snapshot)} onCancel={operation.cancel} onClose={() => { if (!operation.busy) setDetail(null) }} />{updateDialog}</>
+  const toastNode = <FloatingToast toast={installToast.toast} anchor={anchorRef} closeLabel={t('storeToastClose')} cancelLabel={t('storeCancelDownload')} onCancel={cancelInstall} onClose={installToast.clear} />
+  const updateDialog = update && <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('update')} description={`${t('storeUpdateConfirm', { name: update.name })}\n${t('hubConflict')}`} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!installing) setUpdate(null) }}
+    footer={<><Button variant="outline" data-modal-autofocus disabled={installing} onClick={() => setUpdate(null)}>{t('cancel')}</Button>
+      <Button variant="primary" disabled={!canInstall} onClick={() => install(update, true)}>{t('update')}</Button></>} />
+  if (detail) return <>{toastNode}<HubDetail key={detail.item.id} item={detail.item} installed={isInstalled(detail.item)} actions={actions} t={t} canInstall={canInstall} busy={installing} anchorRef={anchorRef} returnFocusId={detail.focusId} returnScrollTop={detail.scrollTop}
+    onDownload={snapshot => download({ ...detail.item, ...snapshot.skill }, snapshot)} onClose={() => { if (!installing) setDetail(null) }} />{updateDialog}</>
   if (!available) return <SectionLayout><p role="status">{t('unavailable')}</p></SectionLayout>
   return <SectionLayout>
+    {toastNode}
     {loading && <div className="tp-store-loading" role="status"><ToolboxIcon name="spinner" size={20} />{t('storeLoading')}</div>}
     {failure && <><p role="alert">{t(failure)}</p><Button onClick={refresh}>{t('refresh')}</Button></>}
-    {!update && operation.feedback}
+    {operation.feedback}
     {!loading && !failed && account?.configured && !rows.length && <p className="tp-toolbox-empty">{t(query.trim() ? 'noMatches' : 'storeEmpty')}</p>}
-    <div className="tp-store-list" aria-busy={loading}>{rows.map((item, index) => {
+    <div ref={anchorRef} className="tp-store-list" aria-busy={loading}>{rows.map((item, index) => {
       const installed = isInstalled(item), busy = acting === item.id
       return <article className="tp-store-card" key={item.id} data-skill-store-card>
-        <button id={`${listId}-${index}`} type="button" className="tp-store-open" aria-label={`${t('detail')}: /${item.name}`} disabled={operation.busy} onClick={event => setDetail({ item, focusId: event.currentTarget.id, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>
+        <button id={`${listId}-${index}`} type="button" className="tp-store-open" aria-label={`${t('detail')}: /${item.name}`} disabled={installing || operation.busy} onClick={event => setDetail({ item, focusId: event.currentTarget.id, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>
           <span className="tp-store-icon"><ToolboxIcon name="report" size={18} /></span>
           <span className="tp-store-card-body"><span className="tp-store-card-title"><span className="tp-store-name">/{item.name}</span><Badges item={item} installed={installed} t={t} /></span>
             <span className="tp-store-description">{item.description || t('storeNoDescription')}</span>
@@ -107,18 +149,17 @@ export function TpcoworkHub({ available, epoch, skills, t, query, actions }: Sec
         </button>}
       </article>
     })}</div>
-    {cursor && <div className="tp-store-more"><Button disabled={loading || operation.busy} onClick={() => { void operation.run(async signal => {
+    {cursor && <div className="tp-store-more"><Button disabled={loading || installing || operation.busy} onClick={() => { void operation.run(async signal => {
       const expected = generation.current
       const page = await actions.hubList({ query, cursor }, signal)
       if (generation.current !== expected) return
       setRows(previous => [...previous, ...page.items.filter(item => !previous.some(row => row.id === item.id))]); setCursor(page.cursor)
     }, null) }}>{t('more')}</Button></div>}
-    {operation.busy && !update && <Button onClick={operation.cancel}>{t('storeCancelDownload')}</Button>}
     {updateDialog}
   </SectionLayout>
 }
-function HubDetail({ item, installed, actions, t, onClose, onDownload, onCancel, canInstall, busy, feedback, returnFocusId, returnScrollTop }: {
-  item: TpcoworkHubSkill; installed: boolean; actions: SectionProps['actions']; t: SectionProps['t']; onClose(): void; onDownload(snapshot: Snapshot): void; onCancel(): void; canInstall: boolean; busy: boolean; feedback: React.ReactNode; returnFocusId: string; returnScrollTop: number
+function HubDetail({ item, installed, actions, t, onClose, onDownload, canInstall, busy, anchorRef, returnFocusId, returnScrollTop }: {
+  item: TpcoworkHubSkill; installed: boolean; actions: SectionProps['actions']; t: SectionProps['t']; onClose(): void; onDownload(snapshot: Snapshot): void; canInstall: boolean; busy: boolean; anchorRef: React.RefObject<HTMLDivElement>; returnFocusId: string; returnScrollTop: number
 }) {
   const [detail, setDetail] = React.useState<Snapshot | null>(null)
   const [failed, setFailed] = React.useState<UiKey | null>(null)
@@ -127,10 +168,9 @@ function HubDetail({ item, installed, actions, t, onClose, onDownload, onCancel,
   const current = { ...item, ...detail?.skill }
   const failure = visibleFailure(failed)
   return <ToolboxDetail title={`/${current.name}`} subtitle={current.description || t('storeNoDescription')} section="tpcoworkhub" t={t} pending={busy} onClose={onClose} returnFocusId={returnFocusId} returnScrollTop={returnScrollTop} className="tp-store-detail"
-    actions={<>{downloadable(current) && <Button className="tp-toolbox-primary" disabled={!detail?.skill.versionId || !canInstall} onClick={() => { if (detail) onDownload(detail) }}><ToolboxIcon name={busy ? 'spinner' : installed ? 'refresh' : 'download'} />{t(installed ? 'update' : 'storeDownload')}</Button>}{busy && <Button onClick={onCancel}>{t('storeCancelDownload')}</Button>}</>}>
-    <div className="tp-store-detail-meta"><Badges item={current} installed={installed} t={t} />{current.version && <span>{t('version')} {current.version}</span>}</div>
+    actions={downloadable(current) && <Button className="tp-toolbox-primary" disabled={!detail?.skill.versionId || !canInstall} onClick={() => { if (detail) onDownload(detail) }}><ToolboxIcon name={busy ? 'spinner' : installed ? 'refresh' : 'download'} />{t(installed ? 'update' : 'storeDownload')}</Button>}>
+    <div ref={anchorRef} className="tp-store-detail-meta"><Badges item={current} installed={installed} t={t} />{current.version && <span>{t('version')} {current.version}</span>}</div>
     {!!current.tags?.length && <div className="tp-store-detail-tags">{current.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}
-    {feedback}
     {failure ? <div><p role="alert">{t(failure)}</p><Button onClick={() => setRetry(value => value + 1)}>{t('refresh')}</Button></div> : !detail && !failed ? <div className="tp-store-loading" role="status"><ToolboxIcon name="spinner" size={20} />{t('loading')}</div> : detail && <>
       <section className="tp-toolbox-detail-section"><h2>{t('skillContent')}</h2><pre className="tp-toolbox-content">{detail.content || t('storeNoContent')}</pre></section>
       <section className="tp-toolbox-detail-section"><h2>{t('resources')} · {detail.files.length}</h2><ul className="tp-toolbox-detail-list">{detail.files.map(file => <li key={file.path}>{file.path} ({file.size})</li>)}</ul></section>

@@ -3,7 +3,7 @@ import * as React from 'react'
 import { Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Catalog, SkillItem } from '../contracts/index.ts'
 import type { Load } from '../client/model.ts'
-import { ConfirmRemove, LoadNotice, ReadinessBadge, Reasons, useOperation, type SectionProps } from './shared.tsx'
+import { ConfirmRemove, FloatingToast, LoadNotice, operationFailure, ReadinessBadge, Reasons, useFloatingToast, useOperation, type SectionProps } from './shared.tsx'
 import type { SkillsClientApi } from '../client/remote.ts'
 import type { InstallResult } from '../contracts/index.ts'
 import { SectionLayout } from './layout.tsx'
@@ -17,6 +17,11 @@ function installed(result: InstallResult): void {
 
 export function Skills({ load, available, t, query, actions }: SectionProps & { load: Load<Catalog<SkillItem>>; available: boolean }) {
   const operation = useOperation(t)
+  const removeToast = useFloatingToast()
+  const [removingBusy, setRemovingBusy] = React.useState(false)
+  const removingRef = React.useRef(false)
+  const mountedRef = React.useRef(true)
+  const gridRef = React.useRef<HTMLDivElement | null>(null)
   const [detail, setDetail] = React.useState<{ item: SkillItem; scrollTop: number } | null>(null)
   const [phone, setPhone] = React.useState<{ id: string; scrollTop: number } | null>(null)
   const [removing, setRemoving] = React.useState<{ item: SkillItem; revision: number } | null>(null)
@@ -26,14 +31,53 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
   const [importMenu, setImportMenu] = React.useState(false)
   const archiveInput = React.useRef<HTMLInputElement>(null)
   const editorId = React.useId()
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
   const items = load.value?.items ?? []
   const sources = orderSkills(items).filter(item => source === 'all' || (item.origin === 'bundled') === (source === 'bundled'))
   const rows = sources.filter(item => `${skillPresentation(item.name, t).label} ${skillPresentation(item.name, t).description ?? ''} ${skillPresentation(item.name, t).keywords.join(' ')} ${item.description}`.toLowerCase().includes(query.trim().toLowerCase()))
   const usable = available && load.value?.complete === true && !load.loading && !load.failed
-  const mutable = usable && !operation.busy
+  const mutable = usable && !operation.busy && !removingBusy
   const usableRef = React.useRef(usable)
   usableRef.current = usable
-  const mutate = (call: () => Promise<unknown>, success: 'saved' | 'removed' = 'saved') => { setImported(false); void operation.run(async () => { await call() }, success) }
+  const loadRef = React.useRef(load)
+  loadRef.current = load
+  /** Removal briefly races the filesystem watcher; re-read until the catalog settles instead of flashing inline errors. */
+  const refreshAfterRemove = async () => {
+    for (let attempt = 0; attempt < 8 && mountedRef.current; attempt++) {
+      try { await actions.refreshSkills() } catch { /* Retry below; a lasting failure is shown once settled. */ }
+      await new Promise(resolve => setTimeout(resolve, 250))
+      const current = loadRef.current
+      if (current.value?.complete && !current.failed && !current.loading) return
+    }
+  }
+  const runRemove = async (target: { item: SkillItem; revision: number }) => {
+    if (removingRef.current) return
+    removingRef.current = true
+    setRemovingBusy(true)
+    setImported(false)
+    const label = skillPresentation(target.item.name, t).label
+    removeToast.show('pending', t('skillRemoving', { name: label }))
+    try {
+      await actions.skillRemove({ id: target.item.id, expectedRevision: target.revision })
+    } catch (error) {
+      removingRef.current = false
+      if (!mountedRef.current) return
+      setRemovingBusy(false)
+      setRemoving(null)
+      const reason = t(operationFailure(error))
+      removeToast.show('failure', reason ? t('skillRemoveFailedReason', { name: label, reason }) : t('skillRemoveFailed', { name: label }))
+      return
+    }
+    if (mountedRef.current) setRemoving(null)
+    await refreshAfterRemove()
+    removingRef.current = false
+    if (!mountedRef.current) return
+    setRemovingBusy(false)
+    removeToast.show('success', t('skillRemoved', { name: label }))
+  }
   const importSkill = (previous?: SkillItem, archive?: File) => {
     setImported(false)
     void operation.run(async signal => {
@@ -55,8 +99,9 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
   if (detail) return <SkillDetail key={detail.item.id} item={detail.item} read={actions.skillDetail} openDirectory={actions.openSkillDirectory} t={t} returnFocusId={`${editorId}-detail-${detail.item.id}`} returnScrollTop={detail.scrollTop} onClose={() => setDetail(null)} />
   return <SectionLayout actions={<>
     <Button icon={<ToolboxIcon name="wand" />} onClick={() => actions.prepareSkill(t('createPrompt', { skill: '{skill}' }))}>{t('createSkill')}</Button>
-    <Button id={`${editorId}-create`} className="tp-toolbox-primary" icon={<ToolboxIcon name="plus" />} disabled={!mutable} onClick={() => setCreating(true)}>{t('manualCreate')}</Button>
+    <Button id={`${editorId}-create`} className="tp-toolbox-primary" icon={<ToolboxIcon name="plus" />} disabled={!mutable} onClick={() => { removeToast.clear(); setCreating(true) }}>{t('manualCreate')}</Button>
   </>}>
+    <FloatingToast toast={removeToast.toast} anchor={gridRef} closeLabel={t('skillRemoveClose')} onClose={removeToast.clear} />
     <div className="tp-toolbox-section-toolbar"><nav className="tp-toolbox-sources" aria-label={t('skillSources')}>{(['all', 'bundled', 'mine'] as const).map(value => <Button key={value} aria-pressed={source === value} onClick={() => setSource(value)}>{t(value === 'all' ? 'allSkills' : value === 'bundled' ? 'bundledSkills' : 'mySkills')} ({items.filter(item => value === 'all' || (item.origin === 'bundled') === (value === 'bundled')).length})</Button>)}</nav>
       <div className="tp-toolbox-actions"><Menu open={importMenu && mutable} onClose={() => setImportMenu(false)} align="end" portal compact
         anchor={<Button id={`${editorId}-import`} icon={<ToolboxIcon name="folder" />} disabled={!mutable} aria-haspopup="menu" aria-expanded={importMenu && mutable} onClick={() => setImportMenu(value => !value)}>{t('import')}<ToolboxIcon name="down" size={14} /></Button>}
@@ -69,23 +114,19 @@ export function Skills({ load, available, t, query, actions }: SectionProps & { 
         }} />
       </div>
     </div>
-    <LoadNotice load={load} available={available} empty={!load.value?.items.length} t={t} />
-    {load.value && !load.value.complete && <p role="alert">{t('incomplete')}</p>}{operation.feedback}{imported && <p role="status">{t('imported')}</p>}
+    <LoadNotice load={removingBusy ? { ...load, failed: false } : load} available={available} empty={!load.value?.items.length} t={t} />
+    {!removingBusy && load.value && !load.value.complete && <p role="alert">{t('incomplete')}</p>}{operation.feedback}{imported && <p role="status">{t('imported')}</p>}
     {!!items.length && !rows.length && <p className="tp-toolbox-empty">{t('noMatches')}</p>}
-    <div className="tp-toolbox-grid">{rows.map(item => <article className="tp-toolbox-card" key={item.id}>
+    <div ref={gridRef} className="tp-toolbox-grid">{rows.map(item => <article className="tp-toolbox-card" key={item.id}>
       <div className="tp-toolbox-card-body"><header><h3 className="tp-skill-heading">{skillPresentation(item.name, t).iconSrc && <img src={skillPresentation(item.name, t).iconSrc} alt="" />}<span>{skillPresentation(item.name, t).label}</span></h3><ReadinessBadge value={item.readiness} t={t} /></header><p className="tp-toolbox-card-description">{skillPresentation(item.name, t).description ?? item.description}</p>
-      <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')} · {t(item.enabled ? 'enabled' : 'disabled')} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'tpcoworkhub' ? 'tpcoworkhub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
+      <p className="tp-toolbox-meta">{t(item.installed ? 'installed' : 'notInstalled')}{!item.enabled ? ` · ${t('disabled')}` : ''} · {t(item.origin === 'bundled' ? 'bundledSkills' : item.origin === 'tpcoworkhub' ? 'tpcoworkhub' : item.origin === 'project' ? 'projectSkills' : 'mySkills')} · {item.version}</p>
       <Reasons value={item.readiness} /></div>
-      <div className="tp-toolbox-actions"><Button id={`${editorId}-detail-${item.id}`} onClick={event => setDetail({ item, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('detail')}</Button>
-        {item.name === 'call' && <Button id={`${editorId}-phone-${item.id}`} data-testid="call-setup" disabled={!mutable} onClick={event => setPhone({ id: item.id, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 })}>{t('callSetup')}</Button>}
-        <Button disabled={!mutable || !item.installed} onClick={() => mutate(() => actions.skillEnable({ id: item.id, enabled: !item.enabled, expectedRevision: load.value!.revision }))}>{t(item.enabled ? 'disable' : 'enable')}</Button>
-        <Button disabled={!mutable} onClick={() => mutate(() => actions.skillCheck({ id: item.id }))}>{t('check')}</Button>
+      <div className="tp-toolbox-actions"><Button id={`${editorId}-detail-${item.id}`} onClick={event => { removeToast.clear(); setDetail({ item, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 }) }}>{t('detail')}</Button>
+        {item.name === 'call' && <Button id={`${editorId}-phone-${item.id}`} data-testid="call-setup" disabled={!mutable} onClick={event => { removeToast.clear(); setPhone({ id: item.id, scrollTop: event.currentTarget.closest('.tp-toolbox')?.scrollTop ?? 0 }) }}>{t('callSetup')}</Button>}
         {item.origin === 'user' && item.managed !== false && <Button id={`${editorId}-update-${item.id}`} disabled={!mutable || !item.installed} onClick={() => importSkill(item)}>{t('update')}</Button>}
-        {item.managed !== false && <Button disabled={!mutable || !item.installed} onClick={() => setRemoving({ item, revision: load.value!.revision })}>{t('remove')}</Button>}</div>
+        {item.origin !== 'bundled' && item.origin !== 'project' && <Button disabled={!mutable || !item.installed} onClick={() => setRemoving({ item, revision: load.value!.revision })}>{t('remove')}</Button>}</div>
     </article>)}</div>
-    {removing && <ConfirmRemove name={skillPresentation(removing.item.name, t).label} busy={operation.busy} disabled={!mutable} feedback={operation.feedback} t={t} onClose={() => setRemoving(null)} onConfirm={() => {
-      mutate(async () => { await actions.skillRemove({ id: removing.item.id, expectedRevision: removing.revision }); setRemoving(null); await actions.refreshSkills() }, 'removed')
-    }} />}
+    {removing && <ConfirmRemove name={skillPresentation(removing.item.name, t).label} description={t('skillRemoveHint')} busy={removingBusy} disabled={!mutable} t={t} onClose={() => setRemoving(null)} onConfirm={() => { void runRemove(removing) }} />}
   </SectionLayout>
 }
 function SkillDetail({ item, read, openDirectory, t, onClose, returnFocusId, returnScrollTop }: { item: SkillItem; read: SkillsClientApi['detail']; openDirectory: SectionProps['actions']['openSkillDirectory']; t: SectionProps['t']; onClose(): void; returnFocusId: string; returnScrollTop: number }) {

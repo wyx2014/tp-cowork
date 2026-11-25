@@ -1,9 +1,14 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Readiness } from '../contracts/index.ts'
 import type { Load } from '../client/model.ts'
 import type { T, UiActions } from './types.ts'
 import type { UiKey } from './locales.ts'
+import { ToolboxIcon } from './Icon.tsx'
+import { createFloatingToast } from './floating-toast.js'
+
+export const { FloatingToast, useFloatingToast } = createFloatingToast(React, createPortal, () => <ToolboxIcon name="spinner" size={16} />)
 
 /** Local operation lifecycle; abortable probes stop on cancel or unmount. */
 export function useOperation(t: T) {
@@ -31,8 +36,8 @@ export function LoadNotice<TValue extends { complete: boolean }>({ load, availab
   return <>{load.loading && !load.value && <p role="status">{t('loading')}</p>}{load.failed && <p role="alert">{t('failed')}</p>}
     {!available && <p role="status">{t('unavailable')}</p>}{available && load.value?.complete && !load.loading && !load.failed && empty && <p className="tp-toolbox-empty">{t('empty')}</p>}</>
 }
-export function ConfirmRemove({ name, onClose, onConfirm, busy, disabled, feedback, t }: { name: string; onClose(): void; onConfirm(): void; busy: boolean; disabled?: boolean; feedback?: React.ReactNode; t: T }) {
-  return <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('confirmRemove', { name })} description={t('removeHint')} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!busy) onClose() }}
+export function ConfirmRemove({ name, description, onClose, onConfirm, busy, disabled, feedback, t }: { name: string; description?: string; onClose(): void; onConfirm(): void; busy: boolean; disabled?: boolean; feedback?: React.ReactNode; t: T }) {
+  return <Modal open className="tp-toolbox-dialog tp-confirm-dialog" contentClassName="tp-toolbox-dialog-content" title={t('confirmRemove', { name })} description={description ?? t('removeHint')} closeLabel={t('close')} showCloseButton={false} onClose={() => { if (!busy) onClose() }}
     footer={<><Button variant="outline" data-modal-autofocus disabled={busy} onClick={onClose}>{t('cancel')}</Button><Button variant="primary" className="tp-dialog-danger" disabled={busy || disabled} onClick={onConfirm}>{t('remove')}</Button></>}>
     {feedback}
   </Modal>
@@ -42,6 +47,7 @@ export type SectionProps = { t: T; query: string; actions: UiActions }
 export function operationFailure(error: unknown): UiKey {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
   if (code === 'toolbox/stale-selection') return 'stale'
+  if (code === 'skills/bundled-protected') return 'skillBundledProtected'
   if (code === 'skills/user-modified') return 'skillModified'
   if (code === 'skills/not-owned') return 'skillUnmanaged'
   if (code === 'skills/name-conflict') return 'skillConflict'

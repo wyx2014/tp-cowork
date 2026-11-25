@@ -1,4 +1,5 @@
 /** Match the automation page's content width, typography, controls and list rhythm. */
+import { floatingToastStyles } from './floating-toast.js'
 import { teamStyles } from './teams/styles.ts'
 import { storeStyles } from './tpcoworkhub/styles.ts'
 import { mcpStyles } from './mcp-styles.ts'
@@ -155,4 +156,5 @@ ${mcpStyles}
 .tp-skill-heading,.tp-capability-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .tp-skill-heading img,.tp-capability-heading img { width: 32px; height: 32px; object-fit: contain; flex: none; }
 .tp-capability-detail-icon { width: 56px; height: 56px; object-fit: contain; flex: none; }
+${floatingToastStyles}
 `

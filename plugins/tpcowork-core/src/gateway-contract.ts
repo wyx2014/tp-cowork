@@ -13,6 +13,7 @@ export interface ModelGateway {
   readModelKey(grantId: string): string | undefined
   clear(status?: string): void
   configure(value: unknown, expiresAt?: number): Promise<void>
+  setLoader?(loader: ((signal?: AbortSignal) => Promise<void>) | undefined): void
 }
 
 declare module '@deepseek-ai/cordis' {

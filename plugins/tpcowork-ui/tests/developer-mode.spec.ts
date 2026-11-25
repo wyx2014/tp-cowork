@@ -26,11 +26,17 @@ it('clears Developer mode once when the native onboarding turned it on', async (
   expect(f.account.listenerCount() + f.developer.listenerCount()).toBe(0)
 })
 
-it('keeps a manual opt-in, and retries when the preference write is refused', async () => {
+it('clears persisted Developer mode from earlier manual toggles or unpatched defaults, and retries when refused', async () => {
   const manual = setup(undefined)
   manual.ready()
-  await Promise.resolve()
-  expect(manual.developer.unset).not.toHaveBeenCalled()
+  await expect.poll(() => manual.developer.unset.mock.calls).toEqual([['enabled']])
+  expect(manual.account.unset).not.toHaveBeenCalled()
+  manual.stop()
+
+  const baseEnabled = setup(undefined)
+  baseEnabled.developer.publish({ status: 'ready', writable: true, base: { enabled: true }, value: { enabled: true } })
+  await expect.poll(() => baseEnabled.developer.set.mock.calls).toEqual([['enabled', false]])
+  baseEnabled.stop()
 
   const refused = setup({ developerTools: true })
   refused.developer.unset.mockResolvedValueOnce(false)
@@ -39,4 +45,5 @@ it('keeps a manual opt-in, and retries when the preference write is refused', as
   expect(refused.account.unset).not.toHaveBeenCalled()
   refused.ready()
   await expect.poll(() => refused.account.unset).toHaveBeenCalledOnce()
+  refused.stop()
 })

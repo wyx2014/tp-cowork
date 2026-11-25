@@ -2,5 +2,5 @@
     - id: tpcowork-memory
       name: '@tpcowork/dsh-memory'
       config:
-        enabled: false
+        enabled: true
         extraction: true

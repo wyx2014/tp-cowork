@@ -57,9 +57,10 @@ describe('unified installer', () => {
     expect((await ctx.skills.get('sample'))?.content).toBe('updated')
     await writeFile(join(dir, 'skills/sample/assets/data.txt'), 'user edit')
     expect((await installer.install({ ...request, requestId: 'preserve-edit', source: { kind: 'local', importId: update.importId }, conflict: 'replace-owned' })).state).toBe('failed')
-    const catalog = await ctx.toolboxSkills.inventory({})
-    await expect(ctx.toolboxSkills.remove({ id: result.skillId!, expectedRevision: catalog.revision })).rejects.toMatchObject({ code: 'skills/user-modified' })
     expect(await readFile(join(dir, 'skills/sample/assets/data.txt'), 'utf8')).toBe('user edit')
+    const catalog = await ctx.toolboxSkills.inventory({})
+    await ctx.toolboxSkills.remove({ id: result.skillId!, expectedRevision: catalog.revision })
+    await expect(readFile(join(dir, 'skills/sample/assets/data.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
   })
   it('rejects traversal, duplicate names, invalid hashes, symlinks and missing resources', async () => {
     const { installer, home, dir } = await skillsFixture()

@@ -223,3 +223,43 @@ it('requires a SkillHub grant for a manually configured provider and blocks it a
   await expect(assemble(ctx, request)).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
   expect(server.urls).toEqual(['https://own.example/v1/chat/completions'])
 })
+
+it('allows other configured models when a signed-in user has exhausted personal quota and preserves prepared calls across unchanged refreshes', async () => {
+  const server = transport([textEvents, textEvents, textEvents])
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(LlmRuntime).await()
+  await ctx.plugin(MemoryCredentials, { OWN_MODEL_KEY: 'private-own-key' }).await()
+  await ctx.plugin(PiAi, { providers: { own: { api: 'openai-completions', baseURL: 'https://own.example/v1',
+    apiKeyEnv: 'OWN_MODEL_KEY', models: [{ id: 'own-model' }] } } }).await()
+  await ctx.plugin(HubModel).await()
+  const deadline = Date.now() + 60_000
+
+  // Signed-in user whose Hub personal quota is exhausted or unassigned can still use other models.
+  await ctx.tpcoworkGateway.configure({ quotaStatus: 'exhausted' }, deadline)
+  expect(ctx.tpcoworkGateway.status).toBe('exhausted')
+  expect((await assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })).message.content)
+    .toEqual([{ type: 'text', text: 'hello' }])
+  await ctx.tpcoworkGateway.configure({ quotaStatus: 'not_assigned' }, deadline)
+  expect((await assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })).message.content)
+    .toEqual([{ type: 'text', text: 'hello' }])
+
+  // Disabled accounts remain blocked on all models.
+  await ctx.tpcoworkGateway.configure({ quotaStatus: 'disabled' }, deadline)
+  await expect(assemble(ctx, { provider: 'own', model: 'own-model', messages: [] })).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
+
+  // Identical periodic refreshes keep prepared calls valid without dropping the active snapshot.
+  const activeConfig = { quotaStatus: 'active', apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    baseURL: 'https://gateway.example/v1', models: [{ id: 'qwen-chat' }], defaultModel: 'qwen-chat' }
+  await ctx.tpcoworkGateway.configure(activeConfig, deadline)
+  const prepared = await ctx.llm.prepareCall({ provider: HubModel.providerId, model: 'qwen-chat' })
+  await ctx.tpcoworkGateway.configure(activeConfig, deadline + 60_000)
+  const result = new BlockAssembler()
+  for await (const chunk of prepared.stream({ ...prepared.config, messages: [] })) result.push(chunk)
+  expect(result.message({ provider: HubModel.providerId, model: 'qwen-chat' }).content).toEqual([{ type: 'text', text: 'hello' }])
+  expect(server.urls).toEqual([
+    'https://own.example/v1/chat/completions',
+    'https://own.example/v1/chat/completions',
+    'https://gateway.example/v1/chat/completions',
+  ])
+})

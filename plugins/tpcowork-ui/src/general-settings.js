@@ -23,11 +23,11 @@ export const ASK_AUTO_CONTINUE_NOTE = 'The user did not answer within 5 minutes.
  */
 export const GENERAL_CARDS = [
   ['language'],
-  ['developer-tools', 'permission'],
+  ['permission'],
   ['tpcowork-notifications', 'tpcowork-notification-sound', 'link-opening'],
   ['composer-enter', 'tpcowork-ask-auto-continue', 'tpcowork-show-reasoning', 'tpcowork-show-todos'],
   ['transcript-view', 'performance-usage'],
-  ['current-version', 'tpcowork-first-run-guide', 'tpcowork-diagnostics'],
+  ['tpcowork-first-run-guide', 'tpcowork-diagnostics'],
 ];
 
 /**
@@ -228,11 +228,10 @@ export function installGeneralSettings(ctx, React, primitives, preferences) {
   const wording = {
     language: { 'language.title': () => h(React.Fragment, null, tp('languageTitle'),
       h('div', { className: 'tpcowork-setting-description' }, tp('languageDescription'))) },
-    'developer-tools': { 'developerTools.title': () => tp('developerMode'), 'developerTools.description': () => tp('developerModeDescription') },
     'composer-enter': { 'settings.enter.title': () => tp('interactionTitle'), 'settings.enter.description': () => tp('interactionDescription'),
       'settings.enter.queue': () => tp('interactionQueue'), 'settings.enter.steer': () => tp('interactionSteer') },
   };
-  for (const id of ['language', 'developer-tools', 'permission', 'link-opening', 'composer-enter', 'transcript-view', 'performance-usage']) {
+  for (const id of ['language', 'permission', 'link-opening', 'composer-enter', 'transcript-view', 'performance-usage']) {
     adaptNativeGeneralRow(ctx, React, id, { order: order[id], wording: wording[id] ?? {},
       adapt: id === 'language' ? languageAdapter(ctx, React, preferences, tp) : undefined });
   }
