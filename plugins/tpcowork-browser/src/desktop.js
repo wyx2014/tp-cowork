@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, nativeImage, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeImage, powerMonitor, screen, session, shell, Tray, webContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -11,6 +11,8 @@ import { BrowserError, CHANNEL, VERSION, PARTITION, IPC, envelope, failure, Oper
 import { WindowZoom } from './window-zoom.js';
 // @tpcowork/dsh-diagnostics' main-process half travels in this payload, the product's only plugin seam into the main process.
 import { createDesktopDiagnostics } from '../../tpcowork-diagnostics/src/desktop.ts';
+// dsh-pet hosts transparent desktop pet windows inside the main process so intranet installs need no second Electron binary.
+import { createDesktopPetHost } from '../../dsh-pet/src/desktop/host.ts';
 import { beginBrowserNavigation, trackBrowserNavigation } from './navigation.js';
 
 const SCOPE = 'dsh-desktop';
@@ -35,12 +37,16 @@ function faviconUrl(candidates) {
 export function createDesktopBrowser(options) {
   const zoom = new WindowZoom(options.window, join(options.userData, 'tpcowork-zoom.json'));
   const diagnostics = createDesktopDiagnostics({ window: options.window, userData: options.userData });
+  const pet = createDesktopPetHost(
+    { BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, powerMonitor, screen, session, shell, Tray },
+    { window: options.window },
+  );
   let browser;
   const live = () => browser ??= new DesktopBrowser(options);
   return {
     willAttach: (...args) => live().willAttach(...args),
     didAttach: (...args) => live().didAttach(...args),
-    handleHost: (...args) => live().handleHost(...args),
+    handleHost: (value, reply) => (pet.handles(value) ? pet.handleHost(value, reply) : live().handleHost(value, reply)),
     request: (op, payload) => {
       if (op === 'windowZoom') return zoom.request(payload);
       if (op === 'diagnostics') return diagnostics.request(payload);
@@ -48,8 +54,8 @@ export function createDesktopBrowser(options) {
       if (op === 'snapshot' && browser === undefined) return { enabled: false, tabs: [], downloads: [], permissions: {}, requests: [] };
       return live().request(op, payload);
     },
-    disable: async () => { await browser?.disable(); },
-    dispose: async () => { diagnostics.dispose(); await browser?.dispose(); },
+    disable: async () => { await pet.disable(); await browser?.disable(); },
+    dispose: async () => { await pet.dispose(); diagnostics.dispose(); await browser?.dispose(); },
   };
 }
 

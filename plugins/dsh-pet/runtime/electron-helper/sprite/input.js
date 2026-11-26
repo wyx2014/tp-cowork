@@ -440,7 +440,7 @@ Object.assign(PetSprite.prototype, {
     this.showChatFromMenu(file);
   },
 
-  /** 悬停快捷键：按住 M 说话、L 开对话、S 截图、Z 切换睡/醒、D 开关待办、1-4 切显示位置。 */
+  /** 悬停快捷键：按住 M 说话、L 开对话、S 截图、Z 切换睡/醒、1-4 切显示位置。 */
   onHotkey(e) {
     // 按住说话先判：它要吃掉按住期间的自动重复，晚一步就会被输入框收走
     if (this.hearHold.onKeyDown(e)) {
@@ -462,11 +462,6 @@ Object.assign(PetSprite.prototype, {
     if (S.isCaptureHotkey(e)) {
       e.preventDefault();
       this.screenshotFromShortcut();
-      return;
-    }
-    if (S.isTodoHotkey(e)) {
-      e.preventDefault();
-      this.toggleTodo();
       return;
     }
     // 睡觉：与浏览器同为切换语义；该条目没配睡觉动画时整项无效（菜单里也不出现）

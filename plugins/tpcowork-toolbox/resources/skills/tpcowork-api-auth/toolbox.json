@@ -1,11 +1,13 @@
 {
   "requiredFiles": [
     "SKILL.md",
+    "references/auth-guide.md",
     "scripts/tpcowork_api.py",
     "scripts/whoami.py"
   ],
   "checksums": {
-    "SKILL.md": "b80e247fac41fb016d8932a4020e804c9e0f224ed1f7f32e4193406f56863f4e",
+    "SKILL.md": "a3728d710e86ad5cdce96304eeeb626d8c2569ed7641f7658adb71c7ecbee61b",
+    "references/auth-guide.md": "bb50afdaa66d77de1f4e699ff020b3aa09e793a056ed86a980d9ece59b2e62df",
     "scripts/tpcowork_api.py": "45d3e17ea6326269ef30077a509cb636116ea4eae23b53a700fd518874036cc8",
     "scripts/whoami.py": "c34e69392d2d5aa8442997d9d1c263fdc956659b7f41ea93091c80ad28699f92"
   },

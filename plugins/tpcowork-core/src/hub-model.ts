@@ -148,7 +148,7 @@ export class GatewayModels extends Service {
       }
       return
     }
-    if (typeof config.apiKey !== 'string' || !/^sk-[A-Za-z0-9_-]{20,256}$/u.test(config.apiKey)
+    if (typeof config.apiKey !== 'string' || !/^[\x21-\x7e]{1,2048}$/u.test(config.apiKey)
       || typeof config.baseURL !== 'string' || !Array.isArray(config.models) || !config.models.length || config.models.length > 1000) {
       this.clear()
       throw new Error('Invalid model configuration')

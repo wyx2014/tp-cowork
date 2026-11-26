@@ -10,7 +10,7 @@
 export function globalsScript(): string {
   return `
 function globalCards() {
-  return [globalFlagsCard, voiceCard, fontCard, physicsCard, motionCard, modelCard, environmentCard, advancedCard];
+  return [globalFlagsCard, voiceCard, fontCard, physicsCard, motionCard, modelCard, advancedCard];
 }
 
 function setGlobal(key, value) {
@@ -29,50 +29,6 @@ function globalFlagsCard() {
   ]);
 }
 
-function environmentCard() {
-  const g = state.globals;
-  const feedback = make('p', { class: 'fieldHint', text: '', hidden: true });
-  const show = (text) => {
-    feedback.textContent = text;
-    feedback.hidden = false;
-  };
-  const input = make('input', { type: 'text', id: 'g-env-city', value: g.environmentCity || '' });
-  input.placeholder = '留空 = 自动定位';
-  input.addEventListener('input', () => {
-    setGlobal('environmentCity', input.value);
-    markDirty(true);
-    feedback.hidden = true;
-  });
-  // 检测走宿主已有的环境查询（不带 pet = 纯查询，不点亮气泡），把 IP 定位结果回填。
-  // 必带 fresh=1：不带就会读到 10 分钟内的缓存定位，用户点了检测却拿到旧城市。
-  // 必带 ip=1：不带就会把配置里已填的城市原样回显，检测按钮等于没作用。
-  // 回填后不自动保存——用户可能还要改，统一走页面底部的保存。
-  const detect = button('检测', () => {
-    detect.textContent = '检测中…';
-    detect.disabled = true;
-    callApi('POST', '/environment?fresh=1&ip=1')
-      .then((facts) => {
-        if (!facts || typeof facts.city !== 'string' || !facts.city) {
-          show('宿主没有返回城市（IP 定位失败），请手动填写。');
-          return;
-        }
-        input.value = facts.city;
-        setGlobal('environmentCity', facts.city);
-        markDirty(true);
-        show('已填入：' + facts.city + '（点保存生效）');
-      })
-      .catch((error) => show('检测失败：' + (error && error.message ? error.message : String(error))))
-      .finally(() => {
-        detect.textContent = '检测';
-        detect.disabled = false;
-      });
-  });
-  return card('环境与定位', '天气查哪座城市。留空 = 按出口 IP 自动定位；填了城市名就按它查。', [
-    fieldRow('g-env-city', '城市', make('div', { class: 'row' }, [input, detect]), '填城市名即可，「扬州」和「扬州市」都行。'),
-    feedback,
-  ]);
-}
-
 function voiceCard() {
   const g = state.globals;
   // 运行时目录优先：宿主注册了 Edge / DeepSeek 就都列出来；拉不到回落构建期的内置清单
@@ -80,11 +36,10 @@ function voiceCard() {
     ? state.voiceOptions
     : VOICES.map((voice) => ({ id: voice.id, name: voice.name, tag: voice.tag, provider: voice.provider }));
   const speechProviders = state.speechProviders || [];
-  return card('语音', '设置对话、待办和通知的语音播报。', [
+  return card('语音', '设置对话和通知的语音播报。', [
     toggleRow('g-voice', '对话回复播报', '朗读桌宠的对话回复。', g.voiceEnabled, (value) => setGlobal('voiceEnabled', value)),
     selectField('g-voice-name', '音色', g.voiceName, voices.map((voice) => ({ value: voice.id, label: voice.name + (voice.tag ? ' · ' + voice.tag : ''), group: voice.provider })), (value) => setGlobal('voiceName', value)),
     numberField('g-voice-volume', '音量（0–1）', g.voiceVolume, (value) => setGlobal('voiceVolume', clampNumber(value, 0, 1, 1)), { min: 0, max: 1, step: 0.05 }),
-    toggleRow('g-voice-todo', '待办提醒也念出来', '到点的待办提醒念出来。', g.voiceTodoEnabled, (value) => setGlobal('voiceTodoEnabled', value)),
     toggleRow('g-voice-notify', '通知播报', '任务完成、出错、等你确认时念一句配置的工作状态文案；页面被藏起来也照样念。', g.voiceNotifyEnabled, (value) => setGlobal('voiceNotifyEnabled', value)),
     selectField('g-speech-provider', '语音识别', g.speechProvider, speechProviders.map((item) => ({ value: item.id, label: item.name })), (value) => setGlobal('speechProvider', value), '按住录音后交给哪个实现转写。装了对应插件才会出现多个选项；选中的实现不可用时识别会明确报错，不会自动换一个。'),
   ]);

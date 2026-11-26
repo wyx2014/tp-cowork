@@ -17,7 +17,6 @@ import { type Feedback, makeActions } from './settings/actions.ts';
 import { petBridge } from './settings/bridge.ts';
 import { type MergedConfig, readConfigEntries, readMainConfig } from './settings/config/index.ts';
 import { type DialogState, makeDialog } from './settings/dialog.ts';
-import { makeEnvironmentCard } from './settings/environment-card.ts';
 import { makeFontCard } from './settings/font-card.ts';
 import { makeGlobalCard, type GlobalFlagKey, type GlobalFlags } from './settings/global-card.ts';
 import { makeLoadStatus } from './settings/load-status.ts';
@@ -77,7 +76,6 @@ export function makePetConfigSection(
   const KindTabs = makeKindTabs({ h, t });
   const PetCard = makePetCard(rt);
   const GlobalCard = makeGlobalCard(rt);
-  const EnvironmentCard = makeEnvironmentCard(rt);
   const VoiceCard = makeVoiceCard(rt, VoicePicker);
   const FontCard = makeFontCard(rt);
   const ModelCard = makeModelCard(rt, ModelPicker);
@@ -441,7 +439,6 @@ export function makePetConfigSection(
           voiceName,
           volume: voiceVolume,
           voices: voiceOptions,
-          todoEnabled: voiceTodoEnabled,
           notifyEnabled: voiceNotifyEnabled,
           speechProvider,
           speechProviders,
@@ -449,7 +446,6 @@ export function makePetConfigSection(
           onToggle: setVoiceEnabled,
           onVoiceChange: setVoiceName,
           onVolumeChange: setVoiceVolume,
-          onTodoToggle: setVoiceTodoEnabled,
           onNotifyToggle: setVoiceNotifyEnabled,
         }),
         h(FontCard, { busy, font, onChange: patchFont }),
@@ -467,7 +463,6 @@ export function makePetConfigSection(
         h(PhysicsCard, { busy, physics, onChange: patchPhysics }),
         h(MotionCard, { busy, weights, onChange: setWeights }),
         h(MobileCard, { busy, physics, onChange: patchPhysics }),
-        h(EnvironmentCard, { busy, city: environmentCity, onChange: setEnvironmentCity }),
         h(Actions, {
           busy,
           msg,

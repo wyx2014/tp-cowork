@@ -5,13 +5,20 @@
  * 依赖显式传入（见输入类型），模块内只读两个进程级环境事实：`DSH_PET_IN_PROCESS` 与 `process.versions.electron`。
  * @module dsh-pet/src/host/plugin/desktop/spawn
  */
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { BUILTIN_WEBM_DIRECTORY, ROUTE_SEGMENT } from '../../../shared/constants.ts';
 import { PACKAGE_ROOT } from '../../paths.ts';
 import type { DesktopHelperDeps } from './types.ts';
 import type { DesktopPets } from './pets.ts';
 import { toBridgeResponse } from './bridge-response.ts';
 import { resolveDesktopSiteUrl } from './site-url.ts';
+import {
+  canUseDesktopHostBridge,
+  createDesktopHostBridge,
+  isUnsupportedDesktopBridgeError,
+  type DesktopHostBridge,
+  type DesktopIpcCarrier,
+} from '../../helper/desktop-host-bridge.ts';
 import {
   HelperProcess,
   defaultElectronExe,
@@ -21,12 +28,27 @@ import {
   resolveElectronPath,
 } from '../../helper-process.ts';
 
+/** 可选的桌面主进程桥接测试注入项。 */
+export interface DesktopBridgeOverrides {
+  /** IPC 载体覆写（默认 `process`）。 */
+  readonly carrier?: DesktopIpcCarrier;
+  /** 环境变量覆写（默认 `process.env`）。 */
+  readonly env?: NodeJS.ProcessEnv;
+  /** `runtime/electron-helper` 目录覆写。 */
+  readonly helperDir?: string;
+  /** IPC 控制请求超时覆写（毫秒）。 */
+  readonly timeoutMs?: number;
+}
+
 /** DesktopSpawn的输入。 */
 export type DesktopSpawnInput = Pick<
   DesktopHelperDeps,
   'ctx' | 'getHandlePetRoute' | 'log' | 'reportDownload' | 'thumbUserRoot'
 > &
-  Pick<DesktopPets, 'getHasDesktopPet' | 'desktopPetList' | 'getTrayOn'>;
+  Pick<DesktopPets, 'getHasDesktopPet' | 'desktopPetList' | 'getTrayOn'> & {
+    /** 可选的桌面主进程桥接参数覆写（供单测使用）。 */
+    readonly desktopBridge?: DesktopBridgeOverrides;
+  };
 
 /** 宿主是不是 DSH 桌面应用（Electron 宿主）。 */
 const isDesktopHost = (): boolean => Boolean(process.versions.electron);
@@ -59,6 +81,14 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
 
   let helper: HelperProcess | undefined;
 
+  let hostBridge: DesktopHostBridge | undefined;
+
+  let pendingHostBridge: DesktopHostBridge | undefined;
+
+  let hostBridgeUnsupported = false;
+
+  let nativeGeneration = 0;
+
   let startRetryTimer: NodeJS.Timeout | undefined;
 
   let electronEnsure: Promise<void> | undefined;
@@ -73,35 +103,37 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
 
   const inProcessHost = process.env.DSH_PET_IN_PROCESS === '1';
 
-  const launchHelper = (electronPath: string | undefined): void => {
-    if (inProcessHost) return; // 应用模式：窗口由本进程建，绝不 spawn
-    if (helper || disposed) return;
-    // 无桌面宠物时：只有「桌面模式曾启用过且托盘还开着」才值得为托盘常驻，否则不启动
-    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) return;
+  const defaultHelperDir = resolve(PACKAGE_ROOT, 'runtime', 'electron-helper');
+
+  const waitWebServerPort = (retry: () => void): number | undefined => {
     const port = typeof ctx.webServer?.port === 'number' ? ctx.webServer.port : 0;
-    if (!port || port <= 0) {
-      // webServer 可能尚未完成监听（OS 分配端口时 port 短暂为 0）：延迟重试。
-      // 诊断日志（issue #168）：这条重试以前完全静默——端口长期不就绪时，桌面宠物
-      // 「连尝试都没有」且没有任何线索。这里只加可见性，重试节奏与次数保持原样。
-      portWaitAttempts += 1;
-      if (portWaitAttempts === 1) {
-        log.info(`[dsh-pet] webServer 端口尚未就绪（port=${String(port)}），每 500ms 重试拉起桌面 Helper`);
-      } else if (portWaitAttempts % 20 === 0) {
-        log.warn(
-          `[dsh-pet] 已等待 webServer 端口 ${(portWaitAttempts * 500) / 1000}s 仍未就绪` +
-            `（port=${String(port)}），桌面 Helper 尚未拉起`,
-        );
-      }
-      if (!startRetryTimer) {
-        startRetryTimer = setTimeout(() => {
-          startRetryTimer = undefined;
-          launchHelper(electronPath);
-        }, 500);
-        startRetryTimer.unref?.();
-      }
-      return;
+    if (port && port > 0) {
+      portWaitAttempts = 0;
+      return port;
     }
-    portWaitAttempts = 0;
+    // webServer 可能尚未完成监听（OS 分配端口时 port 短暂为 0）：延迟重试。
+    // 诊断日志（issue #168）：这条重试以前完全静默——端口长期不就绪时，桌面宠物
+    // 「连尝试都没有」且没有任何线索。这里只加可见性，重试节奏与次数保持原样。
+    portWaitAttempts += 1;
+    if (portWaitAttempts === 1) {
+      log.info(`[dsh-pet] webServer 端口尚未就绪（port=${String(port)}），每 500ms 重试拉起桌面 Helper`);
+    } else if (portWaitAttempts % 20 === 0) {
+      log.warn(
+        `[dsh-pet] 已等待 webServer 端口 ${(portWaitAttempts * 500) / 1000}s 仍未就绪` +
+          `（port=${String(port)}），桌面 Helper 尚未拉起`,
+      );
+    }
+    if (!startRetryTimer) {
+      startRetryTimer = setTimeout(() => {
+        startRetryTimer = undefined;
+        retry();
+      }, 500);
+      startRetryTimer.unref?.();
+    }
+    return undefined;
+  };
+
+  const resolveSiteContext = (port: number): { origin: string; siteUrl: string; configUrl: string } => {
     // 用宿主自报的监听地址，不写死 loopback：DSH 拒绝通配地址，host 永远是某块具体网卡——只绑 LAN IP
     // 时 127.0.0.1 并不监听，写死会让右键「打开网站」打开一个连不上的页面。getOrigin() 在绑定地址
     // 无法表达成 URL（带 zone 的 IPv6）时抛，此时退回 loopback：菜单打不开，但不拖垮 Helper 拉起。
@@ -113,11 +145,22 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
     }
     // 右键「打开网站」交出去的是裸 origin：DSH 只在 `GET /` 接受本进程的启动令牌，换发绑定该 authority
     // 的签名 Cookie，其余请求一律 401，故传 origin 而不是另拼地址。令牌等价登录态：只经子进程环境变量
-    // 递到 helper 内存，不落盘、不进日志。
+    // 或主进程内存递到 helper，不落盘、不进日志。
     const siteUrl = resolveDesktopSiteUrl(ctx, origin);
+    const configUrl = `${origin}${ROUTE_SEGMENT}/config`;
+    return { origin, siteUrl, configUrl };
+  };
+
+  const launchHelper = (electronPath: string | undefined): void => {
+    if (inProcessHost) return; // 应用模式：窗口由本进程建，绝不 spawn
+    if (helper || hostBridge || pendingHostBridge || disposed) return;
+    // 无桌面宠物时：只有「桌面模式曾启用过且托盘还开着」才值得为托盘常驻，否则不启动
+    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) return;
+    const port = waitWebServerPort(() => launchHelper(electronPath));
+    if (port === undefined) return;
+    const { siteUrl, configUrl } = resolveSiteContext(port);
     // 桌面渲染端也从同一份 handlePetRoute 拿成品配置（每只宠物一个局部小窗口；经管道，不走 HTTP——
     // DSH Desktop 2.0.3+ 会拦插件自拉进程的裸 HTTP 请求，浏览器访问闸门只放行带令牌的请求）
-    const configUrl = `${origin}${ROUTE_SEGMENT}/config`;
     helper = new HelperProcess(
       {
         electronPath,
@@ -155,33 +198,9 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
     }
   };
 
-  const startHelper = (): void => {
-    if (inProcessHost) return; // 应用模式：不探测、不下载 Electron
-    if (helper || electronEnsure || disposed) return;
-    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) {
-      // 诊断日志（issue #168）：这条短路不打日志，就是「桌面模式凭空消失：无进程、无目录、无提示」
-      // 的直接成因。用 info 而非 warn——纯网页用户这是正常状态；只打一次避免刷屏。
-      // 托盘关掉后这里也会命中：没人需要那个图标，空常驻没有意义。
-      if (!noDesktopSkipped) {
-        noDesktopSkipped = true;
-        log.info(
-          `[dsh-pet] 无桌面宠物（display 均为 web/none）且无需保留托盘（tray=${getTrayOn()}），已跳过桌面 Helper 启动`,
-        );
-      }
-      return;
-    }
-    // 无图形显示环境（Linux 服务器 / 容器）：直接放弃，不探测、不下载、不拉起。
-    // 否则 Electron 会「拉起即崩」，被守护循环反复重启并刷满 core dump。
-    if (!hasGraphicalDisplay()) {
-      if (!displayWarned) {
-        displayWarned = true;
-        log.warn(
-          '[dsh-pet] 未检测到图形显示环境（DISPLAY/WAYLAND_DISPLAY 均为空），已跳过桌面宠物。' +
-            '浏览器内宠物不受影响；如需在服务器上启用桌面模式，请配置 Xvfb 后设置 DSH_PET_DESKTOP_FORCE=1。',
-        );
-      }
-      return;
-    }
+  const startExternalHelper = (): void => {
+    if (inProcessHost || helper || hostBridge || pendingHostBridge || electronEnsure || disposed) return;
+    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) return;
     const found = resolveElectronPath();
     if (found) {
       launchHelper(found);
@@ -215,11 +234,106 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
       });
   };
 
+  const launchDesktopBridge = (): void => {
+    if (inProcessHost || helper || hostBridge || pendingHostBridge || disposed) return;
+    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) return;
+    const port = waitWebServerPort(() => launchDesktopBridge());
+    if (port === undefined) return;
+    const { siteUrl, configUrl } = resolveSiteContext(port);
+    const gen = ++nativeGeneration;
+    const bridge = createDesktopHostBridge({
+      ...(deps.desktopBridge?.carrier === undefined ? {} : { carrier: deps.desktopBridge.carrier }),
+      ...(deps.desktopBridge?.timeoutMs === undefined ? {} : { timeoutMs: deps.desktopBridge.timeoutMs }),
+      bridgeHandler: async (req) => {
+        const result = await getHandlePetRoute()(req.url ?? '/', req.method ?? 'GET', req.body);
+        return toBridgeResponse(req.id, result);
+      },
+      log,
+      onDisconnect: () => {
+        if (hostBridge === bridge) hostBridge = undefined;
+        if (pendingHostBridge === bridge) pendingHostBridge = undefined;
+      },
+    });
+    pendingHostBridge = bridge;
+    void bridge
+      .start({
+        pets: desktopPetList(),
+        trayEnabled: getTrayOn(),
+        helperDir: deps.desktopBridge?.helperDir ?? defaultHelperDir,
+        openTarget: 'desktop',
+        siteUrl,
+      })
+      .then((result) => {
+        if (pendingHostBridge === bridge) pendingHostBridge = undefined;
+        if (gen !== nativeGeneration || disposed) return;
+        hostBridge = bridge;
+        desktopModeEverActive = true;
+        log.info(
+          `[dsh-pet] dsh-pet desktop pet started via desktop host bridge (windows=${result.windows}, config: ${configUrl})`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (pendingHostBridge === bridge) pendingHostBridge = undefined;
+        if (gen !== nativeGeneration || disposed) return;
+        bridge.detach();
+        if (isUnsupportedDesktopBridgeError(error)) {
+          hostBridgeUnsupported = true;
+          log.info(
+            `[dsh-pet] 桌面主进程桥接不可用（${error instanceof Error ? error.message : String(error)}），回退到外部 Electron Helper`,
+          );
+          startExternalHelper();
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`[dsh-pet] 桌面主进程启动桌宠失败：${message}`);
+        reportDownload(`桌面宠物启动失败：${message}`, 'error', true);
+      });
+  };
+
+  const startHelper = (): void => {
+    if (inProcessHost) return; // 应用模式：不探测、不下载 Electron
+    if (helper || hostBridge || pendingHostBridge || electronEnsure || disposed) return;
+    if (!getHasDesktopPet() && !(desktopModeEverActive && getTrayOn())) {
+      // 诊断日志（issue #168）：这条短路不打日志，就是「桌面模式凭空消失：无进程、无目录、无提示」
+      // 的直接成因。用 info 而非 warn——纯网页用户这是正常状态；只打一次避免刷屏。
+      // 托盘关掉后这里也会命中：没人需要那个图标，空常驻没有意义。
+      if (!noDesktopSkipped) {
+        noDesktopSkipped = true;
+        log.info(
+          `[dsh-pet] 无桌面宠物（display 均为 web/none）且无需保留托盘（tray=${getTrayOn()}），已跳过桌面 Helper 启动`,
+        );
+      }
+      return;
+    }
+    // 无图形显示环境（Linux 服务器 / 容器）：直接放弃，不探测、不下载、不拉起。
+    // 否则 Electron 会「拉起即崩」，被守护循环反复重启并刷满 core dump。
+    if (!hasGraphicalDisplay()) {
+      if (!displayWarned) {
+        displayWarned = true;
+        log.warn(
+          '[dsh-pet] 未检测到图形显示环境（DISPLAY/WAYLAND_DISPLAY 均为空），已跳过桌面宠物。' +
+            '浏览器内宠物不受影响；如需在服务器上启用桌面模式，请配置 Xvfb 后设置 DSH_PET_DESKTOP_FORCE=1。',
+        );
+      }
+      return;
+    }
+    if (!hostBridgeUnsupported && canUseDesktopHostBridge(deps.desktopBridge?.carrier, deps.desktopBridge?.env)) {
+      launchDesktopBridge();
+      return;
+    }
+    startExternalHelper();
+  };
+
   const stopHelper = (reason = 'settings-change'): void => {
     if (startRetryTimer) {
       clearTimeout(startRetryTimer);
       startRetryTimer = undefined;
     }
+    nativeGeneration += 1;
+    const oldBridge = hostBridge ?? pendingHostBridge;
+    hostBridge = undefined;
+    pendingHostBridge = undefined;
+    if (oldBridge) void oldBridge.stop(reason);
     helper?.stop(reason);
     helper = undefined;
   };
@@ -229,9 +343,13 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
       clearTimeout(startRetryTimer);
       startRetryTimer = undefined;
     }
+    nativeGeneration += 1;
+    const oldBridge = hostBridge ?? pendingHostBridge;
+    hostBridge = undefined;
+    pendingHostBridge = undefined;
     const old = helper;
     helper = undefined;
-    await old?.stopAndWait(reason);
+    await Promise.all([oldBridge?.stop(reason), old?.stopAndWait(reason)]);
   };
 
   const animSubdirFor = (ext: string): string => (ext === '.mov' ? 'mov' : 'webm');

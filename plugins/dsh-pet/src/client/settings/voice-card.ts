@@ -25,8 +25,6 @@ export interface VoiceCardProps {
   readonly volume: number;
   /** 可选音色；为空时选择器只显示当前值（列表还没拉回来或拉取失败）。 */
   readonly voices: readonly VoiceOption[];
-  /** 待办提醒要不要念出来。 */
-  readonly todoEnabled: boolean;
   /** 工作状态播报要不要念出来。 */
   readonly notifyEnabled: boolean;
   /** 切换手动播报开关。 */
@@ -35,8 +33,6 @@ export interface VoiceCardProps {
   readonly onVoiceChange: (voiceName: string) => void;
   /** 调整播放音量。 */
   readonly onVolumeChange: (volume: number) => void;
-  /** 切换待办提醒的播报。 */
-  readonly onTodoToggle: (value: boolean) => void;
   /** 切换工作状态播报。 */
   readonly onNotifyToggle: (value: boolean) => void;
   /** 当前语音识别实现 id。 */
@@ -69,10 +65,9 @@ export function makeVoiceCard(
       children: [
         cardHead(t('voiceTitle')),
         h('div', {
-          className: 'dsh-pet-cfg__grid3',
+          className: 'dsh-pet-cfg__grid2',
           children: [
             toggleCell('voiceEnabled', props.enabled, props.busy, props.onToggle),
-            toggleCell('voiceTodoEnabled', props.todoEnabled, props.busy, props.onTodoToggle),
             toggleCell('voiceNotifyEnabled', props.notifyEnabled, props.busy, props.onNotifyToggle),
           ],
         }),

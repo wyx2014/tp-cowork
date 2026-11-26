@@ -4,7 +4,7 @@
  * 与写方向（`http.ts`）分开：这里纯解析，不发请求、不碰状态。
  * @module dsh-pet/src/client/settings/config/read
  */
-import { DEFAULT_FONT } from '../../../shared/fonts.ts';
+import { DEFAULT_FONT, FONT_PRESETS } from '../../../shared/fonts.ts';
 import { DEFAULT_PHYSICS } from '../../../shared/physics.ts';
 import type { FontConfig, ModelSelection, Pet, PhysicsParams, Weights } from '../../../shared/types.ts';
 import { parseWeights } from '../../../shared/weights.ts';
@@ -103,7 +103,11 @@ export function readMainConfig(merged: MergedConfig): MainConfigPatch | null {
     patch.physics = { ...DEFAULT_PHYSICS, ...(main.physics as PhysicsParams) };
   }
   if (main.font && typeof main.font === 'object') {
-    patch.font = { ...DEFAULT_FONT, ...(main.font as FontConfig) };
+    const mergedFont = { ...DEFAULT_FONT, ...(main.font as FontConfig) };
+    if (!FONT_PRESETS.some((preset) => preset.id === mergedFont.family)) {
+      mergedFont.family = DEFAULT_FONT.family;
+    }
+    patch.font = mergedFont;
   }
   const weights = parseWeights(main.animationWeights);
   if (weights) patch.animationWeights = weights;

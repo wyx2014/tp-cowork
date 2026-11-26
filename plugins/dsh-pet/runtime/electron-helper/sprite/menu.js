@@ -27,8 +27,6 @@ Object.assign(PetSprite.prototype, {
         action: 'open-site',
         hint: OPEN_SHORTCUT_HINT,
       },
-      { label: '查询天气', action: 'show-environment' },
-      { label: '待办事项', action: 'todo', hint: S.TODO_HOTKEY_HINT },
       { label: '对话', action: 'chat', hint: S.CHAT_HOTKEY_HINT },
     ];
     // 该条目没配 animations.sleep 就整项不出现——与配置注释「不写 = 没有睡觉功能」一致。

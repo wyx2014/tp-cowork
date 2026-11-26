@@ -15,7 +15,6 @@ import {
 import { captureDisplayFrame } from '../../../shared/chat/capture.ts';
 import { displayOfHotkey } from '../../../shared/display-hotkey.ts';
 import { SLEEP_HOTKEY_HINT, isSleepHotkey } from '../../../shared/sleep-hotkey.ts';
-import { TODO_HOTKEY_HINT, isTodoHotkey } from '../../../shared/todo/hotkey.ts';
 import type { PetDisplay } from '../../../shared/types.ts';
 import { bindOpenChat } from './open-chat.ts';
 import { registerPetChatHandle } from './registry.ts';
@@ -97,8 +96,7 @@ export function createCardEntry(rt: CardEntryRuntime) {
   const { useEffect, useRef } = rt;
 
   return function useCardEntry(input: CardEntryInput): CardEntry {
-    const { card, cfgRef, drag, live, menuItemsRef, motion, runMenuAction, showTodo, stage, tipRef, toggleTodo } =
-      input;
+    const { card, cfgRef, drag, live, menuItemsRef, motion, runMenuAction, showTodo, stage, tipRef } = input;
     // 右键菜单与对话弹窗当前的句柄，卸载或重开前清理。对话弹窗还要按住说话遥控开录/收尾。
     const menuRef = useRef<{ close: () => void } | null>(null);
     const chatRef = useRef<ChatDialogMount | null>(null);
@@ -231,9 +229,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
     // stage 是 getter（首次渲染时节点还不存在），effect 里再取一次，并用 ref 避开依赖告警。
     const stageGetterRef = useRef(stage);
     stageGetterRef.current = stage;
-    // 待办开关同样只在悬停时生效；存 ref 是因为它每次渲染都新建，闭包会捕获旧的那份。
-    const toggleTodoRef = useRef(toggleTodo);
-    toggleTodoRef.current = toggleTodo;
     // 睡觉同样是切换语义：按下的那一刻现读状态，决定发 /sleep 还是 /wake（与菜单那一项同一件事）。
     const toggleSleepRef = useRef<() => void>(() => {});
     toggleSleepRef.current = () => {
@@ -315,9 +310,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
           toggleSleepRef.current();
           return;
         }
-        if (!isTodoHotkey(e)) return;
-        e.preventDefault();
-        toggleTodoRef.current();
       };
       const onKeyUp = (e: KeyboardEvent): void => hearHold.onKeyUp(e);
       document.addEventListener('keydown', onKeyDown, true);
@@ -344,8 +336,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
         ? { label: '起来', action: 'wake', hint: SLEEP_HOTKEY_HINT }
         : { label: '睡觉', action: 'sleep', hint: SLEEP_HOTKEY_HINT };
       const tools: MenuNode[] = [
-        { label: '查询天气', action: 'show-environment' },
-        { label: '待办事项', action: 'todo', hint: TODO_HOTKEY_HINT },
         { label: '对话', action: 'chat', hint: CHAT_HOTKEY_HINT },
         ...(canSleep ? [sleepItem] : []),
       ];

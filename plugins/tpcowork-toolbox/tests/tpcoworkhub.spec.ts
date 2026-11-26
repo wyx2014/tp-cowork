@@ -190,11 +190,11 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     expect(ctx.tpcoworkGateway.readModelKey(restored.grantId)).toBe(key)
   })
 
-  it('switches a signed-in desktop to the SkillHub backup and restores the primary gateway', async () => {
-    const { ctx, login, state, endpoint, requests } = await hubFixture()
+  it('switches a signed-in desktop to the direct fallback provider, keeps it across re-login, and restores the primary gateway', async () => {
+    const { ctx, login, service, state, endpoint, requests } = await hubFixture()
     const timer = vi.spyOn(globalThis, 'setInterval')
     onTestFinished(() => timer.mockRestore())
-    const backupKey = 'sk-backup-relay-credential-fixture'
+    const backupKey = '40i39S-direct-provider-key-fixture'
     let backup: string | null = null
     let primaryUnavailable = false
     state.override = (request, response) => {
@@ -207,7 +207,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
       if (request.url === '/tpcoworkapi/client-config') {
         if (backup) return send({
           userId: 'user-1', quotaStatus: 'active', fallbackRevision: backup, apiKey: backupKey,
-          baseURL: 'https://irrelevant-origin.example/v1', models: [{ id: 'backup-chat' }], defaultModel: 'backup-chat',
+          baseURL: endpoint + '/direct-backup/v1', models: [{ id: 'backup-chat', name: 'backup-chat' }], defaultModel: 'backup-chat',
         })
         if (primaryUnavailable) {
           response.statusCode = 502
@@ -218,7 +218,7 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
           apiKey: 'sk-primary-gateway-credential-fixture', models: [{ id: 'primary-chat' }],
         })
       }
-      if (request.url === '/tpcoworkapi/model-fallback/v1/chat/completions') {
+      if (request.url === '/direct-backup/v1/chat/completions') {
         response.setHeader('Content-Type', 'text/event-stream')
         response.end(textEvents.map(event => `data: ${event}\n\n`).join(''))
         return true
@@ -237,11 +237,18 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
     primaryUnavailable = true
     backup = 'fallback-1'
     await vi.waitFor(async () => { poll(); expect(await modelIds()).toEqual(['backup-chat']) })
-    expect(ctx.tpcoworkGateway.modelConnection()?.baseURL).toBe(endpoint + '/tpcoworkapi/model-fallback/v1')
+    expect(ctx.tpcoworkGateway.modelConnection()?.baseURL).toBe(endpoint + '/direct-backup/v1')
     expect((await assemble(ctx, { provider: HubModel.providerId, model: 'backup-chat', messages: [] })).message.content)
       .toEqual([{ type: 'text', text: 'hello' }])
-    expect(requests.find(row => row.path === '/tpcoworkapi/model-fallback/v1/chat/completions')?.authorization).toBe(`Bearer ${backupKey}`)
-    expect(requests.some(row => row.path.startsWith('/tpcoworkapi/model-fallback/api/mcp/'))).toBe(false)
+    expect(requests.find(row => row.path === '/direct-backup/v1/chat/completions')?.authorization).toBe(`Bearer ${backupKey}`)
+    expect(requests.some(row => row.path.startsWith('/direct-backup/api/mcp/'))).toBe(false)
+
+    // Signing out and back in while fallback is active loads the direct fallback models cleanly.
+    await service.logout()
+    await vi.waitFor(() => expect(ctx.tpcoworkGateway.status).toBe('signed_out'))
+    await login()
+    await vi.waitFor(async () => expect(await modelIds()).toEqual(['backup-chat']))
+    expect(ctx.tpcoworkGateway.modelConnection()?.baseURL).toBe(endpoint + '/direct-backup/v1')
 
     primaryUnavailable = false
     backup = null

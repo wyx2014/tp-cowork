@@ -165,10 +165,7 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
             configuredSessionId = undefined
             throw new TpcoworkHubError('protocol')
           }
-          const modelConfig = typeof fallback === 'string'
-            ? { ...config, baseURL: hubApiUrl(record.endpoint + '/tpcoworkapi/model-fallback/v1') }
-            : config
-          await scope.tpcoworkGateway.configure(modelConfig, record.expiresAt)
+          await scope.tpcoworkGateway.configure(config, record.expiresAt)
           active.throwIfAborted()
           if (current !== revision) return
           configuredSessionId = sessionId

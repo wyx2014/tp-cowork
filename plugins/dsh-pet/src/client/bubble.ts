@@ -38,7 +38,7 @@ const WHISPER_POP_MS = 420;
  */
 const bubbleCss = [
   // 本地字体：由 host 从 assets/fonts 提供；font-display:swap 先回退后切换。
-  `@font-face{font-family:"ShangshouSoftCandy";src:url("${ROUTE_PATH}/font/上首软糖体.ttf") format("truetype");font-display:swap;font-weight:400}`,
+  `@font-face{font-family:"NotoSansSC";src:url("${ROUTE_PATH}/font/NotoSansSC-VF.woff") format("woff");font-display:swap;font-weight:100 900}`,
   '.dsh-pet-bubble{position:absolute;left:50%;transform:translateX(-50%);' +
     'bottom:calc(100% - var(--dsh-pet-size)*0.108);' +
     'width:max-content;min-width:calc(var(--f)*5.7143);max-width:min(calc(var(--f)*16),100%);' +
@@ -49,7 +49,7 @@ const bubbleCss = [
     'border-radius:calc(var(--f)*0.7692);' +
     'background:rgba(255,255,255,.92);' +
     '--f0:var(--dsh-pet-font-bubble,calc(var(--dsh-pet-size)*0.0455));--f:var(--f0);' +
-    'color:#2b2b2b;font-family:var(--dsh-pet-font-family,"ShangshouSoftCandy","Yuanti SC","YouYuan","幼圆","Comic Sans MS","PingFang SC","Microsoft YaHei",sans-serif);' +
+    'color:#2b2b2b;font-family:var(--dsh-pet-font-family,"NotoSansSC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif);' +
     'font-size:var(--f);line-height:1.6;z-index:3;pointer-events:none;' +
     'box-shadow:0 calc(var(--f)*0.1978) calc(var(--f)*0.7692) rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08);' +
     'backdrop-filter:blur(6px);opacity:0;transition:opacity .25s ease;' +

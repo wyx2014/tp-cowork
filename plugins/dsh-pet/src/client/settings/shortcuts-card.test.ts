@@ -13,7 +13,6 @@ import type { jsx } from 'react/jsx-runtime';
 import { HEAR_HOTKEY_HINT } from '../../shared/chat/hear-hold.ts';
 import { CAPTURE_HOTKEY_HINT, CHAT_HOTKEY_HINT } from '../../shared/chat/hotkey.ts';
 import { SLEEP_HOTKEY_HINT } from '../../shared/sleep-hotkey.ts';
-import { TODO_HOTKEY_HINT } from '../../shared/todo/hotkey.ts';
 import { keycapOf, type ShortcutHost } from '../app-shortcut.ts';
 import { makeShortcutsCard } from './shortcuts-card.ts';
 
@@ -112,7 +111,6 @@ describe('ShortcutsCard —— 快捷键卡', () => {
     assert.ok(text.includes(CHAT_HOTKEY_HINT), '打开对话');
     assert.ok(text.includes(HEAR_HOTKEY_HINT), '按住说话');
     assert.ok(text.includes(CAPTURE_HOTKEY_HINT), '截图');
-    assert.ok(text.includes(TODO_HOTKEY_HINT), '待办');
     assert.ok(text.includes(SLEEP_HOTKEY_HINT), '睡觉');
   });
 
@@ -128,13 +126,13 @@ describe('ShortcutsCard —— 快捷键卡', () => {
       'shortcutRowHear',
       'shortcutRowCapture',
       'shortcutRowPaste',
-      'shortcutRowTodo',
       'shortcutRowSleep',
       'shortcutRowDisplay',
       'shortcutRowSidebar',
     ]) {
       assert.ok(text.includes(key), key + ' 应该出现');
     }
+    assert.ok(!text.includes('shortcutRowTodo'), '待办事项快捷键不应再出现');
   });
 
   test('是折叠卡，默认收起（与页尾两张参考卡同一套骨架）', () => {

@@ -1618,13 +1618,23 @@ describe('removeRoundsByTs —— 按轮删除（一轮两条共享 ts，成对�
   });
 });
 
-test('CoWork 的默认动作只引用实际打包的四段视频，点播菜单没有重复', () => {
+test('CoWork 的默认动作只引用实际打包的八段视频，并配置睡觉动作套且点播菜单没有重复', () => {
   const defaultFile = fileURLToPath(new URL('../../assets/config.jsonc', import.meta.url));
   const config = readAllConfig({ defaultFile, userFile: defaultFile + '.missing', petDir: defaultFile + '.missing' });
   const animations = config.main.animations as Animations;
-  const names = ['工作_招手打招呼', '工作_敲打键盘', '工作_犹豫思考', '工作_疑问问号'];
+  const names = [
+    '工作_招手打招呼',
+    '工作_敲打键盘',
+    '工作_犹豫思考',
+    '工作_疑问问号',
+    '动作_吃冰淇淋',
+    '动作_打哈欠',
+    '动作_睡觉Z',
+    '动作_跑步',
+  ];
   assert.deepEqual(animations.idle, names);
   assert.equal(animations.idleSequential, true);
+  assert.deepEqual(animations.sleep, [{ start: ['动作_打哈欠'], loop: ['动作_睡觉Z'], end: ['动作_打哈欠'] }]);
   assert.deepEqual(animationNames(animations), names);
   assert.deepEqual(Object.keys(bundledAnimations), names);
   for (const file of Object.values(bundledAnimations)) assert.ok(existsSync(join(dirname(defaultFile), 'webm', file)));
