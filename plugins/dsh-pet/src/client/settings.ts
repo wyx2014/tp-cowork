@@ -27,7 +27,6 @@ import { makeModelPicker } from './settings/picker/index.ts';
 import { makeVoicePicker } from './settings/picker/voice-picker.ts';
 import { runNotificationTest } from './settings/notify-test.ts';
 import { makeKindTabs } from './settings/kind-tabs.ts';
-import { makePathsCards } from './settings/paths-cards.ts';
 import { makePetCard } from './settings/pet-card.ts';
 import { uploadPetAvatar } from './settings/avatar-upload.ts';
 import { makePetTabs } from './settings/pet-tabs.ts';
@@ -84,7 +83,6 @@ export function makePetConfigSection(
   const ShortcutsCard = makeShortcutsCard(rt, ctx);
   const MobileCard = makeMobileCard(rt);
   const Actions = makeActions(rt);
-  const { ConfigMetaCard, StorageCard } = makePathsCards(rt);
   const SettingsDialog = makeDialog(rt);
   const LoadStatus = makeLoadStatus({ h, t });
 
@@ -474,10 +472,6 @@ export function makePetConfigSection(
 
         // 保存按钮以下是参考类卡片：只读说明，改不改都不用点保存。
         h(ShortcutsCard, {}),
-
-        // 落盘位置两张卡都靠 meta，读不到就整块不出现。
-        paths ? h(ConfigMetaCard, { paths }) : null,
-        paths ? h(StorageCard, { paths }) : null,
 
         dialog
           ? h(SettingsDialog, { dialog, selId, onDismiss: () => setDialog(null), onConfirm: write.confirmDialog })

@@ -10,7 +10,7 @@
 export function globalsScript(): string {
   return `
 function globalCards() {
-  return [globalFlagsCard, voiceCard, fontCard, physicsCard, motionCard, modelCard, advancedCard];
+  return [globalFlagsCard, voiceCard, fontCard, physicsCard, motionCard, modelCard];
 }
 
 function setGlobal(key, value) {
@@ -103,57 +103,6 @@ function modelCard() {
       numberField('g-memory', '对话记忆轮数', g.chatMemoryRounds, (value) => setGlobal('chatMemoryRounds', Math.round(clampNumber(value, 0, 100, 0))), { min: 0, max: 100, step: 1, hint: '0 表示不带历史。' }),
     ]),
   ]);
-}
-
-function pathRows() {
-  const meta = state.meta || {};
-  const rows = [];
-  const pairs = [['用户配置', meta.user], ['内置默认', meta.default], ['动画配置', meta.animations], ['待办数据', meta.todos], ['日志', meta.logs]];
-  for (const pair of pairs) {
-    if (!pair[1]) continue;
-    rows.push(make('div', { class: 'pathRow' }, [
-      make('span', { class: 'pathKey', text: pair[0] }),
-      make('span', { class: 'pathValue', text: String(pair[1]), title: String(pair[1]) }),
-    ]));
-  }
-  if (Array.isArray(meta.storage)) {
-    for (const item of meta.storage) {
-      if (!item || !item.path) continue;
-      rows.push(make('div', { class: 'pathRow' }, [
-        make('span', { class: 'pathKey', text: item.exists === false ? '未生成' : '已存在' }),
-        make('span', { class: 'pathValue', text: String(item.path), title: String(item.path) }),
-      ]));
-    }
-  }
-  return rows.length ? rows : [make('p', { class: 'empty', text: '读不到落盘位置信息。' })];
-}
-
-function advancedCard() {
-  return card('高级', '手改配置文件时可以从这里找到位置；「同步」会用内置默认覆盖用户配置。', [
-    make('div', {}, pathRows()),
-    make('div', { class: 'testRow' }, [button('用内置默认覆盖用户配置', syncFromDefault)]),
-  ]);
-}
-
-async function syncFromDefault() {
-  const confirmed = await confirmDialog({
-    title: '用内置默认覆盖用户配置',
-    text: '现有的用户配置会被整份替换，这个操作不能撤销。',
-    confirmLabel: '覆盖',
-    danger: true,
-  });
-  if (!confirmed) return;
-  const status = byId('pet-status');
-  setStatus(status, '正在同步…');
-  try {
-    const merged = await callApi('POST', '/config');
-    initDrafts(merged);
-    markDirty(false);
-    renderPetsPanel();
-    setStatus(status, '已用内置默认覆盖用户配置。', 'ok');
-  } catch (error) {
-    setStatus(status, error && error.message ? error.message : String(error), 'error');
-  }
 }
 `;
 }
