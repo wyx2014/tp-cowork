@@ -14,6 +14,8 @@ import { parseSkill, sha256, validateFiles, type SkillFile } from '../installer/
 import { SkillError } from '../installer/errors.ts'
 import { parse, TpcoworkHubError } from './errors.ts'
 import { allowedHubUrl, hubApiUrl } from './hub-url.ts'
+import { buildClientHeaders, buildHeartbeatPayload, buildOfflinePayload, deviceIdFilePath, loadOrCreateDeviceId, normalizeArch, normalizePlatform, resolveAppVersion, type ClientMetadata } from './client-metadata.ts'
+import { HEARTBEAT_PATH, HEARTBEAT_TIMEOUT_MS, OFFLINE_PATH, OFFLINE_TIMEOUT_MS, PresenceController } from './presence.ts'
 import { decode, detail, fileContentSchema, loginResultSchema, page, remoteCount, websiteUserSchema } from './protocol.ts'
 import { browserSessionSchema, detailSchema, feedbackIssueAttachments, feedbackIssuePage, feedbackIssueQuery, feedbackReceiptSchema, feedbackSchema, hostContribution, hubInstallSchema, listSchema, loginChannelSchema, loginSchema, modelKeyRevealSchema, publishResultSchema, publishSchema, userSchema } from './remote.ts'
 import { uploadFiles } from './upload.ts'
@@ -91,12 +93,52 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private activeSessionEndpoint: string | undefined
   private gatewayMcp: GatewayMcpConnection | undefined
   private resetGatewaySession: (() => void) | undefined
+  private readonly clientMetadata: ClientMetadata
+  private readonly presence: PresenceController
+  private presenceSyncSeq = 0
   constructor(ctx: Context, readonly config: Config, readonly installer: SkillInstaller) {
     super(ctx, 'toolboxTpcoworkHub')
+    const appVersion = resolveAppVersion()
+    this.clientMetadata = {
+      deviceId: loadOrCreateDeviceId(deviceIdFilePath(ctx.get('profileContext')), {
+        warn: message => { ctx.logger.warn(message) },
+      }),
+      ...(appVersion !== undefined ? { appVersion } : {}),
+      platform: normalizePlatform(),
+      arch: normalizeArch(),
+    }
+    this.presence = new PresenceController({
+      sendHeartbeat: (activeSession, signal) => this.request(
+        HEARTBEAT_PATH,
+        { method: 'POST', body: JSON.stringify(buildHeartbeatPayload(this.clientMetadata)) },
+        AbortSignal.any([this.lifetime.signal, this.authLifetime.signal, signal]),
+        activeSession.token,
+        true,
+        activeSession.endpoint,
+        { timeoutMs: Math.min(this.config.requestTimeoutMs, HEARTBEAT_TIMEOUT_MS), expireOn401: true },
+      ),
+      sendOffline: async (activeSession, signal) => {
+        await this.request(
+          OFFLINE_PATH,
+          { method: 'POST', body: JSON.stringify(buildOfflinePayload(this.clientMetadata)) },
+          AbortSignal.any([this.lifetime.signal, signal]),
+          activeSession.token,
+          true,
+          activeSession.endpoint,
+          { timeoutMs: Math.min(this.config.requestTimeoutMs, OFFLINE_TIMEOUT_MS), expireOn401: false },
+        )
+      },
+      isAuthExpiredError: error => error instanceof TpcoworkHubError && error.code === 'tpcoworkhub/session-expired',
+      log: (level, message) => {
+        if (level === 'warn') ctx.logger.warn(message)
+        else ctx.logger.debug(message)
+      },
+    })
     ctx.on('credentials/record-updated', key => {
       if (key !== sessionKey) return
       this.setGatewayMcp(undefined)
       this.authLifetime.abort(); this.authLifetime = new AbortController(); this.pages.clear(); this.changed()
+      void this.syncPresence()
     })
     ctx.effect(() => installer.registerSource('tpcoworkhub', async (source, signal) => {
       try { return await this.run(signal, active => this.download(source, active)) }
@@ -106,7 +148,18 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
         throw error
       }
     }))
-    ctx.effect(() => async () => { this.lifetime.abort(); await Promise.allSettled([...this.pending]); this.pages.clear() })
+    ctx.effect(() => {
+      const onBeforeExit = () => { void this.presence.goOffline() }
+      process.on('beforeExit', onBeforeExit)
+      void this.syncPresence()
+      return async () => {
+        process.off('beforeExit', onBeforeExit)
+        await this.presence.dispose()
+        this.lifetime.abort()
+        await Promise.allSettled([...this.pending])
+        this.pages.clear()
+      }
+    })
     ctx.effect(() => {
       const check = () => { void this.run(undefined, async () => { await this.stored() }, false).catch(() => undefined) }
       check()
@@ -520,17 +573,59 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       return work
     }, false)
   }
+  private async syncPresence(): Promise<void> {
+    const seq = ++this.presenceSyncSeq
+    try {
+      if (this.lifetime.signal.aborted) return
+      const allowed = this.allowedEndpoints()
+      const record = await this.stored()
+      if (seq !== this.presenceSyncSeq || this.lifetime.signal.aborted) return
+      if (!record || !allowed.has(record.endpoint) || !record.token || record.expired) {
+        this.presence.sync(undefined)
+        return
+      }
+      this.presence.sync({
+        endpoint: record.endpoint,
+        token: record.token,
+        ...(record.user?.id !== undefined ? { userId: record.user.id } : {}),
+      })
+    } catch {
+      // Presence sync must never interrupt Hub startup or authentication flows.
+    }
+  }
   async logout(): Promise<void> {
     // Abort current downloads immediately; serialize deletion after any login already committing.
     this.authLifetime.abort(); this.authLifetime = new AbortController()
     return this.run(undefined, active => {
       const work = this.authTail.then(async () => {
         active.throwIfAborted()
+        this.presenceSyncSeq++
+        let offlineSession = this.presence.activeSession()
+        if (!offlineSession) {
+          try {
+            const allowed = this.allowedEndpoints()
+            const record = await this.stored()
+            if (record?.token && !record.expired && allowed.has(record.endpoint)) {
+              offlineSession = {
+                endpoint: record.endpoint,
+                token: record.token,
+                ...(record.user?.id !== undefined ? { userId: record.user.id } : {}),
+              }
+            }
+          } catch {
+            // Best-effort offline lookup must not block logout.
+          }
+        }
+        this.presence.stop()
         try { await this.ctx.credentials.deleteRecord(sessionKey) }
-        catch { throw new TpcoworkHubError('credentials-unavailable') }
+        catch {
+          void this.syncPresence()
+          throw new TpcoworkHubError('credentials-unavailable')
+        }
         this.activeSessionEndpoint = undefined
         this.loginChannel = 'internal'
         this.pages.clear(); this.changed()
+        if (offlineSession) await this.presence.goOffline(offlineSession)
       })
       this.authTail = work.catch(() => undefined)
       return work
@@ -653,18 +748,31 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
     this.publications.set(input.requestId, { key, promise })
     return promise
   }
-  private async request(path: string, init: RequestInit, signal: AbortSignal, token?: string, enveloped = true, base = this.endpoint()): Promise<unknown> {
-    const timeout = AbortSignal.timeout(this.config.requestTimeoutMs)
+  private async request(
+    path: string,
+    init: RequestInit,
+    signal: AbortSignal,
+    token?: string,
+    enveloped = true,
+    base = this.endpoint(),
+    options?: { timeoutMs?: number; expireOn401?: boolean },
+  ): Promise<unknown> {
+    const timeout = AbortSignal.timeout(options?.timeoutMs ?? this.config.requestTimeoutMs)
     const active = AbortSignal.any([signal, timeout])
     const publishing = path === '/tpcoworkapi/skills/publish'
+    const callerHeaders = init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {}
+    const headers: Record<string, string> = {
+      ...(init.body instanceof FormData || 'content-type' in callerHeaders ? {} : { 'Content-Type': 'application/json' }),
+      ...callerHeaders,
+      ...buildClientHeaders(this.clientMetadata),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
     try {
-      const response = await fetch(hubApiUrl(base + path), { ...init, redirect: 'error', signal: active,
-        headers: { ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      })
+      const response = await fetch(hubApiUrl(base + path), { ...init, redirect: 'error', signal: active, headers })
       if (response.status === 401) {
         await response.body?.cancel()
         if (!token) throw new TpcoworkHubError('login-failed')
-        await this.expire(token, undefined, base)
+        if (options?.expireOn401 !== false) await this.expire(token, undefined, base)
         throw new TpcoworkHubError('session-expired')
       }
       if (!response.ok) { await response.body?.cancel(); throw new TpcoworkHubError(publishing ? (response.status >= 500 ? 'publish-uncertain' : 'publish-rejected') : 'network') }
@@ -688,7 +796,8 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
       const envelope = payload as { code: unknown; data?: unknown }
       if (envelope.code === 401) {
         if (!token) throw new TpcoworkHubError('login-failed')
-        await this.expire(token, undefined, base); throw new TpcoworkHubError('session-expired')
+        if (options?.expireOn401 !== false) await this.expire(token, undefined, base)
+        throw new TpcoworkHubError('session-expired')
       }
       if (envelope.code !== 200) throw new TpcoworkHubError(publishing ? 'publish-rejected' : token ? 'remote-rejected' : 'login-failed')
       return envelope.data
@@ -702,6 +811,10 @@ export class ToolboxTpcoworkHub extends TypertRemoteService implements TpcoworkH
   private async expire(token: string, expected?: Session, targetEndpoint?: string): Promise<void> {
     const endpoint = targetEndpoint ?? expected?.endpoint ?? this.endpoint()
     const revision = this.revision
+    const active = this.presence.activeSession()
+    if (active && active.endpoint === endpoint && active.token === token) {
+      this.presence.stop()
+    }
     if (!expected) {
       this.rejected.add(sha256(endpoint + '\0' + token))
       this.verified.delete(sha256(endpoint + '\0' + token))
