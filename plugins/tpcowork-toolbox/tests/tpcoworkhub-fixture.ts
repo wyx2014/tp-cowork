@@ -24,12 +24,13 @@ export function deferred<T = void>() {
 export async function hubFixture(config: Partial<hub.Config> = {}) {
   const base = await skillsFixture()
   const requests: { path: string; body: unknown; authorization?: string }[] = []
+  const received: { method: string; path: string; headers: IncomingMessage['headers']; body: unknown }[] = []
   const state = {
     files: sampleFiles(), versionId: 'version-1', expired: false, corrupt: false, badMetadata: false, missingResource: false, nullContentType: false, stringSizes: false,
     publishMode: 'ok' as 'ok' | 'rejected' | 'invalid' | 'disconnect' | 'business-failed',
     hold: undefined as undefined | ReturnType<typeof deferred>, entered: deferred(),
     uploaded: [] as { path: string; bytes: Uint8Array }[], loginHash: '', cursorRequests: 0,
-    legacyLogin: false,
+    legacyLogin: false, heartbeatIntervalSec: 60,
     override: undefined as undefined | ((req: IncomingMessage, res: ServerResponse) => boolean),
   }
   const json = (res: ServerResponse, data: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
@@ -42,6 +43,7 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
       const path = req.url!
       const body = req.headers['content-type']?.includes('application/json') && bytes.length ? JSON.parse(bytes.toString('utf8')) : undefined
       requests.push({ path, body, ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}) })
+      received.push({ method: req.method ?? 'GET', path, headers: req.headers, body })
       if (state.override?.(req, res)) return
       if (path === '/tpcoworkapi/users/login') {
         state.loginHash = body.passwordHash
@@ -54,6 +56,16 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
         }); return
       }
       if (req.headers.authorization !== `Bearer ${secret}` || state.expired) { res.statusCode = 401; json(res, { code: 401, message: secret }); return }
+      if (path === '/tpcoworkapi/client/heartbeat') {
+        const deviceId = typeof body?.deviceId === 'string' ? body.deviceId.trim() : ''
+        if (!deviceId || deviceId.toLowerCase() === 'legacy') { res.statusCode = 400; json(res, { code: 400, message: '设备标识无效' }); return }
+        envelope(res, { serverTime: Date.now(), nextIntervalSec: state.heartbeatIntervalSec }); return
+      }
+      if (path === '/tpcoworkapi/client/offline') {
+        const deviceId = typeof body?.deviceId === 'string' ? body.deviceId.trim() : ''
+        if (!deviceId) { res.statusCode = 400; json(res, { code: 400, message: '设备标识无效' }); return }
+        envelope(res, null); return
+      }
       if (path === '/tpcoworkapi/convex/query') {
         if (body.path === 'users:me') { json(res, { _id: 'user-1', username: 'fixture-user', name: 'Fixture User' }); return }
         const second = !!body.args.paginationOpts
@@ -96,5 +108,5 @@ export async function hubFixture(config: Partial<hub.Config> = {}) {
   const { service, fiber } = await attach(base.ctx)
   const login = () => service.login({ username: 'fixture-user', passwordRef: 'HUB_PASSWORD' })
   const installRequest = (requestId: string, hash = fingerprint(state.files)) => ({ requestId, source: { kind: 'tpcoworkhub' as const, skillId: 'store-1', versionId: state.versionId, fingerprint: hash }, scope: { kind: 'user' as const }, conflict: 'reject' as const })
-  return { ...base, endpoint, state, requests, service, fiber, login, installRequest, attach }
+  return { ...base, endpoint, state, requests, received, service, fiber, login, installRequest, attach }
 }

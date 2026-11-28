@@ -72,11 +72,14 @@ console.log(`Toolbox: Cisco office phone ${ciscoDeployment.ciscoQueryUrl && cisc
 const hub = resolveHubEnvironment(JSON.parse(await readFile(resolve(root, 'hub-environments.json'), 'utf8')), process.env.TPCOWORK_HUB_ENV)
 console.log(`Toolbox: TP Cowork Hub ${hub.environment} (${hub.endpoint}${hub.outsourceEndpoint ? `, outsource: ${hub.outsourceEndpoint}` : ''})`)
 await writeFile(resolve(output, 'hub.json'), JSON.stringify(hub, null, 2) + '\n')
+const toolboxPackage = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
 const common = {
   bundle: true, format: 'esm', platform: 'node', target: 'node22',
   define: {
     __TPCOWORK_HUB_ENDPOINT__: JSON.stringify(hub.endpoint),
     __TPCOWORK_HUB_OUTSOURCE_ENDPOINT__: JSON.stringify(hub.outsourceEndpoint ?? hub.endpoint),
+    __TPCOWORK_BUILD_VERSION__: JSON.stringify(process.env.DSH_DESKTOP_BUILD_VERSION?.trim() || ''),
+    __TPCOWORK_PACKAGE_VERSION__: JSON.stringify(typeof toolboxPackage.version === 'string' ? toolboxPackage.version : ''),
   },
   nodePaths: [resolve(harness, 'node_modules')], external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/*'],
   tsconfig: resolve(root, 'tsconfig.base.json'), logLevel: 'warning',

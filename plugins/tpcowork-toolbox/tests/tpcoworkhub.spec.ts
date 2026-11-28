@@ -760,9 +760,9 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
   it('supports explicitly configured SHA-256 login and rejects raw secrets in reference fields', async () => {
     const { login, state, service, requests } = await hubFixture({ passwordEncoding: 'sha256' })
     await login(); expect(state.loginHash).toBe(sha256(password))
-    const count = requests.length
+    const count = requests.filter(row => row.path === '/tpcoworkapi/users/login').length
     await expect(service.login({ username: 'test', passwordRef: 'literal secret value' })).rejects.toMatchObject({ code: 'tpcoworkhub/invalid-request' })
-    expect(requests).toHaveLength(count)
+    expect(requests.filter(row => row.path === '/tpcoworkapi/users/login')).toHaveLength(count)
   })
   it('rejects stale versions, traversal, missing assets and corrupted bytes without committing a directory', async () => {
     const { login, service, state, dir, installRequest } = await hubFixture()
@@ -923,5 +923,153 @@ describe('TpcoworkHub with real HTTP, DSH credentials, Gateway and profile insta
 
     await restarted.logout()
     expect((await restarted.browserAuth()).loginUrl).toBe(`${internalEndpoint}/tp-cowork/desktop/authorize`)
+  })
+
+  it('injects normalized client metadata headers on every Hub request and persists a non-legacy deviceId across restarts', async () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', 'v1.4.2-rc.1')
+    onTestFinished(() => vi.unstubAllEnvs())
+    const { ctx, endpoint, state, received, service, login, start, attach } = await hubFixture()
+    state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/client-config') return false
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({
+        userId: 'user-1', quotaStatus: 'active', baseURL: endpoint + '/modelgw/v1',
+        apiKey: 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', models: [{ id: 'qwen-chat' }],
+      }))
+      return true
+    }
+    await ctx.plugin(LlmRuntime).await()
+    await ctx.plugin(HubModel).await()
+    await login()
+    await service.list({})
+    await vi.waitFor(() => expect(received.some(row => row.path === '/tpcoworkapi/client-config')).toBe(true))
+    await vi.waitFor(() => expect(received.some(row => row.path === '/tpcoworkapi/client/heartbeat')).toBe(true))
+
+    const expectedPlatform = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : 'unknown'
+    const expectedArch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : process.arch
+    const expectedUa = `TPCowork/1.4.2-rc.1 (${expectedPlatform}; ${expectedArch})`
+
+    const hubCalls = received.filter(row => row.path.startsWith('/tpcoworkapi/'))
+    const paths = new Set(hubCalls.map(row => row.path))
+    expect(paths).toContain('/tpcoworkapi/users/login')
+    expect(paths).toContain('/tpcoworkapi/client-config')
+    expect(paths).toContain('/tpcoworkapi/convex/query')
+    expect(paths).toContain('/tpcoworkapi/client/heartbeat')
+
+    const firstDeviceId = String(hubCalls[0]?.headers['x-cowork-device-id'] ?? '')
+    expect(firstDeviceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    expect(firstDeviceId.toLowerCase()).not.toBe('legacy')
+    for (const row of hubCalls) {
+      expect(row.headers['user-agent']).toBe(expectedUa)
+      expect(row.headers['x-cowork-version']).toBe('1.4.2-rc.1')
+      expect(row.headers['x-cowork-platform']).toBe(expectedPlatform)
+      expect(row.headers['x-cowork-arch']).toBe(expectedArch)
+      expect(row.headers['x-cowork-device-id']).toBe(firstDeviceId)
+    }
+
+    const heartbeat = hubCalls.find(row => row.path === '/tpcoworkapi/client/heartbeat')
+    expect(heartbeat?.body).toEqual({
+      deviceId: firstDeviceId,
+      appVersion: '1.4.2-rc.1',
+      platform: expectedPlatform,
+      arch: expectedArch,
+    })
+
+    await ctx.fiber.dispose()
+    const countBeforeRestart = received.length
+    const restarted = await start()
+    await attach(restarted)
+    await vi.waitFor(() => expect(received.slice(countBeforeRestart).some(row => row.path === '/tpcoworkapi/client/heartbeat')).toBe(true))
+    const restartedBeat = received.slice(countBeforeRestart).find(row => row.path === '/tpcoworkapi/client/heartbeat')
+    expect(restartedBeat?.headers['x-cowork-device-id']).toBe(firstDeviceId)
+    expect(restartedBeat?.body).toMatchObject({ deviceId: firstDeviceId, appVersion: '1.4.2-rc.1' })
+  })
+
+  it('sends best-effort offline on logout, account switch, and plugin dispose, and sends nothing when signed out', async () => {
+    const { ctx, endpoint, received, service, login, start, attach } = await hubFixture()
+    expect(received).toHaveLength(0)
+
+    await login()
+    await vi.waitFor(() => expect(received.some(row => row.path === '/tpcoworkapi/client/heartbeat')).toBe(true))
+    const deviceId = String(received.find(row => row.path === '/tpcoworkapi/client/heartbeat')?.headers['x-cowork-device-id'])
+
+    await service.logout()
+    await vi.waitFor(() => expect(received.some(row => row.path === '/tpcoworkapi/client/offline')).toBe(true))
+    const logoutOffline = received.find(row => row.path === '/tpcoworkapi/client/offline')
+    expect(logoutOffline?.headers.authorization).toBe(`Bearer ${secret}`)
+    expect(logoutOffline?.body).toEqual({ deviceId })
+
+    // Switching to another account without explicit logout sends /offline for the previous account before /heartbeat for the next.
+    const switchHub = await hubFixture()
+    const switchUser2Token = 'fixture-user-2-token'
+    switchHub.state.override = (request, response) => {
+      if (request.url === '/tpcoworkapi/convex/query' && request.headers.authorization === `Bearer ${switchUser2Token}`) {
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ _id: 'user-2', username: 'second-user', name: 'Second User' }))
+        return true
+      }
+      if (request.url === '/tpcoworkapi/client/heartbeat' || request.url === '/tpcoworkapi/client/offline') {
+        if (request.headers.authorization === `Bearer ${switchUser2Token}`) {
+          response.setHeader('Content-Type', 'application/json')
+          response.end(JSON.stringify({ code: 200, message: 'ok', data: request.url.endsWith('/heartbeat') ? { serverTime: Date.now(), nextIntervalSec: 60 } : null }))
+          return true
+        }
+      }
+      return false
+    }
+    await switchHub.login()
+    await vi.waitFor(() => expect(switchHub.received.some(row => row.path === '/tpcoworkapi/client/heartbeat' && row.headers.authorization === `Bearer ${secret}`)).toBe(true))
+    await switchHub.service.acceptBrowserSession({ token: switchUser2Token })
+    await vi.waitFor(() => {
+      expect(switchHub.received.some(row => row.path === '/tpcoworkapi/client/offline' && row.headers.authorization === `Bearer ${secret}`)).toBe(true)
+      expect(switchHub.received.some(row => row.path === '/tpcoworkapi/client/heartbeat' && row.headers.authorization === `Bearer ${switchUser2Token}`)).toBe(true)
+    })
+
+    // Plugin disposal (host shutdown) while the server is still listening sends best-effort /offline before closing.
+    const shutdownCtx = await start()
+    const attached = await attach(shutdownCtx)
+    expect(endpoint).toBeTruthy()
+    await attached.service.login({ username: 'fixture-user', passwordRef: 'HUB_PASSWORD' })
+    await vi.waitFor(() => expect(received.filter(row => row.path === '/tpcoworkapi/client/heartbeat').length).toBeGreaterThanOrEqual(2))
+    const offlineBeforeDispose = received.filter(row => row.path === '/tpcoworkapi/client/offline').length
+    await attached.fiber.dispose()
+    expect(received.filter(row => row.path === '/tpcoworkapi/client/offline').length).toBe(offlineBeforeDispose + 1)
+    expect(received.filter(row => row.path === '/tpcoworkapi/client/offline').at(-1)?.body).toEqual({ deviceId })
+    // Context disposal completed without error and cleaned up.
+    expect(shutdownCtx.get('toolboxTpcoworkHub')).toBeUndefined()
+    expect(ctx.get('toolboxTpcoworkHub')).toBeDefined()
+  })
+
+  it('silently tolerates heartbeat/offline server failures and stops heartbeat on 401 expiration', async () => {
+    const { service, state, login, received } = await hubFixture()
+    state.override = (request, response) => {
+      if (request.url === '/tpcoworkapi/client/heartbeat' || request.url === '/tpcoworkapi/client/offline') {
+        response.statusCode = 500
+        response.end('internal error ' + secret)
+        return true
+      }
+      return false
+    }
+
+    await expect(login()).resolves.toEqual({ configured: true })
+    await vi.waitFor(() => expect(received.some(row => row.path === '/tpcoworkapi/client/heartbeat')).toBe(true))
+    expect(await service.account()).toMatchObject({ state: 'signed_in' })
+    expect((await service.list({})).items).toHaveLength(2)
+    await expect(service.logout()).resolves.toBeUndefined()
+    expect(received.some(row => row.path === '/tpcoworkapi/client/offline')).toBe(true)
+    expect(await service.account()).toMatchObject({ state: 'signed_out' })
+
+    // Drive an explicit 401 heartbeat on a fresh fixture to assert session expiration and timer shutdown.
+    const expiredFixture = await hubFixture()
+    expiredFixture.state.override = (request, response) => {
+      if (request.url !== '/tpcoworkapi/client/heartbeat') return false
+      response.statusCode = 401
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ code: 401, message: 'expired' }))
+      return true
+    }
+    await expiredFixture.login()
+    await vi.waitFor(() => expect(expiredFixture.received.some(row => row.path === '/tpcoworkapi/client/heartbeat')).toBe(true))
+    await vi.waitFor(async () => expect(await expiredFixture.service.account()).toMatchObject({ state: 'expired' }))
   })
 })
